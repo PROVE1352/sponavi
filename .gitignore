@@ -6,3 +6,6 @@ __pycache__/
 app.db
 data/raw/
 .env
+.DS_Store
+data/sponavi.db
+data/raw/

@@ -49,7 +49,10 @@ async def _assess_error_handler(request: Request, exc: engine.AssessError) -> JS
 # --- endpoints ------------------------------------------------------------
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "mode": "demo-fixtures"}
+    # mode는 store 소스 선택 로직과 동일 기준 (db=전국 실데이터, fixtures=데모)
+    from .store import db_path
+
+    return {"status": "ok", "mode": "db" if db_path().exists() else "fixtures"}
 
 
 @app.post("/api/assess")

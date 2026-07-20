@@ -74,18 +74,25 @@ export function getSigungu(): Promise<Sigungu[]> {
   return get<Sigungu[]>('/meta/sigungu')
 }
 
-// API.md는 /demo/personas 가 "assess 요청 바디 배열"이라고만 명시한다. 서버가 id/label/summary 를
-// 주지 않을 수 있으므로 방어적으로 보강한다(목 응답은 이미 포함하므로 그대로 유지).
-function normalizePersona(raw: Partial<DemoPersona> & AssessRequest, i: number): DemoPersona {
+// API.md는 /demo/personas 가 "assess 요청 바디 배열"이라고만 명시한다. 실서버는
+// {id,label,expected,body:{...assess}} 로 바디를 중첩해 반환(실측 2026-07-20) — 둘 다 흡수한다.
+function normalizePersona(
+  raw: Partial<DemoPersona> & Partial<AssessRequest> & { body?: AssessRequest; expected?: string },
+  i: number,
+): DemoPersona {
+  const src: AssessRequest = raw.body ?? (raw as AssessRequest)
   const id = raw.id ?? `P${i + 1}`
-  const disTxt = raw.disability?.has ? ` · ${raw.disability.type ?? ''}장애` : ''
-  const label = raw.label ?? `${id} · ${raw.age}세 ${raw.sex === 'F' ? '여' : '남'} · ${raw.income_class}${disTxt}`
-  const summary = raw.summary ?? `${raw.sigungu_nm} 기준 예상 자격과 경로를 확인합니다`
-  return { ...raw, id, label, summary }
+  const disTxt = src.disability?.has ? ` · ${src.disability.type ?? ''}장애` : ''
+  const label =
+    raw.label ?? `${id} · ${src.age}세 ${src.sex === 'F' ? '여' : '남'} · ${src.income_class}${disTxt}`
+  const summary = raw.summary ?? raw.expected ?? `${src.sigungu_nm} 기준 예상 자격과 경로를 확인합니다`
+  return { ...src, id, label, summary }
 }
 
 export async function getPersonas(): Promise<DemoPersona[]> {
   if (IS_MOCK) return delay(PERSONA_REQUESTS, 0)
-  const raw = await get<(Partial<DemoPersona> & AssessRequest)[]>('/demo/personas')
+  const raw = await get<(Partial<DemoPersona> & Partial<AssessRequest> & { body?: AssessRequest })[]>(
+    '/demo/personas',
+  )
   return raw.map(normalizePersona)
 }

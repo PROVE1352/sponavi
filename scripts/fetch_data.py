@@ -43,9 +43,9 @@ RAW_DIR = DATA_DIR / "raw"
 
 PER_PAGE = 500
 MAX_PAGES = 200            # hard stop guard
-RETRY = 3
-BACKOFF_SEC = 1.5
-TIMEOUT_SEC = 20
+RETRY = 5
+BACKOFF_SEC = 2.0
+TIMEOUT_SEC = 60  # B551014 게이트웨이가 큰 페이지에서 수십 초 걸리는 경우 실측됨
 
 # Seoul pilot filter (SPEC §1): keep only 서울 25개 구.
 SEOUL_PREFIX = "11"
@@ -98,7 +98,8 @@ def _http_get_json(url: str) -> dict:
             req = request.Request(url, headers={"Accept": "application/json"})
             with request.urlopen(req, timeout=TIMEOUT_SEC) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except (urlerror.URLError, urlerror.HTTPError, json.JSONDecodeError) as exc:
+        except (urlerror.URLError, urlerror.HTTPError, json.JSONDecodeError, TimeoutError, OSError) as exc:
+            # TimeoutError: py3.10+에서 socket timeout이 URLError 밖으로 새는 실측 케이스
             last = exc
             if attempt < RETRY:
                 time.sleep(BACKOFF_SEC * attempt)
@@ -135,6 +136,7 @@ def fetch_all(endpoint: str, service_key: str, extra: Optional[dict] = None) -> 
             "numOfRows": PER_PAGE,
             "type": "json",
             "returnType": "JSON",
+            "resultType": "json",  # B551014 게이트웨이 실검증 파라미터 (docs/ENDPOINTS.md)
         }
         if extra:
             params.update(extra)
@@ -294,12 +296,13 @@ def _weekday_mask(raw: Any) -> str:
 # ---------------------------------------------------------------------------
 # source registry.  ENDPOINT: confirm exact gateway path on data.go.kr per id.
 # ---------------------------------------------------------------------------
+# 2026-07-20 실호출 검증 완료 — docs/ENDPOINTS.md (오퍼레이션 대소문자 서비스마다 다름 주의)
 SOURCES = {
-    "15107783": {"kind": "facility", "source": "voucher",  "endpoint": "https://api.odcloud.kr/api/15107783/v1/uddi", "name": "스포츠강좌이용권 등록시설"},
-    "15107874": {"kind": "facility", "source": "dvoucher", "endpoint": "https://api.odcloud.kr/api/15107874/v1/uddi", "name": "장애인스포츠강좌이용권 등록시설"},
-    "15113986": {"kind": "public",   "source": "public",   "endpoint": "https://api.odcloud.kr/api/15113986/v1/uddi", "name": "전국 공공체육시설"},
-    "15107784": {"kind": "course",   "source": "voucher",  "endpoint": "https://api.odcloud.kr/api/15107784/v1/uddi", "name": "스포츠강좌이용권 등록강좌"},
-    "15117341": {"kind": "course",   "source": "dvoucher", "endpoint": "https://api.odcloud.kr/api/15117341/v1/uddi", "name": "장애인스포츠강좌이용권 등록강좌"},
+    "15107783": {"kind": "facility", "source": "voucher",  "endpoint": "https://apis.data.go.kr/B551014/SRVC_OD_API_FACIL_MNG/todz_api_facil_mng_i",                "name": "스포츠강좌이용권 등록시설"},
+    "15107874": {"kind": "facility", "source": "dvoucher", "endpoint": "https://apis.data.go.kr/B551014/SRVC_OD_API_FACIL_MNG_DVOUCHER/TODZ_API_MNG_DVOUCHER_I",   "name": "장애인스포츠강좌이용권 등록시설"},
+    "15113986": {"kind": "public",   "source": "public",   "endpoint": "https://apis.data.go.kr/B551014/SRVC_API_SFMS_FACI/TODZ_API_SFMS_FACI",                    "name": "전국 공공체육시설"},
+    "15107784": {"kind": "course",   "source": "voucher",  "endpoint": "https://apis.data.go.kr/B551014/SRVC_OD_API_FACIL_COURSE/todz_api_facil_course_i",         "name": "스포츠강좌이용권 등록강좌"},
+    "15117341": {"kind": "course",   "source": "dvoucher", "endpoint": "https://apis.data.go.kr/B551014/SRVC_DVOUCHER_FACI_COURSE/TODZ_DVOUCHER_FACI_COURSE",      "name": "장애인스포츠강좌이용권 등록강좌"},
 }
 
 

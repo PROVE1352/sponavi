@@ -37,9 +37,17 @@ def test_seongbuk_voucher_has_supply(store):
 
 
 def test_coverage_null_when_district_absent(store):
-    # 성북구(11290)는 coverage fixtures에 없음 -> null (SPEC: 데이터 없는 구는 null)
-    res = assess(store, _body(10, "기초생활수급"))
+    # 강남구(11680)는 coverage fixtures(미리보기 15개 구: 종로~양천)에 없음 -> null
+    res = assess(store, _body(10, "기초생활수급", sigungu="11680"))
     assert res["supply_gap"]["coverage"] is None
+
+
+def test_coverage_seongbuk_real_rows(store):
+    # 2026-07-20 실측 반영: 성북구(11290) 기초수급 1920명 중 560명 수령(29.2%)
+    res = assess(store, _body(10, "기초생활수급"))
+    cov = res["supply_gap"]["coverage"]
+    assert cov is not None and cov["sigungu"] == "성북구"
+    assert cov["target"] == 1920 and cov["recipient"] == 560
 
 
 def test_coverage_join_present_district_default_class(store):

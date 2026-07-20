@@ -1,0 +1,102 @@
+{
+  "_meta": {
+    "description": "스포내비 자격·대체경로·체력 온톨로지 (서버가 로드하는 단일 진실). SPEC §3.",
+    "verification_policy": "이용권/장애인이용권 자격은 공식/정부 출처에서 검증 후 인코딩. 확인일 2026-07-20.",
+    "verified_on": "2026-07-20",
+    "P4_decision": "dvoucher는 소득무관(소득기준 없음)이며 연령 상한 69세. 따라서 SPEC §5 규칙에 의해 P4='72세 청각장애(연령 초과)'로 확정. 근거: culture.go.kr 문화포털 통합 지원사업 안내(dvoucher 5~69세·소득무관), mnuri.kr(만5~69세, 저소득 '우선선정'=요건 아님).",
+    "sources_note": "복지로(bokjiro.go.kr) 상세 페이지는 JS 렌더링으로 정적 추출 불가 → 정부 문화포털(culture.go.kr)·국민체육진흥공단 위탁 안내(mnuri.kr)·언론 교차확인으로 대체. 모든 수치는 아래 sources에 근거."
+  },
+  "programs": [
+    {
+      "id": "svoucher",
+      "name": "스포츠강좌이용권",
+      "eligibility": {
+        "income_classes": ["기초생활수급", "차상위", "한부모"],
+        "age_min": 5,
+        "age_max": 18,
+        "disability": "any"
+      },
+      "benefit": "월 최대 10만 5천원(105,000원) 내 스포츠강좌 수강료 지원(바우처, 연중). 공식 표기 '월 10.5~11만원'.",
+      "subsidy_month": 105000,
+      "apply": {
+        "how": "전용 홈페이지(svoucher.kspo.or.kr) 온라인 신청 또는 주민등록상 시·군·구청/주민센터 방문 신청",
+        "url": "https://svoucher.kspo.or.kr",
+        "docs": ["자격 확인(기초수급·차상위·한부모)", "보호자(신청인) 정보"],
+        "period": "매년 지정 신청기간(2026년 지원분: 2025.11.10~11.28), 이후 지자체별 추가모집",
+        "tel": "1551-0078"
+      },
+      "sources": [
+        { "url": "https://www.culture.go.kr/portal/cltBnf/cltSup/view.do?viewTp=2&rcrtSn=197398&menuNo=200104", "checked": "2026-07-20", "note": "정부 문화포털 '2026년 (장애인)스포츠강좌이용권 지원사업' — 5~18세, 기초·차상위·한부모, 월 10.5~11만원" },
+        { "url": "https://www.wikitree.co.kr/articles/1093816", "checked": "2026-07-20", "note": "월 지원금 105,000원(유·청소년) 명시" },
+        { "url": "https://svoucher.kspo.or.kr", "checked": "2026-07-20", "note": "공식 신청 포털" }
+      ],
+      "verified": true
+    },
+    {
+      "id": "dvoucher",
+      "name": "장애인스포츠강좌이용권",
+      "eligibility": {
+        "income_classes": "any",
+        "age_min": 5,
+        "age_max": 69,
+        "disability": "required"
+      },
+      "benefit": "월 최대 11만원(110,000원) 내 스포츠강좌 수강료 지원(바우처, 연중). 공식 표기 '월 10.5~11만원'.",
+      "subsidy_month": 110000,
+      "income_note": "소득 요건 없음(소득무관): 등록 장애인이면 대상. 단 예산 초과 시 기초수급·차상위 등 저소득이 '우선 선정'된다(자격 게이트 아님). 출처 간 표현 차이 있어 UI에 '저소득 우선선정' 안내 권장.",
+      "apply": {
+        "how": "장애인스포츠강좌이용권 홈페이지(dvoucher.kspo.or.kr) 온라인 신청 또는 주민등록상 시·군·구청/주민센터 방문 신청",
+        "url": "https://dvoucher.kspo.or.kr",
+        "docs": ["장애인 등록 확인"],
+        "period": "매년 지정 신청기간(2026년 지원분: 2025.11.10~11.28), 이후 지자체별 추가모집",
+        "tel": "1551-0078"
+      },
+      "sources": [
+        { "url": "https://www.culture.go.kr/portal/cltBnf/cltSup/view.do?viewTp=2&rcrtSn=197398&menuNo=200104", "checked": "2026-07-20", "note": "정부 문화포털 — 장애인 5~69세(출생 1957.1.1~2021.12.31), 소득무관, 월 10.5~11만원" },
+        { "url": "https://www.mnuri.kr/munhwa/disabledVoucher.do", "checked": "2026-07-20", "note": "국민체육진흥공단 위탁 안내 — 만 5~69세 장애인, 월 11만원 범위, 저소득 우선선정" },
+        { "url": "https://www.wikitree.co.kr/articles/1093816", "checked": "2026-07-20", "note": "월 지원금 110,000원(장애인) 명시" },
+        { "url": "https://dvoucher.kspo.or.kr", "checked": "2026-07-20", "note": "공식 신청 포털" }
+      ],
+      "verified": true
+    },
+    {
+      "id": "public_program",
+      "name": "공공체육시설 프로그램(무료/저가)",
+      "eligibility": {
+        "income_classes": "any",
+        "age_min": 0,
+        "age_max": 200,
+        "disability": "any"
+      },
+      "benefit": "지자체 공공체육시설의 무료/저가 생활체육 프로그램(수영·요가·헬스 등). 자격 제한 없음.",
+      "subsidy_month": 0,
+      "apply": {
+        "how": "각 공공체육시설(구민체육센터 등) 현장/홈페이지 접수. 오전·비수기 저가 시간대 및 무료 실버/장애인 교실 활용.",
+        "url": "https://www.kspo.or.kr",
+        "docs": [],
+        "period": "상시(프로그램별 모집)",
+        "tel": ""
+      },
+      "sources": [
+        { "url": "https://www.data.go.kr/data/15113986/openapi.do", "checked": "2026-07-20", "note": "전국 공공체육시설 공공데이터(15113986)" }
+      ],
+      "verified": true
+    }
+  ],
+  "alt_edges": [
+    { "from": "svoucher", "when": "income_fail", "to": "public_program", "note": "이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램", "curated": "검증 대기" },
+    { "from": "svoucher", "when": "age_fail", "to": "public_program", "note": "이용권 지원연령(5~18세) 초과 → 공공체육시설 프로그램", "curated": "검증 대기" },
+    { "from": "dvoucher", "when": "age_fail", "to": "public_program", "filter": { "disability_support": true }, "note": "장애인 이용권 지원연령(5~69세) 초과 → 장애인 지원 공공체육시설", "curated": "검증 대기" },
+    { "from": "dvoucher", "when": "income_fail", "to": "public_program", "filter": { "disability_support": true }, "note": "→ 장애인 지원 공공체육시설(저가/무료)", "curated": "검증 대기" }
+  ],
+  "fitness_map": [
+    { "weakness": "유연성", "exercises": ["요가", "스트레칭", "필라테스"], "sports": ["요가", "필라테스"] },
+    { "weakness": "심폐지구력", "exercises": ["걷기", "수영", "자전거", "에어로빅"], "sports": ["수영", "에어로빅"] },
+    { "weakness": "근력", "exercises": ["웨이트 트레이닝", "밴드 운동", "코어 강화"], "sports": ["헬스"] },
+    { "weakness": "근지구력", "exercises": ["윗몸말아올리기", "플랭크", "서킷 트레이닝"], "sports": ["헬스", "태권도"] },
+    { "weakness": "민첩성", "exercises": ["사다리 드릴", "셔틀런", "방향전환 훈련"], "sports": ["배드민턴", "탁구", "태권도"] },
+    { "weakness": "평형성", "exercises": ["한발 서기", "밸런스 보드", "요가 균형자세"], "sports": ["요가", "필라테스"] },
+    { "weakness": "순발력", "exercises": ["점프 스쿼트", "단거리 스프린트"], "sports": ["태권도", "배드민턴"] },
+    { "weakness": "협응성", "exercises": ["줄넘기", "라켓 랠리"], "sports": ["배드민턴", "탁구"] }
+  ]
+}

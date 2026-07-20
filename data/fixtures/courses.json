@@ -1,0 +1,21 @@
+{
+  "_source": "데모 fixtures — 필드는 이용권 등록강좌 API(15107784/15117341) 스키마 준거(강좌명·종목·요일값·시각·수강료). 가상 데이터",
+  "_schema": "id, facility_id, name, sport, weekday_mask(월화수목금토일=1111100), start, end, fee_month(원), target(전연령|유청소년|성인|어르신|장애인)",
+  "courses": [
+    { "id": "C01", "facility_id": "V01", "name": "유아·주니어 수영 기초",   "sport": "수영",    "weekday_mask": "1010100", "start": "16:00", "end": "16:50", "fee_month": 95000,  "target": "유청소년" },
+    { "id": "C02", "facility_id": "V02", "name": "청소년 수영 중급",       "sport": "수영",    "weekday_mask": "0101000", "start": "17:00", "end": "17:50", "fee_month": 110000, "target": "유청소년" },
+    { "id": "C03", "facility_id": "V03", "name": "초등 태권도",            "sport": "태권도",  "weekday_mask": "1111100", "start": "15:30", "end": "16:20", "fee_month": 130000, "target": "유청소년" },
+    { "id": "C04", "facility_id": "V04", "name": "성인 필라테스 입문",     "sport": "필라테스","weekday_mask": "0101000", "start": "19:00", "end": "19:50", "fee_month": 160000, "target": "성인" },
+    { "id": "C05", "facility_id": "P01", "name": "구민 요가 (오전 저가)",  "sport": "요가",    "weekday_mask": "1010100", "start": "10:00", "end": "10:50", "fee_month": 30000,  "target": "전연령" },
+    { "id": "C06", "facility_id": "P01", "name": "실버 수중걷기 무료교실", "sport": "수영",    "weekday_mask": "0101000", "start": "09:00", "end": "09:50", "fee_month": 0,      "target": "어르신" },
+    { "id": "C07", "facility_id": "P03", "name": "저녁 스트레칭·요가",     "sport": "요가",    "weekday_mask": "1111100", "start": "20:00", "end": "20:50", "fee_month": 40000,  "target": "성인" },
+    { "id": "C08", "facility_id": "D01", "name": "장애인 재활 수영",       "sport": "수영",    "weekday_mask": "1010100", "start": "14:00", "end": "14:50", "fee_month": 0,      "target": "장애인" },
+    { "id": "C09", "facility_id": "D01", "name": "휠체어 탁구 교실",       "sport": "탁구",    "weekday_mask": "0101000", "start": "15:00", "end": "15:50", "fee_month": 0,      "target": "장애인" },
+    { "id": "C10", "facility_id": "P04", "name": "가족 수영 (주말)",       "sport": "수영",    "weekday_mask": "0000011", "start": "11:00", "end": "11:50", "fee_month": 50000,  "target": "전연령" }
+  ],
+  "videos": [
+    { "title": "국민체력100 유연성 개선 스트레칭", "url": "https://nfa.kspo.or.kr/", "source": "국민체력100 동영상 API(15108846) — 실연동은 키 주입 후", "for_weakness": "유연성" },
+    { "title": "심폐지구력 향상 걷기 프로그램",     "url": "https://nfa.kspo.or.kr/", "source": "동일", "for_weakness": "심폐지구력" },
+    { "title": "근력 향상 홈트(악력·코어)",         "url": "https://nfa.kspo.or.kr/", "source": "동일", "for_weakness": "근력" }
+  ]
+}

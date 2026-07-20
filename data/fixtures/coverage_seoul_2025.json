@@ -1,0 +1,17 @@
+{
+  "_source": "지역별스포츠강좌이용권활용정보 (문화빅데이터플랫폼 id=5b30e290-2594-11eb-af9a-4b03f0a582d6) 미리보기 실측 행, 2026-07-20 추출. class: S=기초수급생활대상자, N=차상위계층 및 한부모가정",
+  "_note": "서울 5개 구 실측. 나머지 구는 실데이터 다운로드 후 채움 — UI는 '데이터 있는 구만 통계 표시' 처리",
+  "year": 2025,
+  "rows": [
+    { "sigungu_cd": "11110", "sigungu_nm": "종로구",  "pop": 137857, "facil_cnt": 33,  "class": "N", "target": 321,  "recipient": 16 },
+    { "sigungu_cd": "11110", "sigungu_nm": "종로구",  "pop": 137857, "facil_cnt": 33,  "class": "S", "target": 367,  "recipient": 70 },
+    { "sigungu_cd": "11140", "sigungu_nm": "중구",    "pop": 118861, "facil_cnt": 27,  "class": "N", "target": 278,  "recipient": 7 },
+    { "sigungu_cd": "11140", "sigungu_nm": "중구",    "pop": 118861, "facil_cnt": 27,  "class": "S", "target": 417,  "recipient": 84 },
+    { "sigungu_cd": "11170", "sigungu_nm": "용산구",  "pop": 202971, "facil_cnt": 42,  "class": "N", "target": 449,  "recipient": 14 },
+    { "sigungu_cd": "11170", "sigungu_nm": "용산구",  "pop": 202971, "facil_cnt": 42,  "class": "S", "target": 699,  "recipient": 197 },
+    { "sigungu_cd": "11200", "sigungu_nm": "성동구",  "pop": 272979, "facil_cnt": 65,  "class": "N", "target": 602,  "recipient": 9 },
+    { "sigungu_cd": "11200", "sigungu_nm": "성동구",  "pop": 272979, "facil_cnt": 65,  "class": "S", "target": 752,  "recipient": 161 },
+    { "sigungu_cd": "11215", "sigungu_nm": "광진구",  "pop": 332833, "facil_cnt": 103, "class": "N", "target": 1147, "recipient": 37 },
+    { "sigungu_cd": "11215", "sigungu_nm": "광진구",  "pop": 332833, "facil_cnt": 103, "class": "S", "target": 1435, "recipient": 396 }
+  ]
+}

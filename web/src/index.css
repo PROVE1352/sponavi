@@ -1,0 +1,76 @@
+@import 'tailwindcss';
+
+/* 다크 모드: 클래스 기반(.dark). 시스템 선호는 main.tsx 초기화에서 반영 + 수동 토글. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+
+  /* 신뢰 블루 + 따뜻한 보조. 마커/상태 색은 색맹 안전(항상 아이콘·텍스트 동반). */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #d9e6ff;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+
+  --color-marker-voucher: #2563eb; /* 이용권 가맹 = 파랑 */
+  --color-marker-public: #16a34a; /* 공공/대안 = 초록 */
+  --color-marker-disability: #7c3aed; /* 장애인 = 보라 */
+}
+
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.dark body {
+  background: #0b1120;
+  color: #e2e8f0;
+}
+
+/* 키보드 포커스 링(접근성) */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-brand-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #dbeafe;
+}
+.dark .leaflet-container {
+  background: #1e293b;
+}
+.dark .leaflet-tile {
+  filter: brightness(0.85) contrast(1.05);
+}
+
+/* 커스텀 divIcon 마커(색상 원 + 링) */
+.marker-pin {
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 3px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.dark .marker-pin {
+  border-color: #0b1120;
+}

@@ -1,0 +1,358 @@
+// SPEC §5 데모 페르소나 P1~P4 의 assess 요청 바디 + 계약-형태 응답(목).
+// 근거: docs/API.md 응답 예시 + data/fixtures/*.json (성북 좌표·시설명·수강료·커버리지 재사용).
+// P4는 SPEC §5에서 "서버 에이전트가 dvoucher 공식 검증 후 확정"으로 남은 유일한 미정 지점.
+//   → dvoucher 연령 상한(만 69세)이 존재한다고 가정하고 "72세 청각장애(연령 초과)" 케이스를 채택.
+//     소득기준 의존이 없어 가장 방어적. dvoucher 규칙 verified:false 로 표기(SPEC §0-5).
+
+import type { AssessResponse, DemoPersona, FitnessResponse } from '../types'
+
+const SVOUCHER_APPLY = {
+  how: '온라인 신청 → 이용권 카드 발급 → 가맹시설에서 결제 시 지원금 자동 차감',
+  url: 'https://svoucher.kspo.or.kr',
+  docs: ['신분증(또는 등본)', '기초수급·차상위·한부모 증명서'],
+}
+const SVOUCHER_SOURCE = { url: 'https://svoucher.kspo.or.kr', checked: '2026-07-20' }
+
+const DVOUCHER_APPLY = {
+  how: '온라인 신청 → 이용권 발급 → 장애인 가맹시설에서 이용',
+  url: 'https://dvoucher.kspo.or.kr',
+  docs: ['신분증', '장애인등록증(복지카드)', '소득 증빙(해당 시)'],
+}
+const DVOUCHER_SOURCE = { url: 'https://dvoucher.kspo.or.kr', checked: '2026-07-20' }
+
+const PUBLIC_APPLY = {
+  how: '각 구민체육센터·공공체육시설에 직접 등록(전화·방문·홈페이지). 저소득·장애인 할인 문의',
+  url: 'https://www.seoul.go.kr',
+  docs: ['신분증'],
+}
+const PUBLIC_SOURCE = { url: 'https://www.seoul.go.kr', checked: '2026-07-20' }
+
+const SVOUCHER_BENEFIT = '월 최대 10만 5천원 강좌비 지원 (유청소년 기준)'
+const DVOUCHER_BENEFIT = '월 최대 11만원 강좌비 지원 (장애인) · 금액·기준 공식 확인 필요'
+const PUBLIC_BENEFIT = '무료 또는 저가(월 0~4만원대) 프로그램'
+
+// 성북구 차상위·한부모 커버리지(= docs/API.md 예시값, 정직-신호 핵심). 구 단위 통계.
+const COVERAGE_SB_NEARPOOR = {
+  sigungu: '성북구',
+  class: '차상위·한부모',
+  target: 602,
+  recipient: 9,
+  rate: 0.015,
+  year: 2025,
+}
+
+// ---------- 요청 바디 (GET /api/demo/personas) ----------
+export const PERSONA_REQUESTS: DemoPersona[] = [
+  {
+    id: 'P1',
+    label: 'P1 · 10세 여아 · 기초수급',
+    summary: '스포츠강좌이용권 예상 자격 ✓ → 신청 안내 + 가맹시설·자부담',
+    age: 10,
+    sex: 'F',
+    sigungu_cd: '11290',
+    sigungu_nm: '성북구',
+    income_class: '기초생활수급',
+    disability: { has: false, type: null },
+    location: { lat: 37.6057, lon: 127.017 },
+  },
+  {
+    id: 'P2',
+    label: 'P2 · 27세 남 · 낀 계층',
+    summary: '이용권 ✗(소득·연령) → 대체경로 → 공공시설 + 체력처방',
+    age: 27,
+    sex: 'M',
+    sigungu_cd: '11290',
+    sigungu_nm: '성북구',
+    income_class: '그외',
+    disability: { has: false, type: null },
+    location: { lat: 37.6057, lon: 127.017 },
+  },
+  {
+    id: 'P3',
+    label: 'P3 · 14세 여 · 차상위 · 지체장애',
+    summary: '장애인스포츠강좌이용권 ✓ → 접근성 시설(단, 성북 내 가맹 0 → 공급공백)',
+    age: 14,
+    sex: 'F',
+    sigungu_cd: '11290',
+    sigungu_nm: '성북구',
+    income_class: '차상위',
+    disability: { has: true, type: '지체' },
+    location: { lat: 37.6057, lon: 127.017 },
+  },
+  {
+    id: 'P4',
+    label: 'P4 · 72세 남 · 청각장애',
+    summary: '장애인 이용권 ✗(연령 초과) → 공급공백 배너 + 장애 특화 대체경로',
+    age: 72,
+    sex: 'M',
+    sigungu_cd: '11290',
+    sigungu_nm: '성북구',
+    income_class: '그외',
+    disability: { has: true, type: '청각' },
+    location: { lat: 37.6057, lon: 127.017 },
+  },
+]
+
+// ---------- P1: svoucher 예상 자격 ✓ ----------
+const P1: AssessResponse = {
+  eligibility: [
+    {
+      program_id: 'svoucher',
+      program_name: '스포츠강좌이용권',
+      eligible: true,
+      reasons: [
+        { field: 'age', ok: true, message: '만 10세 · 지원 연령(만 5~18세)에 해당합니다' },
+        { field: 'income_class', ok: true, message: '기초생활수급 · 소득 지원 대상입니다' },
+      ],
+      benefit: SVOUCHER_BENEFIT,
+      apply: SVOUCHER_APPLY,
+      source: SVOUCHER_SOURCE,
+      verified: true,
+    },
+    {
+      program_id: 'dvoucher',
+      program_name: '장애인스포츠강좌이용권',
+      eligible: false,
+      reasons: [
+        { field: 'disability', ok: false, message: '장애 등록 정보가 없어 장애인 이용권 대상이 아닙니다' },
+      ],
+      benefit: DVOUCHER_BENEFIT,
+      apply: DVOUCHER_APPLY,
+      source: DVOUCHER_SOURCE,
+      verified: false,
+    },
+    {
+      program_id: 'public_program',
+      program_name: '공공체육시설 프로그램(무료/저가)',
+      eligible: true,
+      reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
+      benefit: PUBLIC_BENEFIT,
+      apply: PUBLIC_APPLY,
+      source: PUBLIC_SOURCE,
+      verified: true,
+    },
+  ],
+  path: [
+    { from: 'person', to: 'svoucher', edge: '자격', result: 'ok', label: '만 5~18세·기초수급 충족' },
+    { from: 'svoucher', to: 'facility:V01', edge: '적합·접근', result: 'ok', label: '성북스포츠클럽 · 0.3km' },
+  ],
+  nearby: {
+    voucher_facilities: [
+      { id: 'V01', name: '성북스포츠클럽', sports: ['수영', '헬스'], lat: 37.6061, lon: 127.0242, dist_km: 0.3, fee_month: 95000, subsidy: 105000, copay: 0, disability_support: null, source: 'voucher', addr: '서울 성북구 오패산로 12', course_name: '유아·주니어 수영 기초' },
+      { id: 'V02', name: '돈암수영아카데미', sports: ['수영'], lat: 37.5972, lon: 127.0135, dist_km: 1.3, fee_month: 110000, subsidy: 105000, copay: 5000, disability_support: null, source: 'voucher', addr: '서울 성북구 아리랑로 55', course_name: '청소년 수영 중급' },
+      { id: 'V03', name: '정릉태권체육관', sports: ['태권도'], lat: 37.61, lon: 127.008, dist_km: 1.4, fee_month: 130000, subsidy: 105000, copay: 25000, disability_support: null, source: 'voucher', addr: '서울 성북구 정릉로 200', course_name: '초등 태권도' },
+      { id: 'V04', name: '종암필라테스랩', sports: ['필라테스', '요가'], lat: 37.596, lon: 127.033, dist_km: 1.5, fee_month: 160000, subsidy: 105000, copay: 55000, disability_support: null, source: 'voucher', addr: '서울 성북구 종암로 30', course_name: '성인 필라테스 입문' },
+    ],
+    alternatives: [
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '구민 요가(오전 3만원)·실버 수중걷기 무료 · 접근성 지원', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+    ],
+  },
+  supply_gap: {
+    radius_km: 3,
+    voucher_count: 4,
+    alt_count: 3,
+    nearest: null,
+    message: '반경 3km 내 이용권 가맹시설 4곳을 이용할 수 있습니다',
+    coverage: COVERAGE_SB_NEARPOOR,
+  },
+}
+
+// ---------- P2: svoucher ✗(소득·연령) → 대체경로 → 공공 ----------
+const P2: AssessResponse = {
+  eligibility: [
+    {
+      program_id: 'svoucher',
+      program_name: '스포츠강좌이용권',
+      eligible: false,
+      reasons: [
+        { field: 'income_class', ok: false, message: '소득 기준(기초·차상위·한부모)에 해당하지 않습니다' },
+        { field: 'age', ok: false, message: '지원 연령(만 5~18세)을 초과합니다 (27세)' },
+      ],
+      benefit: SVOUCHER_BENEFIT,
+      apply: SVOUCHER_APPLY,
+      source: SVOUCHER_SOURCE,
+      verified: true,
+    },
+    {
+      program_id: 'dvoucher',
+      program_name: '장애인스포츠강좌이용권',
+      eligible: false,
+      reasons: [{ field: 'disability', ok: false, message: '장애 등록 정보가 없습니다' }],
+      benefit: DVOUCHER_BENEFIT,
+      apply: DVOUCHER_APPLY,
+      source: DVOUCHER_SOURCE,
+      verified: false,
+    },
+    {
+      program_id: 'public_program',
+      program_name: '공공체육시설 프로그램(무료/저가)',
+      eligible: true,
+      reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
+      benefit: PUBLIC_BENEFIT,
+      apply: PUBLIC_APPLY,
+      source: PUBLIC_SOURCE,
+      verified: true,
+    },
+  ],
+  path: [
+    { from: 'person', to: 'svoucher', edge: '자격', result: 'fail', label: '소득 그외 · 연령 27>18' },
+    { from: 'svoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: '무료/저가 공공프로그램', curated: '검증 대기' },
+    { from: 'public_program', to: 'facility:P01', edge: '적합·접근', result: 'ok', label: '성북구민체육센터 · 1.6km' },
+  ],
+  nearby: {
+    voucher_facilities: [],
+    alternatives: [
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '구민 요가 오전 월 3만원 · 실버 수중걷기 무료', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P03', name: '월곡스포츠문화센터', type: '공공체육시설', sports: ['필라테스', '요가', '스트레칭'], lat: 37.6022, lon: 127.0405, dist_km: 1.6, note: '저녁 스트레칭·요가 월 4만원', disability_support: false, fee_month: 40000, source: 'public', addr: '서울 성북구 월곡로 21' },
+    ],
+  },
+  supply_gap: {
+    radius_km: 3,
+    voucher_count: 4,
+    alt_count: 2,
+    nearest: null,
+    message: '반경 3km 내 무료/저가 공공 프로그램 2곳을 이용할 수 있습니다',
+    coverage: COVERAGE_SB_NEARPOOR,
+  },
+}
+
+// ---------- P3: dvoucher 예상 자격 ✓ (단 성북 내 가맹 0 → 공급공백) ----------
+const P3: AssessResponse = {
+  eligibility: [
+    {
+      program_id: 'svoucher',
+      program_name: '스포츠강좌이용권',
+      eligible: false,
+      reasons: [
+        { field: 'route', ok: false, message: '장애인은 장애인스포츠강좌이용권 대상입니다 (비장애 이용권과 중복 지원 불가)' },
+      ],
+      benefit: SVOUCHER_BENEFIT,
+      apply: SVOUCHER_APPLY,
+      source: SVOUCHER_SOURCE,
+      verified: true,
+    },
+    {
+      program_id: 'dvoucher',
+      program_name: '장애인스포츠강좌이용권',
+      eligible: true,
+      reasons: [
+        { field: 'disability', ok: true, message: '지체장애 등록 · 장애인 이용권 대상입니다' },
+        { field: 'age', ok: true, message: '만 14세 · 장애인 이용권 연령 범위에 해당합니다 (공식 확인 필요)' },
+        { field: 'income_class', ok: true, message: '차상위 · 소득 우대 대상입니다 (공식 확인 필요)' },
+      ],
+      benefit: DVOUCHER_BENEFIT,
+      apply: DVOUCHER_APPLY,
+      source: DVOUCHER_SOURCE,
+      verified: false,
+    },
+    {
+      program_id: 'public_program',
+      program_name: '공공체육시설 프로그램(무료/저가)',
+      eligible: true,
+      reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
+      benefit: PUBLIC_BENEFIT,
+      apply: PUBLIC_APPLY,
+      source: PUBLIC_SOURCE,
+      verified: true,
+    },
+  ],
+  path: [
+    { from: 'person', to: 'dvoucher', edge: '자격', result: 'ok', label: '장애인 이용권 대상(연령·소득 충족·공식 확인 필요)' },
+    { from: 'dvoucher', to: 'facility:D01', edge: '적합·접근', result: 'ok', label: '가장 가까운 장애인 가맹 4.2km(강북)' },
+  ],
+  nearby: {
+    voucher_facilities: [
+      { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], lat: 37.6396, lon: 127.0257, dist_km: 4.2, fee_month: 0, subsidy: 110000, copay: 0, disability_support: true, source: 'dvoucher', addr: '서울 강북구 한천로 1000', course_name: '장애인 재활 수영(무료)' },
+    ],
+    alternatives: [
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '접근성 지원 시설 · 저가/무료 프로그램', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+    ],
+  },
+  supply_gap: {
+    radius_km: 3,
+    voucher_count: 0,
+    alt_count: 1,
+    nearest: { name: '서울장애인체육관', dist_km: 4.2 },
+    message: '반경 3km 내 장애인스포츠강좌이용권 가맹시설이 없습니다',
+    coverage: COVERAGE_SB_NEARPOOR,
+  },
+}
+
+// ---------- P4: dvoucher ✗(연령 초과) → 공급공백 + 장애 특화 대체경로 ----------
+const P4: AssessResponse = {
+  eligibility: [
+    {
+      program_id: 'svoucher',
+      program_name: '스포츠강좌이용권',
+      eligible: false,
+      reasons: [
+        { field: 'route', ok: false, message: '장애인은 장애인스포츠강좌이용권 대상입니다' },
+        { field: 'age', ok: false, message: '지원 연령(만 5~18세)을 초과합니다' },
+      ],
+      benefit: SVOUCHER_BENEFIT,
+      apply: SVOUCHER_APPLY,
+      source: SVOUCHER_SOURCE,
+      verified: true,
+    },
+    {
+      program_id: 'dvoucher',
+      program_name: '장애인스포츠강좌이용권',
+      eligible: false,
+      reasons: [
+        { field: 'age', ok: false, message: '연령 72세 · 장애인 이용권 상한(만 69세)을 초과합니다 (공식 확인 필요)' },
+      ],
+      benefit: DVOUCHER_BENEFIT,
+      apply: DVOUCHER_APPLY,
+      source: DVOUCHER_SOURCE,
+      verified: false,
+    },
+    {
+      program_id: 'public_program',
+      program_name: '공공체육시설 프로그램(무료/저가)',
+      eligible: true,
+      reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다 (접근성 지원 시설 우선)' }],
+      benefit: PUBLIC_BENEFIT,
+      apply: PUBLIC_APPLY,
+      source: PUBLIC_SOURCE,
+      verified: true,
+    },
+  ],
+  path: [
+    { from: 'person', to: 'dvoucher', edge: '자격', result: 'fail', label: '연령 72 > 69 상한' },
+    { from: 'dvoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: '접근성 지원 공공프로그램', curated: '검증 대기' },
+    { from: 'public_program', to: 'facility:P01', edge: '적합·접근', result: 'ok', label: '성북구민체육센터(접근성 지원) · 1.6km' },
+  ],
+  nearby: {
+    voucher_facilities: [],
+    alternatives: [
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설(접근성 지원)', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '접근성 지원 · 실버 수중걷기 무료교실 · 저가 프로그램', disability_support: true, fee_month: 0, source: 'public', addr: '서울 성북구 화랑로 189' },
+    ],
+  },
+  supply_gap: {
+    radius_km: 3,
+    voucher_count: 0,
+    alt_count: 1,
+    nearest: { name: '서울장애인체육관', dist_km: 4.2 },
+    message: '반경 3km 내 장애인 이용권 가맹시설이 없습니다',
+    coverage: COVERAGE_SB_NEARPOOR,
+  },
+}
+
+export const PERSONA_RESPONSES: Record<string, AssessResponse> = { P1, P2, P3, P4 }
+
+// ---------- POST /api/fitness (P2 시나리오 기준 샘플) ----------
+export const FITNESS_RESPONSE: FitnessResponse = {
+  weaknesses: [
+    { item: '유연성', value: -3, band: '하위', basis: '데모 기준(연령·성별 근사)' },
+    { item: '심폐지구력', value: 25, band: '하위', basis: '데모 기준(연령·성별 근사)' },
+  ],
+  recommendations: [
+    { weakness: '유연성', exercises: ['요가', '스트레칭', '필라테스'], sports: ['요가', '필라테스'], curated: '체대 검증 대기' },
+    { weakness: '심폐지구력', exercises: ['걷기', '수영', '자전거'], sports: ['수영', '에어로빅'], curated: '체대 검증 대기' },
+  ],
+  videos: [
+    { title: '국민체력100 유연성 개선 스트레칭', url: 'https://nfa.kspo.or.kr/', source: '국민체력100 동영상(15108846)' },
+    { title: '심폐지구력 향상 걷기 프로그램', url: 'https://nfa.kspo.or.kr/', source: '국민체력100 동영상(15108846)' },
+  ],
+  facility_filter_sports: ['요가', '필라테스', '수영', '에어로빅'],
+}

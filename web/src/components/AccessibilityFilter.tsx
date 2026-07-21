@@ -51,7 +51,7 @@ export function AccessibilityFilter({
                   (on
                     ? 'bg-violet-600 text-white ring-violet-600'
                     : dim
-                      ? 'bg-white/50 text-slate-400 ring-slate-200 dark:bg-slate-800/40 dark:text-slate-500 dark:ring-slate-700'
+                      ? 'bg-white/50 text-slate-500 ring-slate-200 dark:bg-slate-800/40 dark:text-slate-400 dark:ring-slate-700'
                       : 'bg-white text-violet-800 ring-violet-200 hover:bg-violet-100 dark:bg-slate-800 dark:text-violet-200 dark:ring-violet-500/40')
                 }
               >

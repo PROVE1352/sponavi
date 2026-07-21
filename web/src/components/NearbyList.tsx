@@ -140,7 +140,7 @@ export function NearbyList({
       {hasDvoucher && (
         <p
           data-testid="accessibility-source"
-          className="text-xs text-slate-400 dark:text-slate-500"
+          className="text-xs text-slate-600 dark:text-slate-400"
         >
           {accessibilitySourceLine(checkedDate)} · 공단 웹서비스 공개 조회(보조)
         </p>
@@ -170,7 +170,7 @@ export function NearbyList({
 
 function DistTag({ dist }: { dist: number }) {
   return (
-    <span className="text-xs text-slate-500 dark:text-slate-400">
+    <span className="text-xs text-slate-600 dark:text-slate-400">
       {km(dist)} · 도보 약 {walkMinutes(dist)}분
     </span>
   )
@@ -179,7 +179,7 @@ function DistTag({ dist }: { dist: number }) {
 // 근사좌표(구 중심) 시설: 거리 대신 근사 안내. km 절대 표기 금지(카피 사전).
 function ApproxTag() {
   return (
-    <span className="text-xs text-slate-400 dark:text-slate-500">구 중심 근사 좌표 · 정확한 위치는 시설에 확인</span>
+    <span className="text-xs text-slate-600 dark:text-slate-400">구 중심 근사 좌표 · 정확한 위치는 시설에 확인</span>
   )
 }
 
@@ -203,7 +203,7 @@ function DisabilityTag({ support }: { support: boolean | null }) {
 function AccessibilityTags({ data }: { data?: FacilityAccessibility }) {
   if (!data) {
     return (
-      <p data-testid="access-none" className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+      <p data-testid="access-none" className="mt-2 text-xs text-slate-600 dark:text-slate-400">
         접근성 정보 없음
       </p>
     )
@@ -226,7 +226,7 @@ function AccessibilityTags({ data }: { data?: FacilityAccessibility }) {
           ))}
         </ul>
       )}
-      {empty && <p className="text-xs text-slate-400 dark:text-slate-500">접근성 정보 없음</p>}
+      {empty && <p className="text-xs text-slate-600 dark:text-slate-400">접근성 정보 없음</p>}
     </div>
   )
 }
@@ -247,7 +247,7 @@ function VoucherRow({
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-slate-900 dark:text-white">{v.name}</p>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
             {v.sports.join(' · ')}
             {v.course_name ? ` · ${v.course_name}` : ''}
           </p>
@@ -258,20 +258,20 @@ function VoucherRow({
           <DisabilityTag support={v.disability_support} />
         </div>
       </div>
-      {v.addr && <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">{v.addr}</p>}
+      {v.addr && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{v.addr}</p>}
 
       {/* 자부담 계산 */}
       <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center dark:bg-slate-800/60">
         <div>
-          <dt className="text-[11px] text-slate-500 dark:text-slate-400">월 수강료</dt>
+          <dt className="text-[11px] text-slate-600 dark:text-slate-400">월 수강료</dt>
           <dd className="text-sm font-semibold text-slate-800 dark:text-slate-100">{won(v.fee_month)}</dd>
         </div>
         <div>
-          <dt className="text-[11px] text-slate-500 dark:text-slate-400">이용권 지원</dt>
-          <dd className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">−{wonPlain(Math.min(v.subsidy, v.fee_month))}</dd>
+          <dt className="text-[11px] text-slate-600 dark:text-slate-400">이용권 지원</dt>
+          <dd className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">−{wonPlain(Math.min(v.subsidy, v.fee_month))}</dd>
         </div>
         <div>
-          <dt className="text-[11px] text-slate-500 dark:text-slate-400">내 부담</dt>
+          <dt className="text-[11px] text-slate-600 dark:text-slate-400">내 부담</dt>
           <dd className="text-sm font-bold text-brand-700 dark:text-brand-100">{won(v.copay)}</dd>
         </div>
       </dl>
@@ -292,7 +292,7 @@ function AltRow({ a }: { a: AlternativeFacility }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-slate-900 dark:text-white">{a.name}</p>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
             {a.type} · {a.sports.join(' · ')}
           </p>
         </div>

@@ -60,9 +60,9 @@ export function Wizard({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-6">
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900 sm:p-6">
       <h2 className="text-lg font-bold text-slate-900 dark:text-white">내 상황 입력</h2>
-      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
         입력값은 저장되지 않고 이번 확인에만 쓰입니다. (로그인·개인정보 저장 없음)
       </p>
 
@@ -77,7 +77,7 @@ export function Wizard({
             required
             value={age}
             onChange={(e) => setAge(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           />
         </label>
 
@@ -92,7 +92,7 @@ export function Wizard({
                 role="radio"
                 aria-checked={sex === s}
                 onClick={() => setSex(s)}
-                className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+                className={`min-h-11 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
                   sex === s
                     ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-700/25 dark:text-brand-100'
                     : 'border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300'
@@ -110,7 +110,7 @@ export function Wizard({
           <select
             value={sigunguCd}
             onChange={(e) => setSigunguCd(e.target.value)}
-            className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
           >
             {sigungu.map((s) => (
               <option key={s.cd} value={s.cd}>
@@ -124,7 +124,7 @@ export function Wizard({
       {/* 소득계층 4택 */}
       <fieldset className="mt-5">
         <legend className="text-sm font-semibold text-slate-700 dark:text-slate-200">소득 계층 (자가 선언)</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <div role="radiogroup" aria-label="소득 계층 (자가 선언)" className="mt-2 grid gap-2 sm:grid-cols-2">
           {INCOME_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -139,7 +139,7 @@ export function Wizard({
               }`}
             >
               <span className="block text-sm font-semibold text-slate-800 dark:text-slate-100">{opt.label}</span>
-              <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{opt.hint}</span>
+              <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">{opt.hint}</span>
             </button>
           ))}
         </div>
@@ -148,7 +148,7 @@ export function Wizard({
       {/* 장애 유무/유형 */}
       <fieldset className="mt-5">
         <legend className="text-sm font-semibold text-slate-700 dark:text-slate-200">장애 여부</legend>
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div role="radiogroup" aria-label="장애 여부" className="mt-2 grid grid-cols-2 gap-2">
           {[false, true].map((v) => (
             <button
               key={String(v)}
@@ -156,7 +156,7 @@ export function Wizard({
               role="radio"
               aria-checked={hasDisability === v}
               onClick={() => setHasDisability(v)}
-              className={`rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
+              className={`min-h-11 rounded-lg border px-3 py-2.5 text-sm font-medium transition ${
                 hasDisability === v
                   ? 'border-brand-600 bg-brand-50 text-brand-700 dark:bg-brand-700/25 dark:text-brand-100'
                   : 'border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-300'
@@ -172,7 +172,7 @@ export function Wizard({
             <select
               value={disabilityType}
               onChange={(e) => setDisabilityType(e.target.value as DisabilityType)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="mt-1.5 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
             >
               {DISABILITY_TYPES.map((t) => (
                 <option key={t} value={t}>

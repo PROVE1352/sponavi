@@ -3,21 +3,46 @@
 /* 다크 모드: 클래스 기반(.dark). 시스템 선호는 main.tsx 초기화에서 반영 + 수동 토글. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── 스포내비 디자인 시스템 토큰 ─────────────────────────────────
+   주색: 공공 신뢰 네이비블루(brand) + 청록 보조(accent).
+   상태색은 색맹 안전 — UI에서 항상 아이콘·텍스트를 함께 쓴다.
+   초록=자격 / 로즈=불가 / 호박=근사·주의 / 보라=장애인. */
 @theme {
   --font-sans:
     'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
     'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
 
-  /* 신뢰 블루 + 따뜻한 보조. 마커/상태 색은 색맹 안전(항상 아이콘·텍스트 동반). */
+  /* Brand — 네이비블루(공공 신뢰) */
   --color-brand-50: #eef4ff;
   --color-brand-100: #d9e6ff;
+  --color-brand-200: #bcd2fe;
+  --color-brand-300: #8fb2fb;
+  --color-brand-400: #5b8def;
   --color-brand-500: #2563eb;
   --color-brand-600: #1d4ed8;
   --color-brand-700: #1e40af;
+  --color-brand-800: #1b3592;
+  --color-brand-900: #172b6e;
+  --color-brand-950: #101d47;
 
-  --color-marker-voucher: #2563eb; /* 이용권 가맹 = 파랑 */
-  --color-marker-public: #16a34a; /* 공공/대안 = 초록 */
+  /* Accent — 청록(보조 신뢰·생동) */
+  --color-accent-50: #ecfeff;
+  --color-accent-100: #cffafe;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #0891b2;
+  --color-accent-600: #0e7490;
+  --color-accent-700: #155e75;
+
+  /* 마커/상태 색(색맹 안전: 항상 아이콘·텍스트 병기). */
+  --color-marker-voucher: #1d4ed8; /* 이용권 가맹 = 파랑 */
+  --color-marker-public: #059669; /* 공공/대안 = 초록 */
   --color-marker-disability: #7c3aed; /* 장애인 = 보라 */
+
+  /* 카드 그림자 — 은은한 깊이(공공 톤: 과하지 않게). */
+  --shadow-card:
+    0 1px 2px 0 rgb(15 23 42 / 0.05), 0 10px 26px -14px rgb(15 23 42 / 0.18);
+  --shadow-hero: 0 20px 48px -20px rgb(23 43 110 / 0.55);
 }
 
 :root {
@@ -29,6 +54,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -44,11 +70,28 @@ body {
   color: #e2e8f0;
 }
 
-/* 키보드 포커스 링(접근성) */
-:where(a, button, input, select, [tabindex]):focus-visible {
+/* 키보드 포커스 링(접근성) — 라이트/다크 모두 또렷하게. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 3px solid var(--color-brand-500);
   outline-offset: 2px;
   border-radius: 6px;
+}
+.dark :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline-color: var(--color-brand-400);
+}
+
+/* 모션 최소화 선호 존중 */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 /* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
@@ -61,6 +104,12 @@ body {
 }
 .dark .leaflet-tile {
   filter: brightness(0.85) contrast(1.05);
+}
+/* 지도 팝업 다크 대비 */
+.dark .leaflet-popup-content-wrapper,
+.dark .leaflet-popup-tip {
+  background: #1e293b;
+  color: #e2e8f0;
 }
 
 /* 커스텀 divIcon 마커(색상 원 + 링) */

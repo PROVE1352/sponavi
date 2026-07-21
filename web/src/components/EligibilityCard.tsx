@@ -5,7 +5,7 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
   const eligible = p.eligible
   return (
     <article
-      className={`rounded-2xl border bg-white p-5 shadow-sm dark:bg-slate-900 ${
+      className={`rounded-2xl border bg-white p-5 shadow-card dark:bg-slate-900 ${
         eligible
           ? 'border-emerald-300 dark:border-emerald-500/40'
           : 'border-slate-200 dark:border-slate-800'
@@ -15,7 +15,7 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-lg font-bold text-slate-900 dark:text-white">{p.program_name}</h3>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{p.benefit}</p>
+          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{p.benefit}</p>
         </div>
         <EligibilityMark eligible={eligible} />
       </header>
@@ -55,7 +55,7 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{p.apply.how}</p>
           {p.apply.docs.length > 0 && (
             <div className="mt-3">
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">준비 서류</p>
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">준비 서류</p>
               <ul className="mt-1 flex flex-wrap gap-1.5">
                 {p.apply.docs.map((d, i) => (
                   <li key={i}>
@@ -69,7 +69,7 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
             href={p.apply.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
           >
             공식 신청 페이지 열기
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
@@ -84,7 +84,7 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
       {altEdges && altEdges.length > 0 && <AltRoutesBlock card={p} altEdges={altEdges} />}
 
       {/* 출처·확인일 각주 */}
-      <footer className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      <footer className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
         출처{' '}
         <a
           href={p.source.url}
@@ -119,10 +119,10 @@ function SelectionBlock({ selection }: { selection: Selection }) {
       </div>
       <p className="mt-2 text-sm text-amber-900/90 dark:text-amber-100/90">{selection.note}</p>
       {selection.tiebreak && (
-        <p className="mt-1.5 text-xs text-amber-800/80 dark:text-amber-200/70">동점 시: {selection.tiebreak}</p>
+        <p className="mt-1.5 text-xs text-amber-800 dark:text-amber-200">동점 시: {selection.tiebreak}</p>
       )}
       {selection.source?.url && (
-        <p className="mt-2 text-xs text-amber-800/70 dark:text-amber-200/60">
+        <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
           선정순위 출처{' '}
           <a
             href={selection.source.url}
@@ -179,7 +179,10 @@ function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges
                 <span className="text-sm font-semibold text-slate-900 dark:text-white">
                   {a.program?.name ?? a.note}
                 </span>
-                <Badge tone={official ? 'ok' : 'purple'} icon={<WarnIcon className="w-3 h-3" />}>
+                <Badge
+                  tone={official ? 'ok' : 'purple'}
+                  icon={official ? <CheckIcon className="w-3 h-3" /> : <WarnIcon className="w-3 h-3" />}
+                >
                   {official ? '공식 확인' : `큐레이션 · ${a.curated}`}
                 </Badge>
               </div>

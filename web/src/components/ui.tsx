@@ -92,7 +92,7 @@ export function ApproxLocationBadge() {
 // 예상 자격 삼중 표기: 색 + 아이콘 + 텍스트
 export function EligibilityMark({ eligible }: { eligible: boolean }) {
   return eligible ? (
-    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-bold text-white">
+    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-bold text-white">
       <CheckIcon className="w-5 h-5" />
       예상 자격
     </span>

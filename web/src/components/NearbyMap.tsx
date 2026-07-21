@@ -36,6 +36,26 @@ function pinIcon(kind: Kind): L.DivIcon {
   })
 }
 
+function kindLabel(kind: Kind): string {
+  switch (kind) {
+    case 'voucher':
+      return '이용권 가맹'
+    case 'dvoucher':
+      return '장애인 가맹'
+    case 'public':
+      return '공공·대안'
+    case 'person':
+      return '내 위치'
+  }
+}
+
+// 마커 접근성 이름(대체텍스트) — 스크린리더/키보드 포커스용. 색만으로 의미를 전달하지 않는다.
+function markerTitle(p: MapPoint): string {
+  if (p.kind === 'person') return '내 위치'
+  const where = p.approx ? '위치 근사(구 중심)' : p.dist_km != null ? `${p.dist_km.toFixed(1)}km` : ''
+  return [p.name, kindLabel(p.kind), where].filter(Boolean).join(' · ')
+}
+
 function FitBounds({ points }: { points: MapPoint[] }) {
   const map = useMap()
   useEffect(() => {
@@ -81,12 +101,12 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
   const center: [number, number] = [personLoc.lat, personLoc.lon]
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800">
+    <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-card dark:border-slate-800">
       <MapContainer
         center={center}
         zoom={14}
         scrollWheelZoom={false}
-        style={{ height: '20rem', width: '100%' }}
+        className="h-64 w-full sm:h-80"
         aria-label="근처 스포츠 자원 지도"
       >
         <TileLayer
@@ -95,7 +115,13 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
         />
         <FitBounds points={points} />
         {points.map((p) => (
-          <Marker key={p.id} position={[p.lat, p.lon]} icon={pinIcon(p.kind)}>
+          <Marker
+            key={p.id}
+            position={[p.lat, p.lon]}
+            icon={pinIcon(p.kind)}
+            title={markerTitle(p)}
+            alt={markerTitle(p)}
+          >
             <Popup>
               <b>{p.name}</b>
               {p.detail && <div>{p.detail}</div>}

@@ -128,7 +128,7 @@ const P5_ALT_EDGES: AltEdge[] = [
 export const PERSONA_REQUESTS: DemoPersona[] = [
   {
     id: 'P1',
-    label: 'P1 · 10세 여아 · 기초수급',
+    label: '기초수급 아동',
     summary: '스포츠강좌이용권 예상 자격 ✓ → 신청 안내 + 가맹시설·자부담',
     age: 10,
     sex: 'F',
@@ -140,7 +140,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
   },
   {
     id: 'P2',
-    label: 'P2 · 27세 남 · 낀 계층',
+    label: '낀 계층 청년',
     summary: '이용권 ✗(소득·연령) → 대체경로 → 공공시설 + 체력처방',
     age: 27,
     sex: 'M',
@@ -152,7 +152,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
   },
   {
     id: 'P3',
-    label: 'P3 · 14세 여 · 차상위 · 지체장애',
+    label: '지체장애 청소년',
     summary: '장애인스포츠강좌이용권 ✓ → 접근성 시설(단, 성북 내 가맹 0 → 공급공백)',
     age: 14,
     sex: 'F',
@@ -164,7 +164,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
   },
   {
     id: 'P4',
-    label: 'P4 · 72세 남 · 청각장애',
+    label: '연령 초과 어르신',
     summary: '장애인 이용권 ✗(연령 초과) → 공급공백 배너 + 장애 특화 대체경로',
     age: 72,
     sex: 'M',
@@ -176,7 +176,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
   },
   {
     id: 'P5',
-    label: 'P5 · 32세 남 · 지체장애 · 비저소득',
+    label: '비저소득 성인 장애인',
     summary: '장애인 이용권 ✓(신청 소득무관) · 예상 5순위 → 지금 바로 되는 대체경로',
     age: 32,
     sex: 'M',

@@ -25,16 +25,21 @@ export function PathDiagram({ path }: { path: PathEdge[] }) {
   for (const e of path) nodes.push({ id: e.to, status: e.result, incoming: e })
 
   return (
-    <section aria-label="추천 경로 시각화" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section aria-label="추천 경로 시각화" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900">
       <div className="mb-1 flex items-center gap-2">
         <h2 className="text-base font-bold text-slate-900 dark:text-white">왜 이 결과인가 · 경로</h2>
       </div>
-      <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+      <p className="mb-4 text-sm text-slate-600 dark:text-slate-400">
         개인 상황에서 제도·대안을 거쳐 실제 시설까지 이어지는 경로입니다.
       </p>
 
       <div className="relative">
-        <div className="overflow-x-auto pb-2">
+        <div
+          className="overflow-x-auto pb-2"
+          tabIndex={0}
+          role="group"
+          aria-label="경로 단계 (좌우로 스크롤)"
+        >
           <ol className="flex min-w-max items-stretch gap-1">
             {nodes.map((n, i) => (
               <li key={i} className="flex items-stretch">
@@ -53,7 +58,7 @@ export function PathDiagram({ path }: { path: PathEdge[] }) {
         )}
       </div>
       {nodes.length > 2 && (
-        <p className="mt-1 text-center text-xs text-slate-400 dark:text-slate-500 sm:hidden">
+        <p className="mt-1 text-center text-xs text-slate-600 dark:text-slate-400 sm:hidden">
           ← 좌우로 넘겨 전체 경로를 확인하세요 →
         </p>
       )}
@@ -72,6 +77,9 @@ function NodeBox({ node }: { node: Node }) {
   return (
     <div className={`flex w-24 flex-col items-center justify-center rounded-xl border px-2 py-3 text-center ${styles}`}>
       <div className="mb-1">
+        <span className="sr-only">
+          {node.status === 'ok' ? '충족: ' : node.status === 'fail' ? '미충족: ' : '시작: '}
+        </span>
         {node.status === 'ok' && <CheckIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
         {node.status === 'fail' && <XIcon className="w-5 h-5 text-rose-600 dark:text-rose-400" />}
         {node.status === 'start' && (
@@ -79,7 +87,7 @@ function NodeBox({ node }: { node: Node }) {
         )}
       </div>
       <div className="text-sm font-semibold leading-tight text-slate-900 dark:text-white">{title}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[11px] text-slate-600 dark:text-slate-400">{sub}</div>}
     </div>
   )
 }
@@ -90,7 +98,7 @@ function EdgeArrow({ edge }: { edge: PathEdge }) {
   const arrow = ok ? 'text-emerald-500 dark:text-emerald-400' : 'text-rose-500 dark:text-rose-400'
   return (
     <div className="flex w-20 flex-col items-center justify-center px-1">
-      <div className="mb-1 text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">{edge.edge}</div>
+      <div className="mb-1 text-center text-[11px] font-semibold text-slate-600 dark:text-slate-400">{edge.edge}</div>
       <div className="flex w-full items-center">
         <span className={`h-0.5 flex-1 ${line}`} />
         <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 ${arrow}`} aria-hidden="true">

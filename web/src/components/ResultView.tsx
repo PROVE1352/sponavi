@@ -32,7 +32,7 @@ export function ResultView({ req, data }: { req: AssessRequest; data: AssessResp
             />
           ))}
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+        <p className="text-xs text-slate-600 dark:text-slate-400">
           ※ 여기 표시된 것은 <b>예상 자격</b>입니다. 최종 자격은 각 공식 신청처에서 확인됩니다.
         </p>
       </section>

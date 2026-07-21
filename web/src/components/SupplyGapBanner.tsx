@@ -54,10 +54,10 @@ export function SupplyGapBanner({ gap }: { gap: SupplyGap }) {
           data-testid="voucher-supply-block"
           className="flex items-start gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm dark:bg-slate-800/70"
         >
-          <InfoIcon className="mt-0.5 w-4 h-4 shrink-0 text-slate-500 dark:text-slate-400" />
+          <InfoIcon className="mt-0.5 w-4 h-4 shrink-0 text-slate-600 dark:text-slate-400" />
           <p className="text-slate-700 dark:text-slate-200">
             <b>{gap.message}</b>
-            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+            <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
               이용권 가맹시설 위치는 구 중심 근사값이라 구 단위로 집계합니다(개별 거리 미표기).
             </span>
           </p>
@@ -66,12 +66,12 @@ export function SupplyGapBanner({ gap }: { gap: SupplyGap }) {
 
       {gap.coverage && (
         <div className="flex items-start gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm dark:bg-slate-800/70">
-          <InfoIcon className="mt-0.5 w-4 h-4 shrink-0 text-slate-500 dark:text-slate-400" />
+          <InfoIcon className="mt-0.5 w-4 h-4 shrink-0 text-slate-600 dark:text-slate-400" />
           <p className="text-slate-700 dark:text-slate-200">
             <b>{gap.coverage.sigungu}</b>의 {gap.coverage.class} 스포츠강좌이용권 수급률은{' '}
-            <b className="text-rose-600 dark:text-rose-400">{percent(gap.coverage.rate)}</b> 입니다 (대상{' '}
+            <b className="text-rose-700 dark:text-rose-400">{percent(gap.coverage.rate)}</b> 입니다 (대상{' '}
             {gap.coverage.target.toLocaleString()}명 중 {gap.coverage.recipient}명 · {gap.coverage.year}).
-            <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+            <span className="mt-0.5 block text-xs text-slate-600 dark:text-slate-400">
               제도가 있어도 실제로 닿지 못하는 사각지대를 그대로 보여줍니다.
             </span>
           </p>

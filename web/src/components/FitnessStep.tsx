@@ -184,7 +184,7 @@ export function FitnessStep({
   return (
     <section
       data-testid="fitness-section"
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900"
     >
       <button
         type="button"
@@ -194,11 +194,11 @@ export function FitnessStep({
       >
         <span>
           <span className="text-base font-bold text-slate-900 dark:text-white">체력 처방 (선택)</span>
-          <span className="ml-2 text-sm text-slate-500 dark:text-slate-400">
+          <span className="ml-2 text-sm text-slate-600 dark:text-slate-400">
             측정값을 넣으면 약점 판정·운동 추천·AI 처방을 받아요
           </span>
         </span>
-        <span className="text-slate-400">{open ? '▲' : '▼'}</span>
+        <span className="text-slate-600 dark:text-slate-400" aria-hidden="true">{open ? '▲' : '▼'}</span>
       </button>
 
       {open && (
@@ -237,7 +237,7 @@ export function FitnessStep({
                 data-testid="fitness-submit"
                 onClick={submit}
                 disabled={loading || !canSubmit}
-                className="w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+                className="min-h-11 w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
               >
                 {loading ? '분석 중…' : canSubmit ? '체력 판정 받기' : '측정값을 1개 이상 입력하세요'}
               </button>
@@ -256,7 +256,7 @@ export function FitnessStep({
           )}
 
           {/* 하단 고정 고지 */}
-          <p className="border-t border-slate-100 pt-3 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+          <p className="border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
             운동 참고 정보이며 의료 조언이 아닙니다. 공식 체력 인증은 전국 체력인증센터(무료)에서 받을 수 있습니다.
           </p>
         </div>
@@ -295,11 +295,11 @@ function ParqGate({ onContinue }: { onContinue: () => void }) {
         data-testid="parq-continue"
         onClick={onContinue}
         disabled={!checked}
-        className="mt-3 w-full rounded-lg border-2 border-brand-600 px-4 py-2 font-semibold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
+        className="mt-3 min-h-11 w-full rounded-lg border-2 border-brand-600 px-4 py-2 font-semibold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
       >
         측정값 입력하기
       </button>
-      <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">이 문진 응답은 저장·전송되지 않습니다.</p>
+      <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">이 문진 응답은 저장·전송되지 않습니다.</p>
     </div>
   )
 }
@@ -318,12 +318,12 @@ function DynamicForm({
   onAlt: (altGroup: string, code: string) => void
 }) {
   const inputCls =
-    'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white'
+    'mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white'
   return (
     <div data-testid="fitness-form" className="space-y-4">
       {grouped.map(([factor, frows]) => (
         <div key={factor}>
-          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
             {factor}
           </h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -333,7 +333,7 @@ function DynamicForm({
                 return (
                   <label key={it.code} className="block text-sm">
                     <span className="text-slate-700 dark:text-slate-200">{it.name}</span>
-                    {it.unit && <span className="ml-1 text-xs text-slate-400">({it.unit})</span>}
+                    {it.unit && <span className="ml-1 text-xs text-slate-600 dark:text-slate-400">({it.unit})</span>}
                     <input
                       type="number"
                       inputMode="decimal"
@@ -342,7 +342,7 @@ function DynamicForm({
                       onChange={(e) => onValue(it.code, e.target.value)}
                       className={inputCls}
                     />
-                    <span className="mt-0.5 block text-[11px] text-slate-400">{it.hint}</span>
+                    <span className="mt-0.5 block text-[11px] text-slate-600 dark:text-slate-400">{it.hint}</span>
                   </label>
                 )
               }
@@ -353,6 +353,7 @@ function DynamicForm({
                   <span className="text-slate-700 dark:text-slate-200">{row.factor} (택1)</span>
                   <select
                     data-testid={`fit-alt-${row.altGroup}`}
+                    aria-label={`${row.factor} 측정 종목 선택`}
                     value={code}
                     onChange={(e) => onAlt(row.altGroup, e.target.value)}
                     className={inputCls}
@@ -368,6 +369,7 @@ function DynamicForm({
                     type="number"
                     inputMode="decimal"
                     data-testid={`fit-input-${active.code}`}
+                    aria-label={`${active.name} 값 입력${active.unit ? ` (단위 ${active.unit})` : ''}`}
                     value={values[active.code] ?? ''}
                     onChange={(e) => onValue(active.code, e.target.value)}
                     className={inputCls}
@@ -416,7 +418,7 @@ function FitnessResult({
           국민체력100 공식 인증기준
         </Badge>
         {result.age_group && (
-          <span className="text-xs text-slate-500 dark:text-slate-400">{result.age_group}</span>
+          <span className="text-xs text-slate-600 dark:text-slate-400">{result.age_group}</span>
         )}
       </div>
 
@@ -453,11 +455,11 @@ function FitnessResult({
             )}
           </div>
           {rg.missing.length > 0 && (
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
               미입력 요인: {rg.missing.join(', ')} — 전 항목 측정 시에만 공식 등급이 확정됩니다.
             </p>
           )}
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
             자가입력 기준 추정값입니다. <b>공식 인증은 체력인증센터(무료)</b>에서 받을 수 있습니다.
           </p>
         </div>
@@ -485,10 +487,10 @@ function FitnessResult({
           type="button"
           data-testid="facility-filter-apply"
           onClick={() => onApplyFilter(sports)}
-          className="w-full rounded-lg border-2 border-brand-600 px-4 py-2.5 text-left font-semibold text-brand-700 transition hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
+          className="min-h-11 w-full rounded-lg border-2 border-brand-600 px-4 py-2.5 text-left font-semibold text-brand-700 transition hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
         >
           이 운동 되는 근처 강좌 보기 · {sports.join(' · ')}
-          <span className="ml-1 font-normal text-brand-600/80 dark:text-brand-100/70">
+          <span className="ml-1 font-normal text-brand-700 dark:text-brand-100">
             (근처 {matchCount}곳)
           </span>
         </button>
@@ -501,7 +503,7 @@ function FitnessResult({
           data-testid="ai-prescribe-btn"
           onClick={onRequestAi}
           disabled={aiLoading}
-          className="w-full rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-900 disabled:opacity-60 dark:bg-slate-700 dark:hover:bg-slate-600"
+          className="min-h-11 w-full rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-900 disabled:opacity-60 dark:bg-slate-700 dark:hover:bg-slate-600"
         >
           {aiLoading ? '처방 생성 중…' : 'AI 처방 받기'}
         </button>
@@ -529,7 +531,7 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
                   <Badge tone={badge.tone}>{badge.label}</Badge>
                 </span>
               )}
-              {e.prov?.via_goal && <span className="text-xs text-slate-400">via {e.prov.via_goal}</span>}
+              {e.prov?.via_goal && <span className="text-xs text-slate-600 dark:text-slate-400">via {e.prov.via_goal}</span>}
             </li>
           )
         })}
@@ -547,7 +549,7 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
                     className="h-[72px] w-32 rounded-md object-cover ring-1 ring-slate-200 dark:ring-slate-700"
                   />
                 ) : (
-                  <div className="grid h-[72px] w-32 place-items-center rounded-md bg-slate-100 text-xs text-slate-400 dark:bg-slate-800">
+                  <div className="grid h-[72px] w-32 place-items-center rounded-md bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                     영상
                   </div>
                 )}
@@ -571,7 +573,7 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
         <Badge tone={isAi ? 'purple' : 'brand'}>
           <span data-testid="ai-provider-label">{isAi ? 'AI 보조 처방' : '기본 규칙 처방'}</span>
         </Badge>
-        <span className="text-xs text-slate-400">provider: {ai.provider}</span>
+        <span className="text-xs text-slate-600 dark:text-slate-400">provider: {ai.provider}</span>
       </div>
 
       {ai.처방.length > 0 && (
@@ -580,7 +582,7 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
             <li key={i} data-testid="ai-rx" className="rounded-lg bg-white p-3 text-sm dark:bg-slate-900">
               <p className="font-semibold text-slate-800 dark:text-slate-100">
                 {rx.운동}
-                <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                <span className="ml-2 text-xs font-normal text-slate-600 dark:text-slate-400">
                   {rx.목표체력요인}
                 </span>
               </p>
@@ -592,7 +594,7 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
         </ul>
       )}
 
-      <p className="text-xs text-slate-400 dark:text-slate-500">{ai.주의}</p>
+      <p className="text-xs text-slate-600 dark:text-slate-400">{ai.주의}</p>
     </div>
   )
 }

@@ -7,8 +7,6 @@ import type {
   AlternativeFacility,
   AssessRequest,
   AssessResponse,
-  FitnessRequest,
-  FitnessResponse,
   IncomeClass,
   PathEdge,
   ProgramEligibility,
@@ -21,7 +19,6 @@ import {
   COVERAGE_ROWS,
   FACILITIES,
   SIGUNGU,
-  VIDEOS,
   distKm,
   type RawFacility,
 } from './fixtures'
@@ -346,34 +343,4 @@ export function mockAssess(req: AssessRequest): AssessResponse {
   }
 }
 
-// --- 체력처방 (데모 근사 기준) ---
-export function mockFitness(req: FitnessRequest): FitnessResponse {
-  const m = req.measures
-  const weaknesses: FitnessResponse['weaknesses'] = []
-  // 데모 근사 임계치. 실제 국민체력100 연령·성별 기준표는 키 주입/자료 확보 후.
-  if (m.flex_cm !== null && m.flex_cm < 5) weaknesses.push({ item: '유연성', value: m.flex_cm, band: '하위', basis: '데모 기준(연령·성별 근사)' })
-  if (m.shuttle_cnt !== null && m.shuttle_cnt < 40) weaknesses.push({ item: '심폐지구력', value: m.shuttle_cnt, band: '하위', basis: '데모 기준(연령·성별 근사)' })
-  if (m.grip_kg !== null && m.grip_kg < 32) weaknesses.push({ item: '근력', value: m.grip_kg, band: '하위', basis: '데모 기준(연령·성별 근사)' })
-  if (m.situp_cnt !== null && m.situp_cnt < 30) weaknesses.push({ item: '근지구력', value: m.situp_cnt, band: '하위', basis: '데모 기준(연령·성별 근사)' })
-  if (weaknesses.length === 0) weaknesses.push({ item: '유연성', value: m.flex_cm, band: '보통', basis: '데모 기준(연령·성별 근사)' })
-
-  const FMAP: Record<string, { exercises: string[]; sports: string[] }> = {
-    유연성: { exercises: ['요가', '스트레칭', '필라테스'], sports: ['요가', '필라테스'] },
-    심폐지구력: { exercises: ['걷기', '수영', '자전거'], sports: ['수영', '에어로빅'] },
-    근력: { exercises: ['홈트', '웨이트', '밴드운동'], sports: ['헬스'] },
-    근지구력: { exercises: ['코어운동', '서킷', '수영'], sports: ['수영', '헬스'] },
-  }
-  const recommendations = weaknesses.map((w) => ({
-    weakness: w.item,
-    exercises: FMAP[w.item]?.exercises ?? ['걷기'],
-    sports: FMAP[w.item]?.sports ?? ['수영'],
-    curated: '체대 검증 대기',
-  }))
-  const filterSports = Array.from(new Set(recommendations.flatMap((r) => r.sports)))
-  const videos = weaknesses
-    .map((w) => VIDEOS.find((v) => v.for_weakness === w.item))
-    .filter((v): v is (typeof VIDEOS)[number] => Boolean(v))
-    .map((v) => ({ title: v.title, url: v.url, source: '국민체력100 동영상(15108846)' }))
-
-  return { weaknesses, recommendations, videos, facility_filter_sports: filterSports }
-}
+// 체력처방 목은 mocks/fitness.ts 로 이동(공식 경로 형태 재현: 항목 카탈로그·판정·그래프 추천·AI).

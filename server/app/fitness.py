@@ -317,7 +317,7 @@ def _assess_official(store: Store, age: int, sex: str, measures: dict) -> dict:
     for w in weaknesses:
         if w["item"] not in weak_factors:
             weak_factors.append(w["item"])
-    recommendations, videos, filter_sports = _recommend_tail(store, weak_factors)
+    recommendations, videos, filter_sports = _recommend_tail_graph(store, weak_factors, age)
 
     result = {
         "age_group": {"gap": "만7~10(공백)", "유소년": "유소년", "청소년": "청소년",
@@ -466,6 +466,61 @@ def _recommend_tail(store: Store, weak_factors: list[str]):
                 "source": v.get("source"),
             })
     return recommendations, videos, rec_sports
+
+
+# ---------------------------------------------------------------------------
+# 그래프 연동 추천 (M1b): 약점요인 → 요인별 {운동·종목·영상 + provenance}.
+# 각 후보에 출처(kspo_standard/guideline/kspo_video/curated)를 동봉해 UI 배지 원천이 된다.
+# 그래프 테이블 부재/빈 결과 시 fitness_map 폴백(무중단, DR-4).
+# ---------------------------------------------------------------------------
+def _recommend_from_graph(store: Store, weak_factors: list[str], age: int):
+    """graph.recommend_for_weakness 서브그래프를 /api/fitness 응답형으로 조립.
+    그래프가 없거나 매칭 0이면 None 을 돌려 폴백을 유도한다."""
+    from . import graph
+    sub = graph.recommend_for_weakness(weak_factors, age, store.conn)
+    if not sub:
+        return None
+
+    recommendations: list[dict] = []
+    rec_sports: list[str] = []
+    videos: list[dict] = []
+    seen_vid: set[str] = set()
+    for factor in weak_factors:
+        block = sub.get(factor)
+        if not block:
+            continue
+        recommendations.append({
+            "weakness": factor,
+            "exercises": block["exercises"],   # [{name, provenance}]
+            "sports": block["sports"],         # [{name, provenance}]
+            "videos": block["videos"],         # [{title,url,img_url,trng_nm,provenance}]
+            "source": "graph",
+        })
+        for sp in block["sports"]:
+            if sp["name"] not in rec_sports:
+                rec_sports.append(sp["name"])
+        for v in block["videos"]:
+            key = v.get("url") or v.get("trng_nm") or ""
+            if key and key not in seen_vid:
+                seen_vid.add(key)
+                videos.append({
+                    "title": v.get("title"),
+                    "url": v.get("url"),
+                    "img_url": v.get("img_url"),
+                    "trng_nm": v.get("trng_nm"),
+                    "source": "국민체력100 운동영상(공단 콘텐츠)",
+                })
+    if not recommendations:
+        return None
+    return recommendations, videos, rec_sports
+
+
+def _recommend_tail_graph(store: Store, weak_factors: list[str], age: int):
+    """그래프 우선 → 부재/빈 결과 시 fitness_map 폴백(무중단)."""
+    out = _recommend_from_graph(store, weak_factors, age)
+    if out is not None:
+        return out
+    return _recommend_tail(store, weak_factors)
 
 
 def _empty_result(age_group: str, message: str, basis: str, certifiable: bool = True) -> dict:

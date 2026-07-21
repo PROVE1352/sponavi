@@ -187,14 +187,31 @@ export interface AssessResponse {
   supply_gap: SupplyGap
 }
 
+// ---- GET /api/fitness/items ----  (동적 폼 카탈로그)
+
+export interface FitnessItem {
+  code: string
+  name: string
+  unit: string | null
+  factor: string
+  alt_group: string | null
+  higher_better: number | null
+  hint: string
+}
+
+export interface FitnessItemsResponse {
+  age: number
+  age_group: string
+  age_gap: boolean
+  basis: string
+  items: FitnessItem[]
+  message?: string
+}
+
 // ---- POST /api/fitness ----
 
-export interface FitnessMeasures {
-  grip_kg: number | null
-  situp_cnt: number | null
-  flex_cm: number | null
-  shuttle_cnt: number | null
-}
+// 동적 폼: 측정항목 코드 → 값(또는 null). 레거시 4키도 서버가 하위호환 수용.
+export type FitnessMeasures = Record<string, number | null>
 
 export interface FitnessRequest {
   age: number
@@ -202,31 +219,127 @@ export interface FitnessRequest {
   measures: FitnessMeasures
 }
 
-export interface Weakness {
-  item: string
+// 엣지 출처(FITNESS_GRAPH §2). 그래프 추천 후보에 동봉되는 provenance.
+export type ProvenanceSource =
+  | 'kspo_standard'
+  | 'guideline'
+  | 'kspo_video'
+  | 'curated'
+  | 'fitness_map'
+
+export interface Provenance {
+  source: ProvenanceSource | string
+  tier?: 'S' | 'A' | 'V' | 'B' | string
+  weight?: number
+  curated_status?: string | null
+  via_goal?: string
+  op?: string
+  aim?: string
+}
+
+export interface GraphNamed {
+  name: string
+  provenance: Provenance
+}
+
+export interface GraphVideo {
+  title: string
+  url: string | null
+  img_url?: string | null
+  trng_nm?: string
+  provenance?: Provenance
+}
+
+// 항목별 판정(공식 경로). band 칩 + 실측 컷 인용 비교문.
+export interface FitnessItemResult {
+  code: string
+  name: string
+  factor: string
   value: number | null
+  unit: string | null
   band: string
+  grade: number | null
+  comparison: string
   basis: string
 }
 
+export interface Weakness {
+  item: string
+  name?: string
+  value: number | null
+  unit?: string | null
+  band: string
+  cut?: number | null
+  cut_grade?: number | null
+  comparison?: string
+  basis: string
+}
+
+export interface ReferenceGrade {
+  grade: number | null
+  label: string
+  rule: string
+  missing: string[]
+  note: string
+}
+
+// 추천: 그래프 경로는 {name, provenance} 객체 배열 / fitness_map 폴백은 문자열 배열.
 export interface FitnessRecommendation {
   weakness: string
-  exercises: string[]
-  sports: string[]
-  curated: string
+  exercises: GraphNamed[] | string[]
+  sports: GraphNamed[] | string[]
+  videos?: GraphVideo[]
+  source?: string
+  curated?: string
 }
 
 export interface FitnessVideo {
   title: string
-  url: string
+  url: string | null
+  img_url?: string | null
+  trng_nm?: string
   source: string
 }
 
 export interface FitnessResponse {
+  age_group?: string
+  age_gap?: boolean
+  sex?: Sex
+  basis?: string
+  items?: FitnessItemResult[]
   weaknesses: Weakness[]
+  reference_grade?: ReferenceGrade | null
   recommendations: FitnessRecommendation[]
   videos: FitnessVideo[]
   facility_filter_sports: string[]
+  message?: string
+}
+
+// ---- POST /api/fitness/ai ----
+
+export interface AiWeak {
+  항목: string
+  등급: string
+  근거: string
+}
+
+export interface AiPrescription {
+  운동: string
+  목표체력요인: string
+  강도: string
+  주당빈도: string
+}
+
+export interface FitnessAiResponse {
+  provider: 'claude' | 'rules' | 'gemini' | string
+  age_group?: string
+  age_gap?: boolean
+  약점: AiWeak[]
+  우선순위: string[]
+  처방: AiPrescription[]
+  주의: string
+  facility_filter_sports?: string[]
+  disclaimer?: string
 }
 
 // ---- GET /api/meta/sigungu ----

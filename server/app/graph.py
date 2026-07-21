@@ -207,7 +207,7 @@ def _videos_for_factor(conn, factor, group, ex_names) -> list[dict]:
     out: list[dict] = []
     seen: set[str] = set()
 
-    def _add(title, url, op, trng, aim, aggrp, via_goal=None):
+    def _add(title, url, img_url, op, trng, aim, aggrp, via_goal=None):
         key = url or f"{op}:{trng}"
         if key in seen:
             return
@@ -217,31 +217,32 @@ def _videos_for_factor(conn, factor, group, ex_names) -> list[dict]:
             prov["aim"] = aim
         if via_goal:
             prov["via_goal"] = via_goal
-        out.append({"title": title or trng, "url": url, "trng_nm": trng,
-                    "provenance": prov})
+        # img_url = 썸네일(결과 화면 영상 카드). 값이 없으면 None 유지(정직).
+        out.append({"title": title or trng, "url": url, "img_url": img_url or None,
+                    "trng_nm": trng, "provenance": prov})
 
     # 1) 추천 운동과 같은 trng_nm 영상 (정합)
     norm_names = {_norm_ws(x) for x in ex_names}
     if norm_names:
         rows = conn.execute(
-            "SELECT title, file_url, op, trng_nm, aim, aggrp FROM videos "
+            "SELECT title, file_url, img_url, op, trng_nm, aim, aggrp FROM videos "
             "WHERE trng_nm IS NOT NULL AND trng_nm<>''").fetchall()
-        for title, url, op, trng, aim, aggrp in rows:
+        for title, url, img_url, op, trng, aim, aggrp in rows:
             if len(out) >= MAX_VIDEOS:
                 break
             if _norm_ws(trng) in norm_names and _age_ok_vid(aggrp):
-                _add(title, url, op, trng, aim, aggrp)
+                _add(title, url, img_url, op, trng, aim, aggrp)
 
     # 2) 보충: 요인 직접 매칭 (근력/근지구력 분리·협응성→협응력 정규화)
     if len(out) < MAX_VIDEOS:
         rows = conn.execute(
-            "SELECT title, file_url, op, trng_nm, aim, aggrp, factor FROM videos "
+            "SELECT title, file_url, img_url, op, trng_nm, aim, aggrp, factor FROM videos "
             "WHERE factor IS NOT NULL AND factor<>''").fetchall()
-        for title, url, op, trng, aim, aggrp, fct in rows:
+        for title, url, img_url, op, trng, aim, aggrp, fct in rows:
             if len(out) >= MAX_VIDEOS:
                 break
             if factor in _norm_factor(fct) and _age_ok_vid(aggrp):
-                _add(title, url, op, trng, aim, aggrp)
+                _add(title, url, img_url, op, trng, aim, aggrp)
     return out[:MAX_VIDEOS]
 
 

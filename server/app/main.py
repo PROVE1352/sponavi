@@ -51,8 +51,13 @@ async def _assess_error_handler(request: Request, exc: engine.AssessError) -> JS
 def health() -> dict:
     # mode는 store 소스 선택 로직과 동일 기준 (db=전국 실데이터, fixtures=데모)
     from .store import db_path
+    from . import ai
 
-    return {"status": "ok", "mode": "db" if db_path().exists() else "fixtures"}
+    return {
+        "status": "ok",
+        "mode": "db" if db_path().exists() else "fixtures",
+        "llm": ai.provider_label(),
+    }
 
 
 @app.post("/api/assess")
@@ -63,6 +68,14 @@ def post_assess(req: AssessRequest) -> dict:
 @app.post("/api/fitness")
 def post_fitness(req: FitnessRequest) -> dict:
     return fitness.assess_fitness(get_store(), req.model_dump())
+
+
+# 전 측정항목 → LLM(또는 규칙) 처방. SPONAVI_LLM 미설정 서버는 provider="rules" 고정.
+@app.post("/api/fitness/ai")
+def post_fitness_ai(req: FitnessRequest) -> dict:
+    from . import ai
+
+    return ai.prescribe(get_store(), req.model_dump())
 
 
 # 웹 동적 폼용 항목 카탈로그 (연령군별 공식 측정항목). 공식 테이블 없으면 데모 4항목.

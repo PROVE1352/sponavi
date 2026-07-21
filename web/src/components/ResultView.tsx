@@ -49,7 +49,12 @@ export function ResultView({ req, data }: { req: AssessRequest; data: AssessResp
       </section>
 
       {/* 체력 처방 (선택) — 필터 연동 */}
-      <FitnessStep age={req.age} sex={req.sex} onApplyFilter={(s) => setFilterSports(s)} />
+      <FitnessStep
+        age={req.age}
+        sex={req.sex}
+        nearby={data.nearby}
+        onApplyFilter={(s) => setFilterSports(s)}
+      />
     </div>
   )
 }

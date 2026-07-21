@@ -7,6 +7,8 @@ import type {
   AssessRequest,
   AssessResponse,
   DemoPersona,
+  FitnessAiResponse,
+  FitnessItemsResponse,
   FitnessRequest,
   FitnessResponse,
   Sigungu,
@@ -17,6 +19,8 @@ import {
   PERSONA_REQUESTS,
   SIGUNGU,
   mockFitness,
+  mockFitnessAi,
+  mockFitnessItems,
   resolveMockAssess,
 } from '../mocks'
 import { resolveMockAccessibility } from '../mocks/accessibility'
@@ -69,6 +73,18 @@ export function assess(req: AssessRequest): Promise<AssessResponse> {
 export function fitness(req: FitnessRequest): Promise<FitnessResponse> {
   if (IS_MOCK) return delay(req.age ? mockFitness(req) : FITNESS_RESPONSE)
   return post<FitnessRequest, FitnessResponse>('/fitness', req)
+}
+
+// 연령군별 측정항목 카탈로그(동적 폼). 목모드는 계약-형태 목 카탈로그.
+export function getFitnessItems(age: number): Promise<FitnessItemsResponse> {
+  if (IS_MOCK) return delay(mockFitnessItems(age), 0)
+  return get<FitnessItemsResponse>(`/fitness/items?age=${encodeURIComponent(age)}`)
+}
+
+// AI(또는 규칙) 처방. 목모드는 규칙 폴백 형태(provider="rules").
+export function fitnessAi(req: FitnessRequest): Promise<FitnessAiResponse> {
+  if (IS_MOCK) return delay(mockFitnessAi(req), 300)
+  return post<FitnessRequest, FitnessAiResponse>('/fitness/ai', req)
 }
 
 export function getSigungu(): Promise<Sigungu[]> {

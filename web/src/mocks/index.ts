@@ -2,8 +2,14 @@ import type { AssessRequest, AssessResponse } from '../types'
 import { mockAssess } from './engine'
 import { PERSONA_REQUESTS, PERSONA_RESPONSES } from './personas'
 
-export { PERSONA_REQUESTS, PERSONA_RESPONSES, FITNESS_RESPONSE } from './personas'
-export { mockAssess, mockFitness } from './engine'
+export { PERSONA_REQUESTS, PERSONA_RESPONSES } from './personas'
+export { mockAssess } from './engine'
+export {
+  FITNESS_RESPONSE,
+  mockFitness,
+  mockFitnessAi,
+  mockFitnessItems,
+} from './fitness'
 export { SIGUNGU } from './fixtures'
 
 // 요청이 데모 페르소나와 일치하면 미리 만든 계약-형태 canned 응답을, 아니면 규칙 엔진 응답을 준다.

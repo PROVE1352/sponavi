@@ -4,7 +4,7 @@
 //   → dvoucher 연령 상한(만 69세)이 존재한다고 가정하고 "72세 청각장애(연령 초과)" 케이스를 채택.
 //     소득기준 의존이 없어 가장 방어적. dvoucher 규칙 verified:false 로 표기(SPEC §0-5).
 
-import type { AltEdge, AssessResponse, DemoPersona, FitnessResponse, Selection } from '../types'
+import type { AltEdge, AssessResponse, DemoPersona, Selection } from '../types'
 
 const SVOUCHER_APPLY = {
   how: '온라인 신청 → 이용권 카드 발급 → 가맹시설에서 결제 시 지원금 자동 차감',
@@ -511,20 +511,3 @@ const P5: AssessResponse = {
 }
 
 export const PERSONA_RESPONSES: Record<string, AssessResponse> = { P1, P2, P3, P4, P5 }
-
-// ---------- POST /api/fitness (P2 시나리오 기준 샘플) ----------
-export const FITNESS_RESPONSE: FitnessResponse = {
-  weaknesses: [
-    { item: '유연성', value: -3, band: '하위', basis: '데모 기준(연령·성별 근사)' },
-    { item: '심폐지구력', value: 25, band: '하위', basis: '데모 기준(연령·성별 근사)' },
-  ],
-  recommendations: [
-    { weakness: '유연성', exercises: ['요가', '스트레칭', '필라테스'], sports: ['요가', '필라테스'], curated: '체대 검증 대기' },
-    { weakness: '심폐지구력', exercises: ['걷기', '수영', '자전거'], sports: ['수영', '에어로빅'], curated: '체대 검증 대기' },
-  ],
-  videos: [
-    { title: '국민체력100 유연성 개선 스트레칭', url: 'https://nfa.kspo.or.kr/', source: '국민체력100 동영상(15108846)' },
-    { title: '심폐지구력 향상 걷기 프로그램', url: 'https://nfa.kspo.or.kr/', source: '국민체력100 동영상(15108846)' },
-  ],
-  facility_filter_sports: ['요가', '필라테스', '수영', '에어로빅'],
-}

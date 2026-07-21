@@ -73,3 +73,23 @@ def get_sigungu() -> list[dict]:
 @app.get("/api/demo/personas")
 def get_personas() -> list[dict]:
     return PERSONAS
+
+
+# FR-10 접근성 보조 소스(dvoucher 웹). engine 무접촉 — 별도 API 로만 노출.
+# 데이터 없는 id 는 응답에서 생략(P-1: 없는 것과 미상을 구분).
+_ACCESS_SOURCE = "장애인이용권 웹 공개 정보"
+
+
+@app.get("/api/accessibility")
+def get_accessibility(ids: str = "") -> dict:
+    id_list = [s for s in (ids.split(",") if ids else []) if s.strip()]
+    data = get_store().accessibility_for([s.strip() for s in id_list])
+    return {
+        fid: {
+            "types": v["types"],
+            "amenities": v["amenities"],
+            "source": _ACCESS_SOURCE,
+            "checked": v.get("checked"),
+        }
+        for fid, v in data.items()
+    }

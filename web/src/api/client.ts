@@ -11,6 +11,7 @@ import type {
   FitnessResponse,
   Sigungu,
 } from '../types'
+import type { AccessibilityMap } from '../types_accessibility'
 import {
   FITNESS_RESPONSE,
   PERSONA_REQUESTS,
@@ -18,6 +19,7 @@ import {
   mockFitness,
   resolveMockAssess,
 } from '../mocks'
+import { resolveMockAccessibility } from '../mocks/accessibility'
 
 export const IS_MOCK = import.meta.env.VITE_MOCK === '1'
 
@@ -95,4 +97,14 @@ export async function getPersonas(): Promise<DemoPersona[]> {
     '/demo/personas',
   )
   return raw.map(normalizePersona)
+}
+
+// FR-10 접근성 배치 조회. id 배열 → {id: {types, amenities, source, checked}}.
+// 데이터 없는 id 는 응답에서 생략된다(P-1). 실패해도 assess 전 기능은 그대로 동작(DR-4).
+export function getAccessibility(ids: string[]): Promise<AccessibilityMap> {
+  const clean = Array.from(new Set(ids.filter(Boolean)))
+  if (clean.length === 0) return Promise.resolve({})
+  if (IS_MOCK) return delay(resolveMockAccessibility(clean), 0)
+  const q = clean.map(encodeURIComponent).join(',')
+  return get<AccessibilityMap>(`/accessibility?ids=${q}`)
 }

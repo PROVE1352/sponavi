@@ -240,6 +240,71 @@ class Store:
         row = cur.fetchone()
         return row["year"] if row else None
 
+    # -- accessibility (FR-10) ---------------------------------------------
+    # dvoucher 웹 보조 소스(scripts/load_accessibility.py). 별도 테이블
+    # facility_accessibility(facility_id, kind, code, name, source, checked).
+    # ★ engine 무접촉: 이 데이터는 assess 응답이 아니라 GET /api/accessibility 로만
+    #   흘린다. 테이블이 없는 데모/레거시 DB 는 빈 결과(폴백 안전, DR-4 애드온).
+    def accessibility_for(self, facility_ids: list[str]) -> dict[str, dict]:
+        """{facility_id: {types:[str], amenities:[{code,name}], checked:str}}.
+        데이터 없는 id 는 딕셔너리에서 생략(P-1: 미상과 구분)."""
+        ids = [i for i in (facility_ids or []) if i]
+        if not ids:
+            return {}
+        out: dict[str, dict] = {}
+        try:
+            qmarks = ",".join("?" for _ in ids)
+            cur = self.conn.execute(
+                f"SELECT facility_id, kind, code, name, checked "
+                f"FROM facility_accessibility WHERE facility_id IN ({qmarks}) "
+                f"ORDER BY facility_id, kind, code",
+                ids,
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            return {}  # 테이블 없음 → 폴백 안전
+        for r in rows:
+            entry = out.setdefault(
+                r["facility_id"], {"types": [], "amenities": [], "checked": None}
+            )
+            if r["checked"] and not entry["checked"]:
+                entry["checked"] = r["checked"]
+            if r["kind"] == "disability_type":
+                if r["name"] and r["name"] not in entry["types"]:
+                    entry["types"].append(r["name"])
+            elif r["kind"] == "amenity":
+                if not any(a["code"] == r["code"] for a in entry["amenities"]):
+                    entry["amenities"].append({"code": r["code"], "name": r["name"]})
+        return out
+
+    def facilities_with_amenity(
+        self, sigungu_cd: Optional[str], codes: list[str]
+    ) -> set[str]:
+        """지정 편의시설 코드를 (전부) 보유한 시설 id 집합. sigungu_cd 주면 그 구로 한정.
+        codes 비면 빈 집합. 테이블 없으면 빈 집합(폴백 안전)."""
+        want = [c for c in (codes or []) if c]
+        if not want:
+            return set()
+        try:
+            qmarks = ",".join("?" for _ in want)
+            params: list = list(want)
+            sql = (
+                "SELECT fa.facility_id AS fid, COUNT(DISTINCT fa.code) AS n "
+                "FROM facility_accessibility fa "
+            )
+            if sigungu_cd:
+                sql += "JOIN facilities f ON f.id = fa.facility_id "
+            sql += f"WHERE fa.kind='amenity' AND fa.code IN ({qmarks}) "
+            if sigungu_cd:
+                sql += "AND f.sigungu_cd = ? "
+                params.append(sigungu_cd)
+            sql += "GROUP BY fa.facility_id HAVING n = ?"
+            params.append(len(set(want)))
+            cur = self.conn.execute(sql, params)
+            return {r["fid"] for r in cur.fetchall()}
+        except sqlite3.OperationalError:
+            return set()
+
 
 # ---------------------------------------------------------------------------
 # fixtures build (demo mode) — maps data/fixtures/*.json into the canonical schema

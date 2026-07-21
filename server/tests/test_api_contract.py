@@ -28,9 +28,18 @@ def test_personas_endpoint_p4_confirmed(client):
 
 
 ELIG_KEYS = {"program_id", "program_name", "eligible", "reasons", "benefit", "apply", "source", "verified"}
-FAC_KEYS = {"id", "name", "sports", "lat", "lon", "dist_km", "fee_month", "subsidy", "copay", "disability_support"}
-ALT_KEYS = {"id", "name", "type", "sports", "lat", "lon", "dist_km", "note", "disability_support"}
+FAC_KEYS = {"id", "name", "sports", "lat", "lon", "dist_km", "coord_source", "fee_month", "subsidy", "copay", "disability_support"}
+ALT_KEYS = {"id", "name", "type", "sports", "lat", "lon", "dist_km", "coord_source", "note", "disability_support"}
 SG_KEYS = {"radius_km", "voucher_count", "alt_count", "nearest", "message", "coverage"}
+
+
+def _assert_coord_honesty(f):
+    """FR-04: 실좌표(api)만 dist_km(수치), 근사좌표(centroid)는 dist_km=None."""
+    assert f["coord_source"] in ("api", "centroid", "geocoded")
+    if f["coord_source"] == "api":
+        assert isinstance(f["dist_km"], (int, float))
+    else:
+        assert f["dist_km"] is None
 
 
 @pytest.mark.parametrize("pid", ["P1", "P2", "P3", "P4"])
@@ -60,11 +69,16 @@ def test_assess_contract_shape_for_personas(client, personas_by_id, pid):
     # nearby
     for f in data["nearby"]["voucher_facilities"]:
         assert FAC_KEYS <= set(f)
+        _assert_coord_honesty(f)
     for a in data["nearby"]["alternatives"]:
         assert ALT_KEYS <= set(a)
+        _assert_coord_honesty(a)
 
     # supply_gap always present
     assert SG_KEYS <= set(data["supply_gap"])
+    # 이용권(voucher/dvoucher)은 실좌표 아님 → 구 단위 카운트, 메시지에 "반경" 금지
+    assert data["supply_gap"].get("voucher_scope") == "sigungu"
+    assert "반경" not in data["supply_gap"]["message"]
 
 
 def test_assess_persona_expectations(client, personas_by_id):

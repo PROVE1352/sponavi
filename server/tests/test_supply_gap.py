@@ -26,14 +26,29 @@ def test_seongbuk_dvoucher_zero_gap(store):
     sg = res["supply_gap"]
     assert sg["voucher_count"] == 0
     assert "장애인스포츠강좌이용권" in sg["message"]
-    assert sg["nearest"] is not None  # 가장 가까운 곳(강북 D01) 노출
-    assert sg["nearest"]["dist_km"] > SUPPLY_GAP_RADIUS_KM
+    assert "없습니다" in sg["message"]
+    # FR-04 AC2: 이용권 카운트는 구 단위 → 이용권 메시지에 "반경" 금지
+    assert "반경" not in sg["message"]
+    assert sg["voucher_scope"] == "sigungu"
+    # FR-05 AC1: 최근접(강북 D01)은 근사좌표 → km 미표기, '△△구'로 노출
+    nearest = sg["nearest"]
+    assert nearest is not None
+    assert nearest["name"] == "서울장애인체육관"
+    assert nearest["coord_source"] == "centroid"
+    assert nearest["dist_km"] is None            # 근사좌표 거리 미표기
+    assert nearest["sigungu_nm"] == "강북구"      # 대신 시군구명
 
 
 def test_seongbuk_voucher_has_supply(store):
     # 비장애 이용권 가맹시설은 성북에 존재 -> gap 아님
     res = assess(store, _body(10, "기초생활수급"))
-    assert res["supply_gap"]["voucher_count"] >= 1
+    sg = res["supply_gap"]
+    assert sg["voucher_count"] >= 1
+    # FR-04 AC2: "OO구 가맹 N곳" 형식 + 이용권 파트에 "반경" 없음
+    assert "가맹" in sg["message"]
+    assert "성북구" in sg["message"]
+    assert "반경" not in sg["message"]
+    assert sg["voucher_scope"] == "sigungu"
 
 
 def test_coverage_null_when_district_absent(store):

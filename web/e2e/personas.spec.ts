@@ -67,3 +67,21 @@ test('P4 · 72세 청각장애 → 공급공백 배너', async ({ page }) => {
 
   await page.screenshot({ path: 'e2e-shots/P4-supply-gap.png', fullPage: true })
 })
+
+test('좌표 정직성: "위치 근사(구 중심)" 배지 + 이용권 블록 "반경" 미표기 (FR-04)', async ({ page }) => {
+  // P3: 성북 dvoucher 가맹 0 → 공급공백 + 최근접(강북 D01) 근사좌표 시설 노출
+  await clickPersona(page, 'P3')
+
+  // FR-04 AC1: 구 중심 폴백 좌표 시설엔 "위치 근사(구 중심)" 배지가 1개 이상 렌더된다
+  const approx = page.getByText('위치 근사(구 중심)')
+  await expect(approx.first()).toBeVisible()
+  expect(await approx.count()).toBeGreaterThanOrEqual(1)
+
+  // FR-04 AC2: 이용권 공급공백 블록은 구 단위 집계라 "반경" 문구가 없어야 한다
+  const voucherGap = page.getByTestId('voucher-gap-block')
+  await expect(voucherGap).toBeVisible()
+  await expect(voucherGap).not.toContainText('반경')
+
+  // 근사좌표 이용권 시설엔 거리(km)도 함께 표기하지 않는다(카피 사전)
+  await expect(page.getByTestId('voucher-section')).not.toContainText('km')
+})

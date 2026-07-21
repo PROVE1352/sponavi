@@ -75,13 +75,19 @@ export interface PathEdge {
   curated?: string
 }
 
+// 좌표 출처(FR-04): api=실좌표, centroid=시군구 중심 폴백(위치 근사), geocoded=M2 예약.
+export type CoordSource = 'api' | 'centroid' | 'geocoded'
+
 export interface VoucherFacility {
   id: string
   name: string
   sports: string[]
   lat: number
   lon: number
-  dist_km: number
+  // 근사좌표(centroid)면 서버가 null → 거리 미표기.
+  dist_km: number | null
+  coord_source?: CoordSource
+  sigungu_nm?: string
   fee_month: number
   subsidy: number
   copay: number
@@ -99,7 +105,9 @@ export interface AlternativeFacility {
   sports: string[]
   lat: number
   lon: number
-  dist_km: number
+  dist_km: number | null
+  coord_source?: CoordSource
+  sigungu_nm?: string
   note: string
   disability_support: boolean | null
   fee_month?: number
@@ -124,8 +132,14 @@ export interface CoverageStat {
 export interface SupplyGap {
   radius_km: number
   voucher_count: number
+  // 이용권 카운트 기준: 'sigungu'=구 단위(실좌표 아님), 'radius'=반경(실좌표 풀).
+  voucher_scope?: 'sigungu' | 'radius'
+  sigungu_nm?: string | null
   alt_count: number
-  nearest: { name: string; dist_km: number } | null
+  // 근사좌표 최근접이면 dist_km=null·sigungu_nm 노출.
+  nearest:
+    | { name: string; dist_km: number | null; coord_source?: CoordSource; sigungu_nm?: string }
+    | null
   message: string
   coverage: CoverageStat | null
 }

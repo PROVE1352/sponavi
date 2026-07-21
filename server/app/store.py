@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS facilities (
     addr               TEXT,
     lat                REAL,
     lon                REAL,
+    coord_source       TEXT,            -- api(실좌표) | centroid(시군구 중심 폴백) | geocoded(M2 예약)
     sports             TEXT,            -- comma-joined
     disability_support INTEGER,         -- 0 | 1 | NULL(unknown)
     brno               TEXT,
@@ -186,6 +187,13 @@ class Store:
     @staticmethod
     def _facility_row(row: sqlite3.Row) -> dict:
         ds = row["disability_support"]
+        # coord_source: 좌표 정직성 신호. api=실좌표, centroid=시군구 중심 폴백.
+        # 컬럼이 없거나 NULL인 레거시/데모 DB는 source로 폴백(public→api, 이용권→centroid).
+        keys = row.keys()
+        if "coord_source" in keys and row["coord_source"]:
+            coord_source = row["coord_source"]
+        else:
+            coord_source = "api" if row["source"] == "public" else "centroid"
         return {
             "id": row["id"],
             "source": row["source"],
@@ -195,6 +203,7 @@ class Store:
             "addr": row["addr"],
             "lat": row["lat"],
             "lon": row["lon"],
+            "coord_source": coord_source,
             "sports": _split_sports(row["sports"]),
             "disability_support": None if ds is None else bool(ds),
             "phone": row["phone"],
@@ -247,14 +256,16 @@ def _build_conn(
         fac_source[f["id"]] = f["source"]
         ds = f.get("disability_support")
         cd = f.get("sigungu_cd") or ""
+        # 데모 fixtures: 필드 있으면 그대로, 없으면 public→api / 이용권→centroid 기본값.
+        coord_source = f.get("coord_source") or ("api" if f["source"] == "public" else "centroid")
         conn.execute(
             "INSERT INTO facilities "
             "(id, source, name, sido_cd, sigungu_cd, sigungu_nm, addr, lat, lon, "
-            " sports, disability_support, brno, facil_sn, status, phone) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " coord_source, sports, disability_support, brno, facil_sn, status, phone) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 f["id"], f["source"], f["name"], cd[:2], cd, f.get("sigungu_nm"),
-                f.get("addr"), f["lat"], f["lon"],
+                f.get("addr"), f["lat"], f["lon"], coord_source,
                 ",".join(f.get("sports", [])),
                 None if ds is None else int(bool(ds)),
                 None, None, None, f.get("phone"),

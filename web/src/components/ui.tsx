@@ -79,6 +79,16 @@ export function Badge({
   )
 }
 
+// 좌표 정직성 배지(FR-04 AC1): 이용권 등 시군구 중심 폴백 좌표 시설에 부착.
+// 카피 사전 고정 문구: "위치 근사(구 중심)". 거리(km)는 함께 표기하지 않는다.
+export function ApproxLocationBadge() {
+  return (
+    <Badge tone="warn" icon={<InfoIcon className="w-3 h-3" />}>
+      위치 근사(구 중심)
+    </Badge>
+  )
+}
+
 // 예상 자격 삼중 표기: 색 + 아이콘 + 텍스트
 export function EligibilityMark({ eligible }: { eligible: boolean }) {
   return eligible ? (

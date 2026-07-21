@@ -13,8 +13,9 @@ interface MapPoint {
   lat: number
   lon: number
   kind: Kind
-  dist_km?: number
+  dist_km?: number | null
   detail?: string
+  approx?: boolean // 좌표 정직성: 구 중심 폴백(centroid)이면 거리 대신 근사 안내
 }
 
 function pinIcon(kind: Kind): L.DivIcon {
@@ -59,6 +60,7 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
         kind: v.source === 'dvoucher' ? 'dvoucher' : 'voucher',
         dist_km: v.dist_km,
         detail: v.sports.join(' · '),
+        approx: v.coord_source === 'centroid',
       })
     }
     for (const a of nearby.alternatives) {
@@ -70,6 +72,7 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
         kind: a.disability_support ? 'public' : 'public',
         dist_km: a.dist_km,
         detail: a.sports.join(' · '),
+        approx: a.coord_source === 'centroid',
       })
     }
     return pts
@@ -96,7 +99,11 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
             <Popup>
               <b>{p.name}</b>
               {p.detail && <div>{p.detail}</div>}
-              {p.dist_km != null && <div>{km(p.dist_km)}</div>}
+              {p.approx ? (
+                <div style={{ color: '#b45309' }}>위치 근사(구 중심)</div>
+              ) : (
+                p.dist_km != null && <div>{km(p.dist_km)}</div>
+              )}
             </Popup>
           </Marker>
         ))}

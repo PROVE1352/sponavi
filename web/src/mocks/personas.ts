@@ -138,21 +138,23 @@ const P1: AssessResponse = {
   ],
   nearby: {
     voucher_facilities: [
-      { id: 'V01', name: '성북스포츠클럽', sports: ['수영', '헬스'], lat: 37.6061, lon: 127.0242, dist_km: 0.3, fee_month: 95000, subsidy: 105000, copay: 0, disability_support: null, source: 'voucher', addr: '서울 성북구 오패산로 12', course_name: '유아·주니어 수영 기초' },
-      { id: 'V02', name: '돈암수영아카데미', sports: ['수영'], lat: 37.5972, lon: 127.0135, dist_km: 1.3, fee_month: 110000, subsidy: 105000, copay: 5000, disability_support: null, source: 'voucher', addr: '서울 성북구 아리랑로 55', course_name: '청소년 수영 중급' },
-      { id: 'V03', name: '정릉태권체육관', sports: ['태권도'], lat: 37.61, lon: 127.008, dist_km: 1.4, fee_month: 130000, subsidy: 105000, copay: 25000, disability_support: null, source: 'voucher', addr: '서울 성북구 정릉로 200', course_name: '초등 태권도' },
-      { id: 'V04', name: '종암필라테스랩', sports: ['필라테스', '요가'], lat: 37.596, lon: 127.033, dist_km: 1.5, fee_month: 160000, subsidy: 105000, copay: 55000, disability_support: null, source: 'voucher', addr: '서울 성북구 종암로 30', course_name: '성인 필라테스 입문' },
+      { id: 'V01', name: '성북스포츠클럽', sports: ['수영', '헬스'], lat: 37.6061, lon: 127.0242, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 95000, subsidy: 105000, copay: 0, disability_support: null, source: 'voucher', addr: '서울 성북구 오패산로 12', course_name: '유아·주니어 수영 기초' },
+      { id: 'V02', name: '돈암수영아카데미', sports: ['수영'], lat: 37.5972, lon: 127.0135, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 110000, subsidy: 105000, copay: 5000, disability_support: null, source: 'voucher', addr: '서울 성북구 아리랑로 55', course_name: '청소년 수영 중급' },
+      { id: 'V03', name: '정릉태권체육관', sports: ['태권도'], lat: 37.61, lon: 127.008, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 130000, subsidy: 105000, copay: 25000, disability_support: null, source: 'voucher', addr: '서울 성북구 정릉로 200', course_name: '초등 태권도' },
+      { id: 'V04', name: '종암필라테스랩', sports: ['필라테스', '요가'], lat: 37.596, lon: 127.033, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 160000, subsidy: 105000, copay: 55000, disability_support: null, source: 'voucher', addr: '서울 성북구 종암로 30', course_name: '성인 필라테스 입문' },
     ],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '구민 요가(오전 3만원)·실버 수중걷기 무료 · 접근성 지원', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가(오전 3만원)·실버 수중걷기 무료 · 접근성 지원', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
     ],
   },
   supply_gap: {
     radius_km: 3,
     voucher_count: 4,
+    voucher_scope: 'sigungu',
+    sigungu_nm: '성북구',
     alt_count: 3,
     nearest: null,
-    message: '반경 3km 내 이용권 가맹시설 4곳을 이용할 수 있습니다',
+    message: '스포츠강좌이용권 · 성북구 가맹 4곳',
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }
@@ -202,16 +204,18 @@ const P2: AssessResponse = {
   nearby: {
     voucher_facilities: [],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '구민 요가 오전 월 3만원 · 실버 수중걷기 무료', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
-      { id: 'P03', name: '월곡스포츠문화센터', type: '공공체육시설', sports: ['필라테스', '요가', '스트레칭'], lat: 37.6022, lon: 127.0405, dist_km: 1.6, note: '저녁 스트레칭·요가 월 4만원', disability_support: false, fee_month: 40000, source: 'public', addr: '서울 성북구 월곡로 21' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가 오전 월 3만원 · 실버 수중걷기 무료', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P03', name: '월곡스포츠문화센터', type: '공공체육시설', sports: ['필라테스', '요가', '스트레칭'], lat: 37.6022, lon: 127.0405, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '저녁 스트레칭·요가 월 4만원', disability_support: false, fee_month: 40000, source: 'public', addr: '서울 성북구 월곡로 21' },
     ],
   },
   supply_gap: {
     radius_km: 3,
     voucher_count: 4,
+    voucher_scope: 'sigungu',
+    sigungu_nm: '성북구',
     alt_count: 2,
     nearest: null,
-    message: '반경 3km 내 무료/저가 공공 프로그램 2곳을 이용할 수 있습니다',
+    message: '스포츠강좌이용권 · 성북구 가맹 4곳',
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }
@@ -258,22 +262,24 @@ const P3: AssessResponse = {
   ],
   path: [
     { from: 'person', to: 'dvoucher', edge: '자격', result: 'ok', label: '장애인 이용권 대상(연령·소득 충족·공식 확인 필요)' },
-    { from: 'dvoucher', to: 'facility:D01', edge: '적합·접근', result: 'ok', label: '가장 가까운 장애인 가맹 4.2km(강북)' },
+    { from: 'dvoucher', to: 'facility:D01', edge: '적합·접근', result: 'ok', label: '가장 가까운 장애인 가맹 · 강북구(위치 근사)' },
   ],
   nearby: {
     voucher_facilities: [
-      { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], lat: 37.6396, lon: 127.0257, dist_km: 4.2, fee_month: 0, subsidy: 110000, copay: 0, disability_support: true, source: 'dvoucher', addr: '서울 강북구 한천로 1000', course_name: '장애인 재활 수영(무료)' },
+      { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], lat: 37.6396, lon: 127.0257, coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구', fee_month: 0, subsidy: 110000, copay: 0, disability_support: true, source: 'dvoucher', addr: '서울 강북구 한천로 1000', course_name: '장애인 재활 수영(무료)' },
     ],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '접근성 지원 시설 · 저가/무료 프로그램', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 시설 · 저가/무료 프로그램', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
     ],
   },
   supply_gap: {
     radius_km: 3,
     voucher_count: 0,
+    voucher_scope: 'sigungu',
+    sigungu_nm: '성북구',
     alt_count: 1,
-    nearest: { name: '서울장애인체육관', dist_km: 4.2 },
-    message: '반경 3km 내 장애인스포츠강좌이용권 가맹시설이 없습니다',
+    nearest: { name: '서울장애인체육관', coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구' },
+    message: '성북구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }
@@ -325,15 +331,17 @@ const P4: AssessResponse = {
   nearby: {
     voucher_facilities: [],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설(접근성 지원)', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, dist_km: 1.6, note: '접근성 지원 · 실버 수중걷기 무료교실 · 저가 프로그램', disability_support: true, fee_month: 0, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설(접근성 지원)', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 · 실버 수중걷기 무료교실 · 저가 프로그램', disability_support: true, fee_month: 0, source: 'public', addr: '서울 성북구 화랑로 189' },
     ],
   },
   supply_gap: {
     radius_km: 3,
     voucher_count: 0,
+    voucher_scope: 'sigungu',
+    sigungu_nm: '성북구',
     alt_count: 1,
-    nearest: { name: '서울장애인체육관', dist_km: 4.2 },
-    message: '반경 3km 내 장애인 이용권 가맹시설이 없습니다',
+    nearest: { name: '서울장애인체육관', coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구' },
+    message: '성북구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }

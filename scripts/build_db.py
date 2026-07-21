@@ -481,34 +481,39 @@ def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, public_code_names,
         seen_ids.add(fid)
         return fid
 
-    def _insert_fac(f, lat, lon):
+    def _insert_fac(f, lat, lon, coord_source):
         fid = _fac_id(f["id"])
         conn.execute(
             "INSERT INTO facilities "
             "(id, source, name, sido_cd, sigungu_cd, sigungu_nm, addr, lat, lon, "
-            " sports, disability_support, brno, facil_sn, status, phone) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " coord_source, sports, disability_support, brno, facil_sn, status, phone) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 fid, f["source"], f["name"], f["sido_cd"], f["sigungu_cd"],
-                f["sigungu_nm"], f["addr"], lat, lon,
+                f["sigungu_nm"], f["addr"], lat, lon, coord_source,
                 ",".join(sorted(s for s in f["sports"] if s)),
                 f["disability_support"], f["brno"], f["facil_sn"],
                 f["status"], f["phone"],
             ),
         )
 
+    # 좌표 정직성: voucher/dvoucher 는 실좌표가 없어 전부 시군구 중심 폴백(centroid).
+    # public 은 원본 좌표(_own_lat) 보유 시 실좌표(api), 폴백 시 centroid.
     for f in vfac.values():
         la, lo = facility_coord(f["sigungu_cd"])
-        _insert_fac(f, la, lo)
+        _insert_fac(f, la, lo, "centroid")
     for f in dfac:
         la, lo = facility_coord(f["sigungu_cd"])
-        _insert_fac(f, la, lo)
+        _insert_fac(f, la, lo, "centroid")
     for f in pfac:
         la, lo = f["_own_lat"], f["_own_lon"]
         if la is None:
             la, lo = facility_coord(f["sigungu_cd"])
+            coord_source = "centroid"
+        else:
+            coord_source = "api"
         f["id"] = f"public-{f['_faci_cd']}" if f["_faci_cd"] else "public-x"
-        _insert_fac(f, la, lo)
+        _insert_fac(f, la, lo, coord_source)
 
     # courses
     for c in courses:
@@ -606,12 +611,17 @@ def main() -> None:
     by_src = conn.execute(
         "SELECT source, COUNT(*) FROM facilities GROUP BY source ORDER BY source"
     ).fetchall()
+    by_coord = conn.execute(
+        "SELECT source, coord_source, COUNT(*) FROM facilities "
+        "GROUP BY source, coord_source ORDER BY source, coord_source"
+    ).fetchall()
     sb = q("SELECT COUNT(*) FROM facilities WHERE sigungu_cd = '11290'")
 
     print(f"\n[build_db] {out} 생성 완료")
     print(f"  facilities {n_fac} · courses {n_course} · coverage {n_cov}행 · "
           f"sigungu {n_sig}({n_sig_geo} 좌표보유)")
     print(f"  source 분포: {', '.join(f'{s}={c}' for s, c in by_src)}")
+    print(f"  coord_source 분포: {', '.join(f'{s}/{cs}={c}' for s, cs, c in by_coord)}")
     print(f"  성북구(11290) 시설 {sb}개")
     print(f"  voucher_course 매칭: {rep.get('voucher_course_matched',0)}/"
           f"{rep.get('voucher_course',0)}")

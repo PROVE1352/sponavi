@@ -1,6 +1,6 @@
 import type { AlternativeFacility, Nearby, VoucherFacility } from '../types'
 import { km, walkMinutes, won, wonPlain } from '../lib/format'
-import { Badge, CheckIcon } from './ui'
+import { ApproxLocationBadge, Badge, CheckIcon } from './ui'
 
 function matchesFilter(sports: string[], filter?: string[]): boolean {
   if (!filter || filter.length === 0) return true
@@ -41,7 +41,7 @@ export function NearbyList({
       </div>
 
       {vouchers.length > 0 && (
-        <div>
+        <div data-testid="voucher-section">
           <h3 className="mb-2 text-sm font-semibold text-brand-700 dark:text-brand-100">이용권 가맹시설</h3>
           <ul className="space-y-2">
             {vouchers.map((v) => (
@@ -81,6 +81,20 @@ function DistTag({ dist }: { dist: number }) {
   )
 }
 
+// 근사좌표(구 중심) 시설: 거리 대신 근사 안내. km 절대 표기 금지(카피 사전).
+function ApproxTag() {
+  return (
+    <span className="text-xs text-slate-400 dark:text-slate-500">구 중심 근사 좌표 · 정확한 위치는 시설에 확인</span>
+  )
+}
+
+// 실좌표면 거리, 근사좌표면 근사 안내를 렌더(둘 중 하나).
+function LocationLine({ coordSource, dist }: { coordSource?: string; dist: number | null }) {
+  if (coordSource === 'centroid') return <ApproxTag />
+  if (dist != null) return <DistTag dist={dist} />
+  return null
+}
+
 function DisabilityTag({ support }: { support: boolean | null }) {
   if (support !== true) return null
   return (
@@ -104,6 +118,7 @@ function VoucherRow({ v }: { v: VoucherFacility }) {
         </div>
         <div className="flex flex-col items-end gap-1">
           <Badge tone={isDvoucher ? 'purple' : 'brand'}>{isDvoucher ? '장애인 가맹' : '이용권 가맹'}</Badge>
+          {v.coord_source === 'centroid' && <ApproxLocationBadge />}
           <DisabilityTag support={v.disability_support} />
         </div>
       </div>
@@ -126,7 +141,7 @@ function VoucherRow({ v }: { v: VoucherFacility }) {
       </dl>
 
       <div className="mt-2">
-        <DistTag dist={v.dist_km} />
+        <LocationLine coordSource={v.coord_source} dist={v.dist_km} />
       </div>
     </li>
   )
@@ -144,12 +159,13 @@ function AltRow({ a }: { a: AlternativeFacility }) {
         </div>
         <div className="flex flex-col items-end gap-1">
           <Badge tone="ok">공공·대안</Badge>
+          {a.coord_source === 'centroid' && <ApproxLocationBadge />}
           <DisabilityTag support={a.disability_support} />
         </div>
       </div>
       <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{a.note}</p>
       <div className="mt-2 flex items-center justify-between">
-        <DistTag dist={a.dist_km} />
+        <LocationLine coordSource={a.coord_source} dist={a.dist_km} />
         {a.fee_month != null && (
           <span className="text-xs font-medium text-slate-600 dark:text-slate-300">월 {won(a.fee_month)}</span>
         )}

@@ -26,6 +26,27 @@ def _round_km(v: float) -> float:
     return round(v, 2)
 
 
+# ---------------------------------------------------------------------------
+# 좌표 정직성 (FR-04/FR-05): 실좌표(api)만 거리(km) 노출, 시군구 중심 폴백(centroid)은
+# 거리 미표기. 내부 정렬·최근접 판단엔 폴백 거리도 쓰되(방향성), 사용자 노출 수치엔 금지.
+# ---------------------------------------------------------------------------
+def _is_api(fac: dict) -> bool:
+    return fac.get("coord_source") == "api"
+
+
+def _expose_dist(fac: dict) -> Optional[float]:
+    """사용자 노출용 거리. 실좌표면 km, 근사좌표(구 중심)면 None(미표기)."""
+    return fac["dist_km"] if _is_api(fac) else None
+
+
+def _facility_hop_label(fac: dict) -> str:
+    """경로 다이어그램 시설 홉 라벨. 근사좌표엔 'Nonekm'를 찍지 않는다."""
+    d = fac.get("dist_km")
+    if _is_api(fac) and d is not None:
+        return f"{fac['name']} · {d}km"
+    return fac["name"]
+
+
 def _primary_program_id(disability_has: bool) -> str:
     """비장애=svoucher, 장애=dvoucher (SPEC §5 프레이밍)."""
     return "dvoucher" if disability_has else "svoucher"
@@ -173,7 +194,10 @@ def _voucher_facilities(
             "sports": f["sports"],
             "lat": f["lat"],
             "lon": f["lon"],
-            "dist_km": f["dist_km"],
+            "coord_source": f["coord_source"],
+            # 이용권 시설은 시군구 중심 폴백(근사) → 거리 미표기(null).
+            "dist_km": _expose_dist(f),
+            "sigungu_nm": f["sigungu_nm"],
             "fee_month": fee,
             "subsidy": subsidy,
             "copay": copay,
@@ -201,7 +225,10 @@ def _alternatives(
             "sports": f["sports"],
             "lat": f["lat"],
             "lon": f["lon"],
-            "dist_km": f["dist_km"],
+            "coord_source": f["coord_source"],
+            # public 은 대부분 실좌표 → km 노출. 폴백 행만 미표기(null).
+            "dist_km": _expose_dist(f),
+            "sigungu_nm": f["sigungu_nm"],
             "note": _course_note(store, f["id"], age),
             "disability_support": f["disability_support"],
         })
@@ -215,6 +242,14 @@ def _alternatives(
 # ---------------------------------------------------------------------------
 def _voucher_label(disability_has: bool) -> str:
     return "장애인스포츠강좌이용권" if disability_has else "스포츠강좌이용권"
+
+
+def _sigungu_nm(store: Store, sigungu_cd: Optional[str]) -> Optional[str]:
+    """사용자 시군구명(구 단위 가맹 라벨용). 좌표 없이 이름만 조회."""
+    if not sigungu_cd:
+        return None
+    c = store.centroid(sigungu_cd)
+    return c.get("nm") if c else None
 
 
 def _coverage(store: Store, sigungu_cd: str, income_class: str) -> Optional[dict]:
@@ -244,34 +279,50 @@ def _supply_gap(
     disability_has: bool, disability_filter: bool, age: int,
     sigungu_cd: str, income_class: str,
 ) -> dict:
-    voucher_all = _with_distance(store.facilities(source), lat, lon)
-    voucher_in = [f for f in voucher_all if f["dist_km"] <= SUPPLY_GAP_RADIUS_KM]
+    source_facs = store.facilities(source)
+    voucher_all = _with_distance(source_facs, lat, lon)  # 정렬됨 — 최근접 선정용(내부 거리)
 
+    # FR-04 AC2: 이용권 시설은 실좌표가 아니므로 "반경 N km" 금지.
+    #            사용자 시군구(sigungu_cd) 일치 = "OO구 가맹 N곳"(구 단위 카운트).
+    user_sigungu_nm = _sigungu_nm(store, sigungu_cd)
+    if sigungu_cd:
+        voucher_count = sum(1 for f in source_facs if f["sigungu_cd"] == sigungu_cd)
+    else:
+        voucher_count = 0  # 시군구 미상(좌표만 입력) → 구 단위 카운트 근거 없음
+
+    # 공공 대안 풀은 실좌표(api 위주) → 반경 유지.
     alt_all = _with_distance(store.facilities("public"), lat, lon)
     if disability_filter:
         alt_all = [f for f in alt_all if f["disability_support"]]
     alt_in = [f for f in alt_all if f["dist_km"] <= SUPPLY_GAP_RADIUS_KM]
 
+    # 최근접 이용권 시설: 내부 거리로 선정(방향성). 노출은 coord_source 규칙.
     nearest = None
     if voucher_all:
         n = voucher_all[0]
-        nearest = {"name": n["name"], "dist_km": n["dist_km"]}
+        nearest = {
+            "name": n["name"],
+            "coord_source": n["coord_source"],
+            "dist_km": _expose_dist(n),      # 실좌표만 km, 근사면 None
+            "sigungu_nm": n["sigungu_nm"],   # 근사 시설 노출용 '△△구'
+        }
 
     label = _voucher_label(disability_has)
-    if len(voucher_in) == 0:
-        if nearest:
-            message = (
-                f"반경 {SUPPLY_GAP_RADIUS_KM:g}km 내 {label} 가맹시설이 없습니다. "
-                f"가장 가까운 곳: {nearest['name']}({nearest['dist_km']}km)"
-            )
-        else:
-            message = f"반경 {SUPPLY_GAP_RADIUS_KM:g}km 내 {label} 가맹시설이 없습니다"
+    where = user_sigungu_nm or "이 지역"
+    # 헤드라인은 짧게. 최근접 상세(실좌표면 km, 아니면 '△△구')는 nearest 구조체로 전달
+    # (표기 규칙은 소비자가 coord_source 로 판단 — 문구 중복 방지).
+    if voucher_count == 0:
+        # FR-05 AC1: 카운트 0 → 경고 헤드라인.
+        message = f"{where}에 {label} 가맹시설이 없습니다"
     else:
-        message = f"반경 {SUPPLY_GAP_RADIUS_KM:g}km 내 {label} 가맹시설 {len(voucher_in)}곳"
+        # FR-04 AC2: 이용권은 구 단위 카운트. 예: "스포츠강좌이용권 · 성북구 가맹 41곳"
+        message = f"{label} · {where} 가맹 {voucher_count}곳"
 
     return {
-        "radius_km": SUPPLY_GAP_RADIUS_KM,
-        "voucher_count": len(voucher_in),
+        "radius_km": SUPPLY_GAP_RADIUS_KM,   # 공공 대안 카운트(alt_count) 기준 반경
+        "voucher_count": voucher_count,
+        "voucher_scope": "sigungu",          # 이용권 카운트 기준: 구 단위(반경 아님)
+        "sigungu_nm": user_sigungu_nm,
         "alt_count": len(alt_in),
         "nearest": nearest,
         "message": message,
@@ -303,7 +354,7 @@ def _build_path(
             top = voucher_facilities[0]
             path.append({
                 "from": pid, "to": f"facility:{top['id']}", "edge": "적합·접근",
-                "result": "ok", "label": f"{top['name']} · {top['dist_km']}km",
+                "result": "ok", "label": _facility_hop_label(top),
             })
         return path, False
 
@@ -335,7 +386,7 @@ def _build_path(
         top = alternatives[0]
         path.append({
             "from": to, "to": f"facility:{top['id']}", "edge": "적합·접근",
-            "result": "ok", "label": f"{top['name']} · {top['dist_km']}km",
+            "result": "ok", "label": _facility_hop_label(top),
         })
     return path, disability_filter
 

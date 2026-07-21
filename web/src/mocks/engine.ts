@@ -42,6 +42,12 @@ function repCourse(facilityId: string): string | undefined {
   return COURSES.find((c) => c.facility_id === facilityId)?.name
 }
 
+// 사용자 노출용 거리: 실좌표(api)만 km, 근사좌표(구 중심)는 null(거리 미표기).
+function exposeDist(f: RawFacility, from: { lat: number; lon: number }): number | null {
+  if (f.coord_source !== 'api') return null
+  return Math.round(distKm(from, f) * 10) / 10
+}
+
 function toVoucher(f: RawFacility, from: { lat: number; lon: number }, subsidy: number): VoucherFacility {
   const fee = repFee(f.id)
   return {
@@ -50,7 +56,9 @@ function toVoucher(f: RawFacility, from: { lat: number; lon: number }, subsidy: 
     sports: f.sports,
     lat: f.lat,
     lon: f.lon,
-    dist_km: Math.round(distKm(from, f) * 10) / 10,
+    coord_source: f.coord_source,
+    dist_km: exposeDist(f, from),
+    sigungu_nm: f.sigungu_nm,
     fee_month: fee,
     subsidy,
     copay: Math.max(0, fee - subsidy),
@@ -69,13 +77,20 @@ function toAlt(f: RawFacility, from: { lat: number; lon: number }): AlternativeF
     sports: f.sports,
     lat: f.lat,
     lon: f.lon,
-    dist_km: Math.round(distKm(from, f) * 10) / 10,
+    coord_source: f.coord_source,
+    dist_km: exposeDist(f, from),
+    sigungu_nm: f.sigungu_nm,
     note: f.disability_support ? '접근성 지원 · 저가/무료 프로그램' : '저가 프로그램',
     disability_support: f.disability_support,
     fee_month: repFee(f.id),
     source: 'public',
     addr: f.addr,
   }
+}
+
+// 경로 시설 홉 라벨: 근사좌표엔 'nullkm' 대신 이름만.
+function facHopLabel(f: { name: string; coord_source?: string; dist_km: number | null }): string {
+  return f.coord_source === 'api' && f.dist_km != null ? `${f.name} · ${f.dist_km}km` : f.name
 }
 
 export function mockAssess(req: AssessRequest): AssessResponse {
@@ -141,12 +156,15 @@ export function mockAssess(req: AssessRequest): AssessResponse {
   const publicFacilities = inSigungu.filter((f) => f.source === 'public')
   const dvoucherAll = FACILITIES.filter((f) => f.source === 'dvoucher').sort((a, b) => distKm(from, a) - distKm(from, b))
 
+  // 정렬은 내부 실거리(방향성) 기준 — 노출 dist_km 은 근사좌표면 null 이라 정렬 키로 못 씀.
+  const byDist = (a: RawFacility, b: RawFacility) => distKm(from, a) - distKm(from, b)
+
   let voucherFacilities: VoucherFacility[] = []
   if (svoucherEligible) {
     voucherFacilities = inSigungu
       .filter((f) => f.source === 'voucher')
+      .sort(byDist)
       .map((f) => toVoucher(f, from, SVOUCHER_SUBSIDY))
-      .sort((a, b) => a.dist_km - b.dist_km)
   } else if (dvoucherEligible) {
     // 장애인 가맹시설(가까운 순). 성북엔 없으므로 강북 D01 등 인접 구가 잡힌다(공급공백 신호).
     voucherFacilities = dvoucherAll.slice(0, 3).map((f) => toVoucher(f, from, DVOUCHER_SUBSIDY))
@@ -156,7 +174,7 @@ export function mockAssess(req: AssessRequest): AssessResponse {
   const altSource = wantDisabilitySupport
     ? publicFacilities.filter((f) => f.disability_support).concat(publicFacilities.filter((f) => !f.disability_support))
     : publicFacilities
-  const alternatives = altSource.map((f) => toAlt(f, from)).sort((a, b) => a.dist_km - b.dist_km)
+  const alternatives = [...altSource].sort(byDist).map((f) => toAlt(f, from))
 
   // --- 경로 ---
   let path: PathEdge[]
@@ -164,13 +182,13 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     const top = voucherFacilities[0]
     path = [
       { from: 'person', to: 'svoucher', edge: '자격', result: 'ok', label: '연령·소득 충족' },
-      ...(top ? [{ from: 'svoucher', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: `${top.name} · ${top.dist_km}km` }] : []),
+      ...(top ? [{ from: 'svoucher', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: facHopLabel(top) }] : []),
     ]
   } else if (dvoucherEligible) {
     const top = voucherFacilities[0]
     path = [
       { from: 'person', to: 'dvoucher', edge: '자격', result: 'ok', label: '장애인 이용권 대상(공식 확인 필요)' },
-      ...(top ? [{ from: 'dvoucher', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: `${top.name} · ${top.dist_km}km` }] : []),
+      ...(top ? [{ from: 'dvoucher', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: facHopLabel(top) }] : []),
     ]
   } else {
     const failed = disabled ? 'dvoucher' : 'svoucher'
@@ -179,20 +197,31 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     path = [
       { from: 'person', to: failed, edge: '자격', result: 'fail', label: failLabel },
       { from: failed, to: 'public_program', edge: '대체경로', result: 'ok', label: wantDisabilitySupport ? '접근성 지원 공공프로그램' : '무료/저가 공공프로그램', curated: '검증 대기' },
-      ...(top ? [{ from: 'public_program', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: `${top.name} · ${top.dist_km}km` }] : []),
+      ...(top ? [{ from: 'public_program', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: facHopLabel(top) }] : []),
     ]
   }
 
-  // --- 공급공백 ---
+  // --- 공급공백 (좌표 정직성 FR-04/FR-05) ---
   const radius = 3
   const countVoucherSource = disabled ? 'dvoucher' : 'voucher'
-  const voucherInRadius = FACILITIES.filter(
-    (f) => f.source === countVoucherSource && f.sigungu_cd === req.sigungu_cd && distKm(from, f) <= radius,
+  // 이용권 시설은 구 중심 폴백 좌표 → "반경" 대신 사용자 시군구 일치("구 단위 가맹 N곳").
+  const voucherCount = FACILITIES.filter(
+    (f) => f.source === countVoucherSource && f.sigungu_cd === req.sigungu_cd,
   ).length
-  const altInRadius = alternatives.filter((a) => a.dist_km <= radius).length
-  const nearestPool = FACILITIES.filter((f) => f.source === countVoucherSource).sort((a, b) => distKm(from, a) - distKm(from, b))
-  const nearestF = nearestPool[0]
-  const nearest = voucherInRadius === 0 && nearestF ? { name: nearestF.name, dist_km: Math.round(distKm(from, nearestF) * 10) / 10 } : null
+  // 공공 대안은 실좌표 → 반경 유지(노출 dist_km 기준, 근사=null 은 제외).
+  const altInRadius = alternatives.filter((a) => a.dist_km != null && a.dist_km <= radius).length
+  // 최근접 이용권 시설: 내부 거리로 선정, 노출은 coord_source 규칙.
+  const nearestF = [...FACILITIES.filter((f) => f.source === countVoucherSource)].sort(
+    (a, b) => distKm(from, a) - distKm(from, b),
+  )[0]
+  const nearest = nearestF
+    ? {
+        name: nearestF.name,
+        coord_source: nearestF.coord_source,
+        dist_km: nearestF.coord_source === 'api' ? Math.round(distKm(from, nearestF) * 10) / 10 : null,
+        sigungu_nm: nearestF.sigungu_nm,
+      }
+    : null
 
   // 커버리지: 구 단위 차상위·한부모(N) 수급률 (정직-신호)
   const covRow = COVERAGE_ROWS.find((r) => r.sigungu_cd === req.sigungu_cd && r.class === 'N')
@@ -200,17 +229,27 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     ? { sigungu: covRow.sigungu_nm, class: CLASS_LABEL[covRow.class], target: covRow.target, recipient: covRow.recipient, rate: Math.round((covRow.recipient / covRow.target) * 1000) / 1000, year: 2025 }
     : null
 
-  const gapLabel = disabled ? '장애인스포츠강좌이용권 가맹시설' : '이용권 가맹시설'
+  const userSigunguNm = SIGUNGU.find((s) => s.cd === req.sigungu_cd)?.nm ?? req.sigungu_nm ?? '이 지역'
+  const label = disabled ? '장애인스포츠강좌이용권' : '스포츠강좌이용권'
   const message =
-    voucherInRadius === 0
-      ? `반경 ${radius}km 내 ${gapLabel}이 없습니다`
-      : `반경 ${radius}km 내 ${gapLabel} ${voucherInRadius}곳을 이용할 수 있습니다`
+    voucherCount === 0
+      ? `${userSigunguNm}에 ${label} 가맹시설이 없습니다`
+      : `${label} · ${userSigunguNm} 가맹 ${voucherCount}곳`
 
   return {
     eligibility,
     path,
     nearby: { voucher_facilities: voucherFacilities, alternatives },
-    supply_gap: { radius_km: radius, voucher_count: voucherInRadius, alt_count: altInRadius, nearest, message, coverage },
+    supply_gap: {
+      radius_km: radius,
+      voucher_count: voucherCount,
+      voucher_scope: 'sigungu',
+      sigungu_nm: userSigunguNm,
+      alt_count: altInRadius,
+      nearest,
+      message,
+      coverage,
+    },
   }
 }
 

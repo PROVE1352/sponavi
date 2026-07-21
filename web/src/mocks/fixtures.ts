@@ -2,7 +2,7 @@
 // 실데이터가 아니라 데모용 시드다. 실연동 시 서버가 fixtures/DB에서 같은 스키마로 응답한다.
 // 참고: docs/SPEC.md §2, docs/API.md, data/fixtures/{facilities,courses,coverage_seoul_2025}.json
 
-import type { Sigungu } from '../types'
+import type { CoordSource, Sigungu } from '../types'
 
 export interface RawFacility {
   id: string
@@ -13,23 +13,25 @@ export interface RawFacility {
   addr: string
   lat: number
   lon: number
+  // 좌표 정직성(FR-04): 이용권=구 중심 폴백(centroid), 공공=실좌표(api).
+  coord_source: CoordSource
   sports: string[]
   disability_support: boolean | null
   phone: string
 }
 
-// data/fixtures/facilities.json 그대로
+// data/fixtures/facilities.json 그대로 (coord_source 포함)
 export const FACILITIES: RawFacility[] = [
-  { id: 'V01', source: 'voucher',  name: '성북스포츠클럽',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 오패산로 12', lat: 37.6061, lon: 127.0242, sports: ['수영', '헬스'], disability_support: null, phone: '02-000-0001' },
-  { id: 'V02', source: 'voucher',  name: '돈암수영아카데미',   sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 아리랑로 55', lat: 37.5972, lon: 127.0135, sports: ['수영'], disability_support: null, phone: '02-000-0002' },
-  { id: 'V03', source: 'voucher',  name: '정릉태권체육관',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 정릉로 200', lat: 37.6100, lon: 127.0080, sports: ['태권도'], disability_support: null, phone: '02-000-0003' },
-  { id: 'V04', source: 'voucher',  name: '종암필라테스랩',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 종암로 30', lat: 37.5960, lon: 127.0330, sports: ['필라테스', '요가'], disability_support: null, phone: '02-000-0004' },
-  { id: 'V05', source: 'voucher',  name: '강남스윔센터',       sigungu_cd: '11680', sigungu_nm: '강남구', addr: '서울 강남구 선릉로 100', lat: 37.5045, lon: 127.0490, sports: ['수영'], disability_support: null, phone: '02-000-0005' },
-  { id: 'P01', source: 'public',   name: '성북구민체육센터',   sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 화랑로 189', lat: 37.6046, lon: 127.0413, sports: ['요가', '수영', '헬스', '에어로빅'], disability_support: true, phone: '02-000-0011' },
-  { id: 'P02', source: 'public',   name: '아리랑체육관',       sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 아리랑로 82', lat: 37.6008, lon: 127.0117, sports: ['배드민턴', '탁구'], disability_support: false, phone: '02-000-0012' },
-  { id: 'P03', source: 'public',   name: '월곡스포츠문화센터', sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 월곡로 21', lat: 37.6022, lon: 127.0405, sports: ['필라테스', '요가', '스트레칭'], disability_support: false, phone: '02-000-0013' },
-  { id: 'P04', source: 'public',   name: '용산가족체육센터',   sigungu_cd: '11170', sigungu_nm: '용산구', addr: '서울 용산구 이촌로 200', lat: 37.5220, lon: 126.9720, sports: ['수영', '헬스'], disability_support: true, phone: '02-000-0014' },
-  { id: 'D01', source: 'dvoucher', name: '서울장애인체육관',   sigungu_cd: '11305', sigungu_nm: '강북구', addr: '서울 강북구 한천로 1000', lat: 37.6396, lon: 127.0257, sports: ['수영', '재활운동', '탁구'], disability_support: true, phone: '02-000-0021' },
+  { id: 'V01', source: 'voucher',  name: '성북스포츠클럽',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 오패산로 12', lat: 37.6061, lon: 127.0242, coord_source: 'centroid', sports: ['수영', '헬스'], disability_support: null, phone: '02-000-0001' },
+  { id: 'V02', source: 'voucher',  name: '돈암수영아카데미',   sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 아리랑로 55', lat: 37.5972, lon: 127.0135, coord_source: 'centroid', sports: ['수영'], disability_support: null, phone: '02-000-0002' },
+  { id: 'V03', source: 'voucher',  name: '정릉태권체육관',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 정릉로 200', lat: 37.6100, lon: 127.0080, coord_source: 'centroid', sports: ['태권도'], disability_support: null, phone: '02-000-0003' },
+  { id: 'V04', source: 'voucher',  name: '종암필라테스랩',     sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 종암로 30', lat: 37.5960, lon: 127.0330, coord_source: 'centroid', sports: ['필라테스', '요가'], disability_support: null, phone: '02-000-0004' },
+  { id: 'V05', source: 'voucher',  name: '강남스윔센터',       sigungu_cd: '11680', sigungu_nm: '강남구', addr: '서울 강남구 선릉로 100', lat: 37.5045, lon: 127.0490, coord_source: 'centroid', sports: ['수영'], disability_support: null, phone: '02-000-0005' },
+  { id: 'P01', source: 'public',   name: '성북구민체육센터',   sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 화랑로 189', lat: 37.6046, lon: 127.0413, coord_source: 'api', sports: ['요가', '수영', '헬스', '에어로빅'], disability_support: true, phone: '02-000-0011' },
+  { id: 'P02', source: 'public',   name: '아리랑체육관',       sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 아리랑로 82', lat: 37.6008, lon: 127.0117, coord_source: 'api', sports: ['배드민턴', '탁구'], disability_support: false, phone: '02-000-0012' },
+  { id: 'P03', source: 'public',   name: '월곡스포츠문화센터', sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 월곡로 21', lat: 37.6022, lon: 127.0405, coord_source: 'api', sports: ['필라테스', '요가', '스트레칭'], disability_support: false, phone: '02-000-0013' },
+  { id: 'P04', source: 'public',   name: '용산가족체육센터',   sigungu_cd: '11170', sigungu_nm: '용산구', addr: '서울 용산구 이촌로 200', lat: 37.5220, lon: 126.9720, coord_source: 'api', sports: ['수영', '헬스'], disability_support: true, phone: '02-000-0014' },
+  { id: 'D01', source: 'dvoucher', name: '서울장애인체육관',   sigungu_cd: '11305', sigungu_nm: '강북구', addr: '서울 강북구 한천로 1000', lat: 37.6396, lon: 127.0257, coord_source: 'centroid', sports: ['수영', '재활운동', '탁구'], disability_support: true, phone: '02-000-0021' },
 ]
 
 export interface RawCourse {

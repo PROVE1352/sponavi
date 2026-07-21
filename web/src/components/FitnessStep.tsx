@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fitness, fitnessAi, getFitnessItems } from '../api/client'
 import type {
   FitnessAiResponse,
@@ -13,6 +13,8 @@ import type {
   Sex,
 } from '../types'
 import { Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
+import { Skeleton } from './Skeleton'
+import { toAppError, type AppError } from './ErrorPanel'
 
 type BadgeTone = 'neutral' | 'brand' | 'ok' | 'fail' | 'warn' | 'purple'
 
@@ -101,37 +103,58 @@ export function FitnessStep({
   const [parqOk, setParqOk] = useState(false)
 
   const [items, setItems] = useState<FitnessItemsResponse | null>(null)
+  const [itemsError, setItemsError] = useState(false)
+  const [itemsLoading, setItemsLoading] = useState(false)
   const [values, setValues] = useState<Record<string, string>>({})
   const [altChoice, setAltChoice] = useState<Record<string, string>>({})
+  const itemsToken = useRef(0)
 
   const [result, setResult] = useState<FitnessResponse | null>(null)
   const [loading, setLoading] = useState(false)
+  const [submitError, setSubmitError] = useState<AppError | null>(null)
 
   const [ai, setAi] = useState<FitnessAiResponse | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<AppError | null>(null)
+  const aiAbort = useRef<AbortController | null>(null)
+  const aiCanceled = useRef(false)
 
-  // 위저드 나이 변경(다른 페르소나) → 폼·결과 리셋 후 카탈로그 재조회.
-  useEffect(() => {
-    let alive = true
-    setResult(null)
-    setAi(null)
-    setValues({})
-    setAltChoice({})
-    getFitnessItems(age)
+  // 측정항목 카탈로그 조회. 실패 시 폼 대신 재시도 패널을 띄운다(itemsError).
+  const loadItems = useCallback((a: number) => {
+    const token = ++itemsToken.current
+    setItemsLoading(true)
+    setItemsError(false)
+    getFitnessItems(a)
       .then((r) => {
-        if (!alive) return
+        if (token !== itemsToken.current) return
         setItems(r)
         const initial: Record<string, string> = {}
         for (const row of buildRows(r.items)) {
           if (row.kind === 'alt') initial[row.altGroup] = row.options[0].code
         }
         setAltChoice(initial)
+        setItemsError(false)
       })
-      .catch(() => alive && setItems(null))
-    return () => {
-      alive = false
-    }
-  }, [age])
+      .catch(() => {
+        if (token !== itemsToken.current) return
+        setItems(null)
+        setItemsError(true)
+      })
+      .finally(() => {
+        if (token === itemsToken.current) setItemsLoading(false)
+      })
+  }, [])
+
+  // 위저드 나이 변경(다른 페르소나) → 폼·결과 리셋 후 카탈로그 재조회.
+  useEffect(() => {
+    setResult(null)
+    setAi(null)
+    setAiError(null)
+    setSubmitError(null)
+    setValues({})
+    setAltChoice({})
+    loadItems(age)
+  }, [age, loadItems])
 
   const rows = useMemo(() => (items ? buildRows(items.items) : []), [items])
 
@@ -151,22 +174,44 @@ export function FitnessStep({
   async function submit() {
     setLoading(true)
     setAi(null)
+    setAiError(null)
+    setSubmitError(null)
     try {
       const res = await fitness({ age, sex, measures })
       setResult(res)
+    } catch (e) {
+      setSubmitError(toAppError(e)) // POST 는 자동 재시도 없음 → 수동 재시도 버튼 제공
     } finally {
       setLoading(false)
     }
   }
 
   async function requestAi() {
+    aiCanceled.current = false
+    const ctrl = new AbortController()
+    aiAbort.current = ctrl
+    setAiError(null)
     setAiLoading(true)
     try {
-      const res = await fitnessAi({ age, sex, measures })
+      const res = await fitnessAi({ age, sex, measures }, ctrl.signal)
+      if (aiCanceled.current) return
       setAi(res)
+    } catch (e) {
+      if (aiCanceled.current) return
+      const err = toAppError(e)
+      if (err.kind !== 'canceled') setAiError(err) // 429 는 err.message 를 그대로 노출
     } finally {
-      setAiLoading(false)
+      if (aiAbort.current === ctrl) aiAbort.current = null
+      if (!aiCanceled.current) setAiLoading(false)
     }
+  }
+
+  // 사용자가 "처방 생성"을 취소 — 실서버는 요청을 중단하고, 목/느린 응답은 결과를 버린다.
+  function cancelAi() {
+    aiCanceled.current = true
+    aiAbort.current?.abort()
+    aiAbort.current = null
+    setAiLoading(false)
   }
 
   // 항목을 factor 로 그룹핑(표시).
@@ -219,6 +264,10 @@ export function FitnessStep({
 
           {!parqOk ? (
             <ParqGate onContinue={() => setParqOk(true)} />
+          ) : itemsLoading ? (
+            <FitnessFormSkeleton />
+          ) : itemsError ? (
+            <ItemsRetryPanel onRetry={() => loadItems(age)} />
           ) : items && items.items.length === 0 ? (
             <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
               {items.message ?? '이 연령군은 등급 판정 측정항목이 없습니다.'}
@@ -241,6 +290,28 @@ export function FitnessStep({
               >
                 {loading ? '분석 중…' : canSubmit ? '체력 판정 받기' : '측정값을 1개 이상 입력하세요'}
               </button>
+              {submitError && (
+                <div
+                  role="alert"
+                  data-testid="fitness-submit-error"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <WarnIcon className="h-4 w-4 shrink-0" />
+                    {submitError.kind === 'ratelimit'
+                      ? submitError.message
+                      : '체력 판정을 불러오지 못했습니다.'}
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="fitness-submit-retry"
+                    onClick={submit}
+                    className="rounded-md px-2 py-1 text-xs font-bold text-rose-700 underline underline-offset-2 hover:text-rose-900 dark:text-rose-200"
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )}
             </>
           )}
 
@@ -251,7 +322,9 @@ export function FitnessStep({
               onApplyFilter={onApplyFilter}
               ai={ai}
               aiLoading={aiLoading}
+              aiError={aiError}
               onRequestAi={requestAi}
+              onCancelAi={cancelAi}
             />
           )}
 
@@ -300,6 +373,49 @@ function ParqGate({ onContinue }: { onContinue: () => void }) {
         측정값 입력하기
       </button>
       <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">이 문진 응답은 저장·전송되지 않습니다.</p>
+    </div>
+  )
+}
+
+// 측정항목 로딩 자리표시(동적 폼 모양).
+function FitnessFormSkeleton() {
+  return (
+    <div data-testid="fitness-form-skeleton" role="status" aria-busy="true" className="space-y-3">
+      <span className="sr-only">측정항목을 불러오는 중입니다…</span>
+      <Skeleton className="h-4 w-24" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+      <Skeleton className="h-11 w-full rounded-lg" />
+    </div>
+  )
+}
+
+// 측정항목 조회 실패 → 빈 폼 대신 재시도 패널(입력 흐름 보호).
+function ItemsRetryPanel({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      data-testid="fitness-items-error"
+      className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm dark:border-rose-500/40 dark:bg-rose-500/10"
+    >
+      <p className="flex items-center gap-2 font-semibold text-rose-900 dark:text-rose-100">
+        <WarnIcon className="h-4 w-4 shrink-0" />
+        측정항목을 불러오지 못했습니다
+      </p>
+      <p className="mt-1 text-rose-800 dark:text-rose-200/90">
+        잠시 후 다시 시도해 주세요. 결과와 다른 정보는 그대로 유지됩니다.
+      </p>
+      <button
+        type="button"
+        data-testid="fitness-items-retry"
+        onClick={onRetry}
+        className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700"
+      >
+        다시 시도
+      </button>
     </div>
   )
 }
@@ -391,14 +507,18 @@ function FitnessResult({
   onApplyFilter,
   ai,
   aiLoading,
+  aiError,
   onRequestAi,
+  onCancelAi,
 }: {
   result: FitnessResponse
   nearby: Nearby
   onApplyFilter: (sports: string[]) => void
   ai: FitnessAiResponse | null
   aiLoading: boolean
+  aiError: AppError | null
   onRequestAi: () => void
+  onCancelAi: () => void
 }) {
   const items = result.items ?? []
   const rg = result.reference_grade
@@ -496,17 +616,56 @@ function FitnessResult({
         </button>
       )}
 
-      {/* ⑤ AI 처방 */}
-      <div>
-        <button
-          type="button"
-          data-testid="ai-prescribe-btn"
-          onClick={onRequestAi}
-          disabled={aiLoading}
-          className="min-h-11 w-full rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-900 disabled:opacity-60 dark:bg-slate-700 dark:hover:bg-slate-600"
-        >
-          {aiLoading ? '처방 생성 중…' : 'AI 처방 받기'}
-        </button>
+      {/* ⑤ AI 처방 — 진행 문구("최대 1분") + 취소, 실패 시(429 등) 정직한 안내 */}
+      <div className="space-y-2">
+        {!aiLoading && (
+          <button
+            type="button"
+            data-testid="ai-prescribe-btn"
+            onClick={onRequestAi}
+            className="min-h-11 w-full rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
+          >
+            {ai || aiError ? 'AI 처방 다시 받기' : 'AI 처방 받기'}
+          </button>
+        )}
+        {aiLoading && (
+          <div
+            role="status"
+            data-testid="ai-progress"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+          >
+            <span className="inline-flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 dark:border-slate-600 dark:border-t-slate-300"
+              />
+              처방 문장을 만드는 중 — 최대 1분
+            </span>
+            <button
+              type="button"
+              data-testid="ai-cancel"
+              onClick={onCancelAi}
+              className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              취소
+            </button>
+          </div>
+        )}
+        {aiError && !aiLoading && (
+          <div
+            role="alert"
+            data-testid="ai-error"
+            className={`rounded-lg border p-3 text-sm ${
+              aiError.kind === 'ratelimit'
+                ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200'
+                : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200'
+            }`}
+          >
+            {aiError.kind === 'ratelimit'
+              ? aiError.message
+              : 'AI 처방을 불러오지 못했어요. 위 규칙 기반 추천을 참고하시고, 잠시 후 다시 시도해 주세요.'}
+          </div>
+        )}
         {ai && <AiResult ai={ai} />}
       </div>
     </div>

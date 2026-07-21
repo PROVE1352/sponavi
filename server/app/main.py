@@ -1,21 +1,219 @@
 """SpoNavi FastAPI app. Endpoints per docs/API.md. Demo mode = fixtures only.
 
 Run: cd server && uvicorn app.main:app --reload
+
+운영 하드닝(관측/성능/보안 기본기)은 미들웨어 스택으로 얹는다. 미들웨어는
+'나중에 등록될수록 바깥(outermost)'이므로 아래 등록 순서는 요청 기준
+안쪽→바깥 순이다: RateLimit → CORS → SecurityHeaders → GZip → AccessLog.
 """
 from __future__ import annotations
+
+import json
+import logging
+import os
+import subprocess
+import time
+import traceback
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import engine, fitness
 from .models import AssessRequest, FitnessRequest
 from .personas import PERSONAS
-from .store import get_store
+from .store import REPO_ROOT, get_store
 
 app = FastAPI(title="SpoNavi API", version="1.0")
 
+# ---------------------------------------------------------------------------
+# 프로세스 메타 (관측 가능성) — GET /api/health 확장 필드용
+# ---------------------------------------------------------------------------
+_START_MONO = time.monotonic()
+
+
+def _resolve_version() -> str:
+    """빌드 시 주입된 git short hash. 컨테이너는 ENV SPONAVI_VERSION(Dockerfile
+    ARG GIT_SHA)로 받고, 로컬 개발은 git 조회로 폴백, 둘 다 없으면 'dev'."""
+    env = os.environ.get("SPONAVI_VERSION")
+    if env and env.strip():
+        return env.strip()
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=2,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.strip()
+    except Exception:
+        pass
+    return "dev"
+
+
+VERSION = _resolve_version()
+
+# 액세스 로거를 직접 배선한다 — uvicorn/root 로깅 설정에 의존하면 핸들러가 없어
+# 레코드가 조용히 버려질 수 있다. 자체 스트림 핸들러(메시지=완성된 JSON 한 줄)로
+# stderr(=docker logs 캡처)에 확실히 남긴다. propagate=False 로 중복 방지.
+_access_log = logging.getLogger("sponavi.access")
+if not _access_log.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(message)s"))
+    _access_log.addHandler(_h)
+    _access_log.setLevel(logging.INFO)
+    _access_log.propagate = False
+
+
+# ---------------------------------------------------------------------------
+# 미들웨어 — 관측/성능/보안 (SPEC 하드닝)
+# ---------------------------------------------------------------------------
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    """구조화 액세스 로그(요청당 JSON 한 줄).
+
+    ★ P-3(개인정보 최소수집): method·path·status·ms 만 기록한다.
+      - 쿼리스트링·요청 바디·요청 헤더·클라이언트 IP 등 개인정보는 절대 남기지
+        않는다(path 는 url.path 라 쿼리 제외). 로그로 PII 가 새지 않게 한다.
+    5xx 는 스택 '요약'(마지막 프레임 한 줄)만 error 로 남긴다 — 본문 미포함.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        start = time.perf_counter()
+        method = request.method
+        path = request.url.path  # 쿼리스트링 제외 (P-3)
+        try:
+            response = await call_next(request)
+        except Exception:
+            ms = round((time.perf_counter() - start) * 1000, 1)
+            # 스택 '요약'만 — 요청 본문/파라미터는 절대 기록하지 않는다 (P-3)
+            tb = traceback.format_exc().strip().splitlines()
+            summary = tb[-1] if tb else "unhandled exception"
+            _access_log.error(json.dumps(
+                {"method": method, "path": path, "status": 500, "ms": ms,
+                 "error": summary}, ensure_ascii=False))
+            raise
+        ms = round((time.perf_counter() - start) * 1000, 1)
+        rec = {"method": method, "path": path,
+               "status": response.status_code, "ms": ms}
+        if response.status_code >= 500:
+            _access_log.error(json.dumps(rec, ensure_ascii=False))
+        else:
+            _access_log.info(json.dumps(rec, ensure_ascii=False))
+        return response
+
+
+# self + inline style 허용(Tailwind v4 / Leaflet 인라인 스타일 특성).
+# 지도 타일은 https://{s}.tile.openstreetmap.org 이므로 img-src 에 필수 허용.
+# 마커는 L.divIcon(인라인 HTML)이라 외부 이미지 CDN 불필요. data: 는 파비콘/
+# leaflet 내부 1x1 gif 등. 외부 kspo/svoucher 링크는 <a href> 네비게이션이라
+# 리소스 지시자 대상이 아님(허용 호스트 추가 불필요).
+_CSP = (
+    "default-src 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none'; "
+    "frame-ancestors 'none'; "
+    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "style-src 'self' 'unsafe-inline'; "
+    "script-src 'self'; "
+    "connect-src 'self'; "
+    "font-src 'self' data:"
+)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """보안 응답 헤더(모든 응답 — 에러/429 포함). setdefault 라 개별 응답이
+    이미 지정한 값은 덮지 않는다."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        h = response.headers
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("X-Frame-Options", "DENY")
+        h.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        h.setdefault("Content-Security-Policy", _CSP)
+        return response
+
+
+class RateLimiter:
+    """IP·버킷별 슬라이딩 윈도우(메모리). 단일 컨테이너 기준 충분(외부 의존 0).
+
+    - /api/fitness/ai : 분당 ai_per_min(기본 6) — LLM/무거운 경로 보호
+    - 그 외 /api/*    : 분당 default_per_min(기본 120)
+    - 정적/그 외 경로 : 무제한
+    워커>1 이면 카운트가 워커별이라 실효 한도는 워커수 배로 근사된다(계약 허용
+    — '단일 컨테이너라 충분'). enabled 는 ENV SPONAVI_RATE_LIMIT(off 로 비활성)."""
+
+    def __init__(self, default_per_min: int = 120, ai_per_min: int = 6,
+                 window_s: int = 60) -> None:
+        self.default_per_min = default_per_min
+        self.ai_per_min = ai_per_min
+        self.window_s = window_s
+        self.enabled = os.environ.get(
+            "SPONAVI_RATE_LIMIT", "on").strip().lower() not in (
+            "off", "0", "false", "no")
+        self._hits: dict[tuple, list[float]] = {}
+
+    def reset(self) -> None:
+        """카운터 초기화(테스트에서 케이스 간 격리에 사용)."""
+        self._hits.clear()
+
+    def _limit_for(self, path: str):
+        if path == "/api/fitness/ai":
+            return self.ai_per_min, "ai"
+        if path.startswith("/api/"):
+            return self.default_per_min, "api"
+        return None, None  # 정적 자산 등 — 무제한
+
+    def allow(self, ip: str, path: str, now: float) -> bool:
+        if not self.enabled:
+            return True
+        limit, bucket = self._limit_for(path)
+        if limit is None:
+            return True
+        key = (ip, bucket)
+        window_start = now - self.window_s
+        hits = self._hits.get(key)
+        if hits is None:
+            hits = []
+            self._hits[key] = hits
+        elif hits and hits[0] <= window_start:
+            hits[:] = [t for t in hits if t > window_start]  # 오래된 기록 제거
+        if len(hits) >= limit:
+            return False
+        hits.append(now)
+        return True
+
+
+_rate_limiter = RateLimiter()
+_RATE_MSG = "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+
+
+def _client_ip(request: Request) -> str:
+    # 신뢰하는 단일 리버스 프록시(Caddy) 뒤 — X-Forwarded-For 왼쪽 첫 IP.
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not _rate_limiter.allow(
+            _client_ip(request), request.url.path, time.time()
+        ):
+            return JSONResponse(
+                status_code=429,
+                content={"error": {"code": "RATE_LIMITED", "message": _RATE_MSG}},
+            )
+        return await call_next(request)
+
+
+# --- 미들웨어 등록 (아래로 갈수록 바깥) -----------------------------------
+# 요청 흐름:  AccessLog → GZip → SecurityHeaders → CORS → RateLimit → 라우터
+# 응답에도 역순으로 헤더/압축/로그가 얹힌다(429·에러도 보안 헤더·CORS 포함).
+app.add_middleware(RateLimitMiddleware)
 # CORS: local Vite dev server (SPEC §6)
 app.add_middleware(
     CORSMiddleware,
@@ -26,6 +224,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware)
+# GZip: JSON 응답(assess 등 수 KB)·정적 텍스트 압축. minimum_size 미만은 건너뜀.
+app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(AccessLogMiddleware)
 
 
 def _error(code: str, message: str, status: int = 400) -> JSONResponse:
@@ -50,13 +252,18 @@ async def _assess_error_handler(request: Request, exc: engine.AssessError) -> JS
 @app.get("/api/health")
 def health() -> dict:
     # mode는 store 소스 선택 로직과 동일 기준 (db=전국 실데이터, fixtures=데모)
-    from .store import db_path
     from . import ai
+    from .store import db_mtime_iso, db_path
 
+    store = get_store()
     return {
         "status": "ok",
         "mode": "db" if db_path().exists() else "fixtures",
         "llm": ai.provider_label(),
+        # 데이터 기준일: DB 내 빌드 스탬프 우선, 없으면 파일 mtime(ISO) 폴백.
+        "data_built": store.build_stamp() or db_mtime_iso(),
+        "version": VERSION,          # 빌드 시 주입된 git short hash
+        "uptime_s": round(time.monotonic() - _START_MONO, 1),
     }
 
 

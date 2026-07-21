@@ -4,6 +4,7 @@ Contract: docs/API.md POST /api/assess.
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Optional
 
 from .store import Store, haversine_km
@@ -244,10 +245,33 @@ def _with_distance(facilities: list[dict], lat: float, lon: float) -> list[dict]
     return out
 
 
+def _bbox(lat: float, lon: float, radius_km: float) -> tuple[float, float, float, float]:
+    """반경 원을 포함하는 위경도 사각형. 1° 위도 ≈ 111km, 경도는 cos(위도) 보정."""
+    dlat = radius_km / 111.0
+    coslat = max(0.1, math.cos(math.radians(lat)))
+    dlon = radius_km / (111.0 * coslat)
+    return (lat - dlat, lat + dlat, lon - dlon, lon + dlon)
+
+
+def _nearest_facility(store: Store, source: str, lat: float, lon: float) -> Optional[dict]:
+    """확장 링 탐색: 링 내 최소거리 ≤ 링 반경이면 전역 최솟값이 증명된다
+    (박스 밖 점은 축 거리만으로 링 반경 초과). 최후엔 전량 폴백."""
+    for radius in (10.0, 50.0, None):
+        bbox = _bbox(lat, lon, radius) if radius is not None else None
+        cand = _with_distance(store.facilities(source, bbox=bbox), lat, lon)
+        if not cand:
+            continue
+        if radius is None or cand[0]["dist_km"] <= radius:
+            return cand[0]
+    return None
+
+
 def _voucher_facilities(
     store: Store, source: str, lat: float, lon: float, subsidy: int, age: int
 ) -> list[dict]:
-    facs = _with_distance(store.facilities(source), lat, lon)
+    facs = _with_distance(
+        store.facilities(source, bbox=_bbox(lat, lon, NEARBY_RADIUS_KM)), lat, lon
+    )
     out = []
     for f in facs:
         if f["dist_km"] > NEARBY_RADIUS_KM:
@@ -277,7 +301,9 @@ def _voucher_facilities(
 def _alternatives(
     store: Store, lat: float, lon: float, age: int, disability_filter: bool
 ) -> list[dict]:
-    facs = _with_distance(store.facilities("public"), lat, lon)
+    facs = _with_distance(
+        store.facilities("public", bbox=_bbox(lat, lon, NEARBY_RADIUS_KM)), lat, lon
+    )
     out = []
     for f in facs:
         if f["dist_km"] > NEARBY_RADIUS_KM:
@@ -345,27 +371,26 @@ def _supply_gap(
     disability_has: bool, disability_filter: bool, age: int,
     sigungu_cd: str, income_class: str,
 ) -> dict:
-    source_facs = store.facilities(source)
-    voucher_all = _with_distance(source_facs, lat, lon)  # 정렬됨 — 최근접 선정용(내부 거리)
-
     # FR-04 AC2: 이용권 시설은 실좌표가 아니므로 "반경 N km" 금지.
-    #            사용자 시군구(sigungu_cd) 일치 = "OO구 가맹 N곳"(구 단위 카운트).
+    #            사용자 시군구(sigungu_cd) 일치 = "OO구 가맹 N곳"(구 단위 카운트, SQL COUNT).
     user_sigungu_nm = _sigungu_nm(store, sigungu_cd)
     if sigungu_cd:
-        voucher_count = sum(1 for f in source_facs if f["sigungu_cd"] == sigungu_cd)
+        voucher_count = store.count_facilities_in_sigungu(source, sigungu_cd)
     else:
         voucher_count = 0  # 시군구 미상(좌표만 입력) → 구 단위 카운트 근거 없음
 
-    # 공공 대안 풀은 실좌표(api 위주) → 반경 유지.
-    alt_all = _with_distance(store.facilities("public"), lat, lon)
+    # 공공 대안 풀은 실좌표(api 위주) → 반경 유지 (bbox 프리필터, 결과 동일).
+    alt_all = _with_distance(
+        store.facilities("public", bbox=_bbox(lat, lon, SUPPLY_GAP_RADIUS_KM)), lat, lon
+    )
     if disability_filter:
         alt_all = [f for f in alt_all if f["disability_support"]]
     alt_in = [f for f in alt_all if f["dist_km"] <= SUPPLY_GAP_RADIUS_KM]
 
-    # 최근접 이용권 시설: 내부 거리로 선정(방향성). 노출은 coord_source 규칙.
+    # 최근접 이용권 시설: 확장 링 탐색(내부 거리 — 방향성). 노출은 coord_source 규칙.
     nearest = None
-    if voucher_all:
-        n = voucher_all[0]
+    n = _nearest_facility(store, source, lat, lon)
+    if n is not None:
         nearest = {
             "name": n["name"],
             "coord_source": n["coord_source"],

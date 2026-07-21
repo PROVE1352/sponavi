@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { IS_MOCK, ApiCallError, assess, getPersonas, getSigungu } from './api/client'
+import {
+  DATA_BUILT_FALLBACK,
+  IS_MOCK,
+  assess,
+  getHealth,
+  getPersonas,
+  getSigungu,
+  type HealthResponse,
+} from './api/client'
 import type { AssessRequest, AssessResponse, DemoPersona, Sigungu } from './types'
 import { PersonaBar } from './components/PersonaBar'
 import { Wizard } from './components/Wizard'
 import { ResultView } from './components/ResultView'
+import { ResultSkeleton } from './components/Skeleton'
+import { ErrorPanel, toAppError, type AppError } from './components/ErrorPanel'
 import { Badge, WarnIcon } from './components/ui'
 
 function PinIcon({ className = 'w-4 h-4' }: { className?: string }) {
@@ -23,7 +33,11 @@ export default function App() {
   const [req, setReq] = useState<AssessRequest | null>(null)
   const [data, setData] = useState<AssessResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<AppError | null>(null)
+  const lastAttempt = useRef<{ request: AssessRequest; personaId: string | null } | null>(null)
+
+  const [health, setHealth] = useState<HealthResponse | null>(null)
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
 
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
   const resultRef = useRef<HTMLDivElement>(null)
@@ -31,6 +45,20 @@ export default function App() {
   useEffect(() => {
     getSigungu().then(setSigungu).catch(() => setSigungu([]))
     getPersonas().then(setPersonas).catch(() => setPersonas([]))
+    // 푸터 데이터 기준일/버전(옵셔널 — 서버가 추가 중). 실패해도 폴백으로 렌더.
+    getHealth().then(setHealth).catch(() => setHealth(null))
+  }, [])
+
+  // 오프라인/재접속 감지 → 상단 미니 배너 토글.
+  useEffect(() => {
+    const goOnline = () => setOnline(true)
+    const goOffline = () => setOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
   }, [])
 
   function toggleTheme() {
@@ -40,6 +68,7 @@ export default function App() {
   }
 
   async function run(request: AssessRequest, personaId: string | null) {
+    lastAttempt.current = { request, personaId } // 입력 보존 재시도용
     setLoading(true)
     setError(null)
     setActiveId(personaId)
@@ -49,12 +78,17 @@ export default function App() {
       setData(res)
       requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     } catch (e) {
-      const msg = e instanceof ApiCallError ? `${e.message} (${e.code})` : '결과를 불러오지 못했습니다. 서버 연결을 확인하세요.'
-      setError(msg)
+      setError(toAppError(e))
       setData(null)
     } finally {
       setLoading(false)
     }
+  }
+
+  // 마지막 시도를 그대로(입력 보존) 재호출.
+  function retryAssess() {
+    const a = lastAttempt.current
+    if (a) void run(a.request, a.personaId)
   }
 
   function onPersona(p: DemoPersona) {
@@ -67,8 +101,22 @@ export default function App() {
     void run(request, null)
   }
 
+  const dataBuilt = health?.data_built ?? DATA_BUILT_FALLBACK
+  const version = typeof health?.version === 'string' ? health.version : null
+
   return (
     <div id="top" className="flex min-h-dvh flex-col overflow-x-clip">
+      {/* 오프라인 미니 배너 — 재접속되면 자동 사라짐 */}
+      {!online && (
+        <div
+          role="status"
+          data-testid="offline-banner"
+          className="flex items-center justify-center gap-2 bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950"
+        >
+          <WarnIcon className="h-3.5 w-3.5 shrink-0" />
+          오프라인 상태입니다 — 네트워크 연결을 확인해 주세요. 다시 연결되면 자동으로 사라집니다.
+        </div>
+      )}
       <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/80">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2.5">
           <a href="#top" className="flex items-center gap-2.5" aria-label="스포내비 홈으로">
@@ -133,18 +181,12 @@ export default function App() {
 
         <Wizard sigungu={sigungu} prefill={prefill} onSubmit={onWizard} loading={loading} />
 
-        {error && (
-          <div
-            role="alert"
-            className="flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200"
-          >
-            <WarnIcon className="w-5 h-5 shrink-0" />
-            {error}
-          </div>
-        )}
-
         <div ref={resultRef}>
-          {data && req && (
+          {loading ? (
+            <ResultSkeleton />
+          ) : error ? (
+            <ErrorPanel error={error} onRetry={retryAssess} retrying={loading} />
+          ) : data && req ? (
             <>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">결과</h2>
@@ -155,7 +197,7 @@ export default function App() {
               </div>
               <ResultView req={req} data={data} />
             </>
-          )}
+          ) : null}
         </div>
       </main>
 
@@ -177,8 +219,10 @@ export default function App() {
             </span>
           </div>
           <p>
-            데이터 기준 2026-07-20 · 출처: 국민체육진흥공단 공공데이터(문화체육관광부) + 공단 웹 공개 조회(보조) · 본
-            서비스의 자격 안내는 '예상'이며 최종 확인은 공식 신청처 · 운동 정보는 의료 조언이 아님
+            <span data-testid="footer-data-built">데이터 기준 {dataBuilt}</span>
+            {version && <span data-testid="footer-version"> · v{version}</span>} · 출처: 국민체육진흥공단
+            공공데이터(문화체육관광부) + 공단 웹 공개 조회(보조) · 본 서비스의 자격 안내는 '예상'이며 최종 확인은
+            공식 신청처 · 운동 정보는 의료 조언이 아님
           </p>
           <p className="text-slate-600 dark:text-slate-400">지도 &copy; OpenStreetMap 기여자.</p>
         </div>

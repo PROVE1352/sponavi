@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AlternativeFacility, Nearby, VoucherFacility } from '../types'
 import type { AccessibilityMap, FacilityAccessibility } from '../types_accessibility'
 import { accessibilitySourceLine } from '../types_accessibility'
 import { getAccessibility } from '../api/client'
 import { km, walkMinutes, won, wonPlain } from '../lib/format'
-import { ApproxLocationBadge, Badge, CheckIcon } from './ui'
+import { ApproxLocationBadge, Badge, CheckIcon, WarnIcon } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
 
 function matchesFilter(sports: string[], filter?: string[]): boolean {
@@ -22,8 +22,12 @@ export function NearbyList({
   onClearFilter?: () => void
 }) {
   // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
+  // 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
   const [access, setAccess] = useState<AccessibilityMap>({})
+  const [accessError, setAccessError] = useState(false)
+  const [accessLoading, setAccessLoading] = useState(false)
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
+  const loadToken = useRef(0)
 
   const dvoucherIds = useMemo(
     () =>
@@ -34,19 +38,35 @@ export function NearbyList({
   )
   const dvoucherKey = dvoucherIds.join(',')
 
-  useEffect(() => {
-    setSelectedAmenities([]) // 새 결과마다 필터 초기화
-    if (dvoucherIds.length === 0) {
+  const loadAccess = useCallback((ids: string[]) => {
+    if (ids.length === 0) {
       setAccess({})
+      setAccessError(false)
+      setAccessLoading(false)
       return
     }
-    let alive = true
-    getAccessibility(dvoucherIds)
-      .then((m) => alive && setAccess(m))
-      .catch(() => alive && setAccess({}))
-    return () => {
-      alive = false
-    }
+    const token = ++loadToken.current
+    setAccessLoading(true)
+    setAccessError(false)
+    getAccessibility(ids)
+      .then((m) => {
+        if (token !== loadToken.current) return
+        setAccess(m)
+        setAccessError(false)
+      })
+      .catch(() => {
+        if (token !== loadToken.current) return
+        setAccess({}) // 거짓 데이터로 채우지 않는다(정직 원칙) — 미상으로 남긴다
+        setAccessError(true)
+      })
+      .finally(() => {
+        if (token === loadToken.current) setAccessLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    setSelectedAmenities([]) // 새 결과마다 필터 초기화
+    loadAccess(dvoucherIds)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dvoucherKey])
 
@@ -113,12 +133,39 @@ export function NearbyList({
         />
       )}
 
+      {/* 접근성 조회 로딩/실패 — 실패해도 아래 시설 리스트는 완전히 동작한다(부분 실패 격리) */}
+      {hasDvoucher && accessLoading && (
+        <p data-testid="accessibility-loading" className="text-xs text-slate-500 dark:text-slate-400">
+          접근성 정보를 불러오는 중…
+        </p>
+      )}
+      {hasDvoucher && accessError && !accessLoading && (
+        <div
+          role="status"
+          data-testid="accessibility-error"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200"
+        >
+          <span className="inline-flex items-center gap-2">
+            <WarnIcon className="h-4 w-4 shrink-0" />
+            접근성 정보를 불러오지 못했습니다. 시설 목록은 정상 표시됩니다.
+          </span>
+          <button
+            type="button"
+            data-testid="accessibility-retry"
+            onClick={() => loadAccess(dvoucherIds)}
+            className="rounded-md px-2 py-1 text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
       {vouchers.length > 0 && (
         <div data-testid="voucher-section">
           <h3 className="mb-2 text-sm font-semibold text-brand-700 dark:text-brand-100">이용권 가맹시설</h3>
           <ul className="space-y-2">
             {vouchers.map((v) => (
-              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} />
+              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={accessError} />
             ))}
           </ul>
         </div>
@@ -200,8 +247,16 @@ function DisabilityTag({ support }: { support: boolean | null }) {
 }
 
 // FR-10 AC2: 장애지원유형 목록 + 편의시설 태그. 데이터 없으면 "접근성 정보 없음"(미상 구분).
-function AccessibilityTags({ data }: { data?: FacilityAccessibility }) {
+// 조회 자체가 실패했으면(error) "없음"과 구분해 "일시적으로 불러오지 못함"으로 정직하게 표기.
+function AccessibilityTags({ data, error }: { data?: FacilityAccessibility; error?: boolean }) {
   if (!data) {
+    if (error) {
+      return (
+        <p data-testid="access-error-inline" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          접근성 정보를 일시적으로 불러오지 못했습니다
+        </p>
+      )
+    }
     return (
       <p data-testid="access-none" className="mt-2 text-xs text-slate-600 dark:text-slate-400">
         접근성 정보 없음
@@ -234,9 +289,11 @@ function AccessibilityTags({ data }: { data?: FacilityAccessibility }) {
 function VoucherRow({
   v,
   accessibility,
+  accessError,
 }: {
   v: VoucherFacility
   accessibility?: FacilityAccessibility
+  accessError?: boolean
 }) {
   const isDvoucher = v.source === 'dvoucher'
   return (
@@ -277,7 +334,7 @@ function VoucherRow({
       </dl>
 
       {/* FR-10: 장애인 가맹시설엔 접근성 태그(지원유형·편의시설) */}
-      {isDvoucher && <AccessibilityTags data={accessibility} />}
+      {isDvoucher && <AccessibilityTags data={accessibility} error={accessError} />}
 
       <div className="mt-2">
         <LocationLine coordSource={v.coord_source} dist={v.dist_km} />

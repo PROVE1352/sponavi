@@ -29,3 +29,15 @@ def client():
     from app.main import app
 
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """레이트리밋 카운터를 케이스마다 초기화한다. 세션 스코프 client 로 전체
+    스위트가 누적하면 분당 한도(120)를 넘어 기존 테스트가 429 로 깨질 수 있는데,
+    개별 테스트는 /api 호출이 소수라 케이스 간 리셋으로 충분히 격리된다."""
+    from app.main import _rate_limiter
+
+    _rate_limiter.reset()
+    yield
+    _rate_limiter.reset()

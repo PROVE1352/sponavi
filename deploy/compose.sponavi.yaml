@@ -3,6 +3,9 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        # deploy.sh 가 로컬 git short hash 를 GIT_SHA 로 넘긴다(서버엔 .git 없음).
+        GIT_SHA: ${GIT_SHA:-unknown}
     container_name: sponavi
     restart: unless-stopped
     ports:
@@ -10,3 +13,9 @@ services:
     volumes:
       # DB는 이미지에도 들어가지만, 월간 갱신 시 rsync만으로 교체 가능하게 볼륨 우선
       - ../data/sponavi.db:/srv/data/sponavi.db:ro
+    # 컨테이너 로그 무제한 방지 — 디스크 보호(10m x 3 파일 롤링)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

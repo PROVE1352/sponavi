@@ -9,3 +9,5 @@ data/raw/
 .DS_Store
 data/sponavi.db
 data/raw/
+data/sponavi.db-wal
+data/sponavi.db-shm

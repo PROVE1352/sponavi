@@ -17,6 +17,7 @@ import json
 import math
 import os
 import sqlite3
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
@@ -108,6 +109,42 @@ CREATE INDEX IF NOT EXISTS idx_cov_cd      ON coverage(sigungu_cd);
 
 def create_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA_SQL)
+
+
+def _apply_pragmas(conn: sqlite3.Connection) -> None:
+    """읽기 위주 워크로드용 SQLite 튜닝. 전부 best-effort — 배포 RO 볼륨에서
+    실패해도 무중단(서비스는 순수 읽기라 실패해도 조회에 지장 없음).
+
+    - journal_mode=WAL: 쓰기 가능 볼륨에서만 실제 전환된다. DB 파일이 RO 로
+      마운트되면(compose `:ro`) 전환이 거부/무시되고 기존 모드로 남는다("가능 시").
+    - synchronous=NORMAL·mmap_size·cache_size·temp_store: 세션 스코프 설정으로
+      읽기 지연을 줄인다(RO 여부와 무관하게 안전).
+    """
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.Error:
+        pass  # RO 볼륨 등 — 기존 저널 모드 유지
+    for pragma in (
+        "PRAGMA synchronous=NORMAL",
+        "PRAGMA mmap_size=268435456",   # 256MB — DB(≈80MB) 전체를 메모리 매핑
+        "PRAGMA cache_size=-16000",     # ~16MB 페이지 캐시
+        "PRAGMA temp_store=MEMORY",
+    ):
+        try:
+            conn.execute(pragma)
+        except sqlite3.Error:
+            pass
+
+
+def db_mtime_iso() -> Optional[str]:
+    """sponavi.db 파일 mtime(UTC ISO). 없으면 None.
+    DB 에 빌드 스탬프(meta 테이블)가 없을 때 GET /api/health data_built 폴백으로
+    쓴다(build_db.py 미수정 — 스크립트 변경 최소화, 계약 §1.③)."""
+    db = db_path()
+    if not db.exists():
+        return None
+    ts = db.stat().st_mtime
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(timespec="seconds")
 
 
 # ---------------------------------------------------------------------------
@@ -209,18 +246,31 @@ class Store:
             "phone": row["phone"],
         }
 
-    def facilities(self, source: Optional[str] = None) -> list[dict]:
-        if source is None:
-            cur = self.conn.execute(
-                "SELECT * FROM facilities WHERE lat IS NOT NULL AND lon IS NOT NULL"
-            )
-        else:
-            cur = self.conn.execute(
-                "SELECT * FROM facilities "
-                "WHERE source = ? AND lat IS NOT NULL AND lon IS NOT NULL",
-                (source,),
-            )
+    def facilities(
+        self,
+        source: Optional[str] = None,
+        bbox: Optional[tuple[float, float, float, float]] = None,
+    ) -> list[dict]:
+        """bbox=(lat_min, lat_max, lon_min, lon_max) — 반경 원을 포함하는 사각형
+        프리필터(idx_fac_geo). 박스 밖 점은 축 거리만으로 반경 밖이 보장되므로
+        하버사인 정밀 필터 결과는 전량 로드와 동일하다(성능만 다름)."""
+        sql = "SELECT * FROM facilities WHERE lat IS NOT NULL AND lon IS NOT NULL"
+        args: list = []
+        if source is not None:
+            sql += " AND source = ?"
+            args.append(source)
+        if bbox is not None:
+            sql += " AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?"
+            args.extend([bbox[0], bbox[1], bbox[2], bbox[3]])
+        cur = self.conn.execute(sql, args)
         return [self._facility_row(r) for r in cur.fetchall()]
+
+    def count_facilities_in_sigungu(self, source: str, sigungu_cd: str) -> int:
+        cur = self.conn.execute(
+            "SELECT COUNT(*) FROM facilities WHERE source = ? AND sigungu_cd = ?",
+            (source, sigungu_cd),
+        )
+        return int(cur.fetchone()[0])
 
     def courses_for(self, facility_id: str) -> list[dict]:
         cur = self.conn.execute(
@@ -239,6 +289,21 @@ class Store:
         cur = self.conn.execute("SELECT year FROM coverage LIMIT 1")
         row = cur.fetchone()
         return row["year"] if row else None
+
+    # -- build stamp (관측 가능성) ------------------------------------------
+    def build_stamp(self) -> Optional[str]:
+        """DB 내 빌드 스탬프(meta 테이블 key='built_at'). 미래 대비 — 현재
+        build_db.py 는 이 테이블을 만들지 않으므로 보통 None 을 반환하고,
+        호출부(GET /api/health)가 파일 mtime(db_mtime_iso)으로 폴백한다."""
+        try:
+            row = self.conn.execute(
+                "SELECT value FROM meta WHERE key='built_at'"
+            ).fetchone()
+        except sqlite3.Error:
+            return None
+        if row and row["value"]:
+            return str(row["value"])
+        return None
 
     # -- accessibility (FR-10) ---------------------------------------------
     # dvoucher 웹 보조 소스(scripts/load_accessibility.py). 별도 테이블
@@ -462,6 +527,7 @@ def build_store(sqlite_target: str = ":memory:") -> Store:
 def open_db_store(path: str) -> Store:
     """Load the prebuilt nationwide DB (scripts/build_db.py output)."""
     conn = sqlite3.connect(path, check_same_thread=False)
+    _apply_pragmas(conn)  # 읽기 최적화(WAL/mmap 등) — best-effort, RO 볼륨 안전
     ddir = data_dir()
     rules = _read_json(ddir / "rules.json")
     centroids = _read_json(ddir / "sigungu_centroids.json")

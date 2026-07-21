@@ -1,0 +1,10 @@
+[Unit]
+Description=SpoNavi container health watchdog (restart on unhealthy)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# deploy.sh 가 /opt/sponavi/watchdog.sh 로 설치한다(설치 스텝 참조).
+ExecStart=/opt/sponavi/watchdog.sh
+Nice=10

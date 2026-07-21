@@ -158,6 +158,126 @@
     }
    ],
    "verified": true
+  },
+  {
+   "id": "tteuntteun",
+   "name": "튼튼머니(스포츠활동 인센티브)",
+   "eligibility": {
+    "income_classes": "any",
+    "age_min": 4,
+    "age_max": null,
+    "disability": "any"
+   },
+   "benefit": "스포츠활동·체력측정 실적으로 연간 최대 5만 포인트 적립(1P=1원), 스포츠상품권(제로페이) 전환 후 스포츠시설·용품에 사용",
+   "subsidy_month": null,
+   "income_note": "소득·지역 요건 없음. 만 4세 이상 누구나. 언론 별칭 '전국민 운동지원금'(동일 사업).",
+   "apply": {
+    "how": "튼튼머니 앱(2026-03 출시) 또는 국민체력100 누리집에서 가입, 적립시설(전국 1,281개소)에서 QR 인증",
+    "url": "https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo",
+    "docs": [],
+    "period": "2026년 적립 2/23~11/30, 상품권 전환 3/30~12/20",
+    "tel": "02-410-1414"
+   },
+   "sources": [
+    {
+     "url": "https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo",
+     "checked": "2026-07-21",
+     "note": "KSPO 국민체력100 공식 — 대상·적립 한도·기간"
+    },
+    {
+     "url": "https://nfa.kspo.or.kr/spoint/selectSpointFacility.kspo",
+     "checked": "2026-07-21",
+     "note": "적립시설 목록(전국 1,281개소)"
+    }
+   ],
+   "verified": true
+  },
+  {
+   "id": "senior_voucher",
+   "name": "어르신 스포츠 상품권",
+   "eligibility": {
+    "income_classes": [
+     "기초연금수급"
+    ],
+    "age_min": 65,
+    "age_max": null,
+    "disability": "any"
+   },
+   "benefit": "상품권 1장 5만원, 지자체 신청 상황에 따라 1인 최대 15만원 — 제로페이 가맹 스포츠시설(전국 약 4.3만곳)",
+   "subsidy_month": null,
+   "income_note": "2025년 공식 기준: '기초연금을 받는 만 65세 이상'이 자격요건(기초연금=소득인정액 하위 70%). ⚠2026년 소득요건 해제 보도는 2차 출처만 존재 — 미검증, 지자체 공고 확인 필요.",
+   "apply": {
+    "how": "전용 누리집(ssvoucher.co.kr) 온라인 신청 또는 주민센터 방문(대리신청 가능)",
+    "url": "https://ssvoucher.co.kr",
+    "docs": [],
+    "period": "연 1~2차 모집(2025년 1차 8/4~8/13, 10월 추가), 지자체별 상이·예산 소진 시 마감",
+    "tel": "1551-9998"
+   },
+   "sources": [
+    {
+     "url": "https://www.korea.kr/news/policyNewsView.do?newsId=148946914",
+     "checked": "2026-07-21",
+     "note": "정책브리핑(2025-07-31) — 문체부+KSPO, 기초연금 수급 65세+, 장당 5만·최대 15만, 제로페이 4.3만곳"
+    }
+   ],
+   "verified": true
+  },
+  {
+   "id": "senior_free_class",
+   "name": "어르신 스포츠강좌 프로그램(무료 강좌)",
+   "eligibility": {
+    "income_classes": "any",
+    "age_min": 65,
+    "age_max": null,
+    "disability": "any"
+   },
+   "benefit": "노인복지관·경로당·공공체육시설 등에서 수강료 무료 강좌(요가·기체조·파크골프·라인댄스 등)",
+   "subsidy_month": null,
+   "income_note": "소득 무관. 상품권 사업과 별개(블로그에서 자주 혼동됨 — 이건 '무료 강좌', 상품권은 '이용료 지원').",
+   "apply": {
+    "how": "거주지 노인복지관·주민자치센터·공공체육시설 문의(2026년 13개 시도 54개 사업)",
+    "url": "https://www.mcst.go.kr",
+    "docs": [],
+    "period": "2026-02부터 시도별 순차 시행",
+    "tel": null
+   },
+   "sources": [
+    {
+     "url": "https://www.news1.kr/articles/6097119",
+     "checked": "2026-07-21",
+     "note": "문체부 발표 보도 — 13개 시도 54개 사업, 국비 75억, 소득 무관 무료"
+    }
+   ],
+   "verified": true
+  },
+  {
+   "id": "culture_deduction",
+   "name": "체육시설 문화비 소득공제",
+   "eligibility": {
+    "income_classes": "any",
+    "age_min": null,
+    "age_max": null,
+    "disability": "any",
+    "extra": "총급여 7,000만원 이하 근로소득자"
+   },
+   "benefit": "등록 체육시설(헬스장·수영장) 이용료 30% 소득공제(문화비 합산 연 300만원 한도), 2025-07-01 결제분부터",
+   "subsidy_month": null,
+   "income_note": "복지계층 기준 아님 — 총급여 7천만원 이하 근로소득자 요건. '소득공제 등록 시설'에서 결제한 금액만 해당.",
+   "apply": {
+    "how": "별도 신청 불필요 — 등록 시설에서 카드 결제 시 연말정산 자동 반영. 등록 시설 검색은 문화비 소득공제 누리집",
+    "url": "https://www.culture.go.kr/deduction",
+    "docs": [],
+    "period": "상시",
+    "tel": null
+   },
+   "sources": [
+    {
+     "url": "https://www.culture.go.kr/deduction",
+     "checked": "2026-07-21",
+     "note": "공식 누리집 — 등록 사업자 검색 제공(벌크 데이터 미제공)"
+    }
+   ],
+   "verified": true
   }
  ],
  "alt_edges": [
@@ -194,6 +314,41 @@
    },
    "note": "→ 장애인 지원 공공체육시설(저가/무료)",
    "curated": "검증 대기"
+  },
+  {
+   "from": "svoucher",
+   "when": "income_fail",
+   "to": "tteuntteun",
+   "note": "이용권 소득기준 미달 → 튼튼머니(만 4세+ 소득무관 포인트 적립)",
+   "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "svoucher",
+   "when": "age_fail",
+   "to": "tteuntteun",
+   "note": "이용권 연령(5~18) 초과 성인 → 튼튼머니",
+   "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "svoucher",
+   "when": "income_fail",
+   "to": "culture_deduction",
+   "note": "근로소득자(총급여 7천 이하)면 헬스장·수영장 30% 소득공제",
+   "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "dvoucher",
+   "when": "age_fail",
+   "to": "senior_voucher",
+   "note": "이용권 연령(69세) 초과 어르신 → 기초연금 수급 시 어르신 스포츠 상품권(최대 15만)",
+   "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "dvoucher",
+   "when": "age_fail",
+   "to": "senior_free_class",
+   "note": "65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)",
+   "curated": "공식 확인(2026-07-21)"
   }
  ],
  "fitness_map": [

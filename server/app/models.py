@@ -29,18 +29,15 @@ class AssessRequest(BaseModel):
     location: Optional[Location] = None
 
 
-class Measures(BaseModel):
-    model_config = {"extra": "ignore"}
-
-    grip_kg: Optional[float] = None
-    situp_cnt: Optional[float] = None
-    flex_cm: Optional[float] = None
-    shuttle_cnt: Optional[float] = None
-
-
 class FitnessRequest(BaseModel):
+    """POST /api/fitness.
+
+    measures 는 측정항목 코드→값 dict (예: {"grip_rel": 55.3, "sit_reach": 12}).
+    기존 4키(grip_kg/situp_cnt/flex_cm/shuttle_cnt)도 하위호환으로 수용하며
+    fitness.py 가 연령군에 맞는 공식 항목으로 매핑한다. 값은 숫자 또는 null."""
+
     model_config = {"extra": "ignore"}
 
     age: int = Field(ge=0, le=200)
     sex: Literal["M", "F"] = "M"
-    measures: Measures = Field(default_factory=Measures)
+    measures: dict[str, Optional[float]] = Field(default_factory=dict)

@@ -305,6 +305,81 @@ class Store:
         except sqlite3.OperationalError:
             return set()
 
+    # -- fitness norms (M1a: 국민체력100 공식 인증기준) ----------------------
+    # scripts/scrape_norms.py 가 적재한 measurement_item / fitness_norm 테이블.
+    # 두 테이블이 없는 데모/레거시 DB 는 빈 결과 → fitness.py 가 데모 컷으로
+    # 폴백(무중단, DR-4). 조회는 연령대(age_min<=age<=age_max)로 연령군을 자동 선택.
+    def has_fitness_norms(self) -> bool:
+        try:
+            row = self.conn.execute("SELECT COUNT(*) AS n FROM fitness_norm").fetchone()
+            return bool(row and row["n"])
+        except sqlite3.OperationalError:
+            return False
+
+    @staticmethod
+    def _age_band_label(age_min: int, age_max: int) -> str:
+        if age_max >= 200:
+            return f"{age_min}세 이상"
+        if age_min == age_max:
+            return f"{age_min}세"
+        return f"{age_min}~{age_max}세"
+
+    def fitness_items(self, age: int) -> list[dict]:
+        """해당 연령(연령군)에 적용되는 측정항목 카탈로그. 테이블/행 없으면 []."""
+        try:
+            cur = self.conn.execute(
+                "SELECT DISTINCT mi.code, mi.name, mi.unit, mi.factor, "
+                "       mi.higher_better, mi.alt_group "
+                "FROM measurement_item mi "
+                "JOIN fitness_norm fn ON fn.item_code = mi.code "
+                "WHERE fn.age_min <= ? AND fn.age_max >= ? "
+                "ORDER BY mi.factor, mi.code",
+                (age, age),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [
+            {
+                "code": r["code"], "name": r["name"], "unit": r["unit"],
+                "factor": r["factor"], "higher_better": r["higher_better"],
+                "alt_group": r["alt_group"],
+            }
+            for r in rows
+        ]
+
+    def fitness_norms(self, age: int, sex: str) -> dict:
+        """{code: {"meta": {...}, "cuts": {grade: {"value","rule"}}}} for age/sex.
+        테이블/행 없으면 {} (폴백 안전)."""
+        sx = sex if sex in ("M", "F") else "M"
+        try:
+            cur = self.conn.execute(
+                "SELECT fn.item_code, fn.grade, fn.cut_value, fn.cut_rule, "
+                "       fn.age_min, fn.age_max, "
+                "       mi.name, mi.unit, mi.factor, mi.higher_better, mi.alt_group "
+                "FROM fitness_norm fn "
+                "JOIN measurement_item mi ON mi.code = fn.item_code "
+                "WHERE fn.sex = ? AND fn.age_min <= ? AND fn.age_max >= ?",
+                (sx, age, age),
+            )
+            rows = cur.fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        out: dict[str, dict] = {}
+        for r in rows:
+            entry = out.setdefault(r["item_code"], {
+                "meta": {
+                    "code": r["item_code"], "name": r["name"], "unit": r["unit"],
+                    "factor": r["factor"], "higher_better": r["higher_better"],
+                    "alt_group": r["alt_group"],
+                    "age_min": r["age_min"], "age_max": r["age_max"],
+                    "age_band": self._age_band_label(r["age_min"], r["age_max"]),
+                },
+                "cuts": {},
+            })
+            entry["cuts"][r["grade"]] = {"value": r["cut_value"], "rule": r["cut_rule"]}
+        return out
+
 
 # ---------------------------------------------------------------------------
 # fixtures build (demo mode) — maps data/fixtures/*.json into the canonical schema

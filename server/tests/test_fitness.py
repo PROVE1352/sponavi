@@ -1,9 +1,19 @@
-"""약점 판정 (SPEC §3, API POST /api/fitness)."""
+"""약점 판정 — 데모 폴백 경로 (SPEC §3, API POST /api/fitness).
+
+`store` fixture 는 fixtures 기반 인메모리 DB(공식 measurement_item/fitness_norm 없음)
+이므로 fitness.py 는 데모 근사 컷으로 폴백한다. 이 파일은 그 무중단 폴백 계약을 검증한다.
+(공식 인증기준 경로는 test_fitness_official.py 가 data/sponavi.db 로 검증.)
+"""
 from app.fitness import assess_fitness
 
 
+def test_store_fixture_is_fallback_path(store):
+    # 데모 폴백 전제: 이 스토어에는 공식 norm 테이블이 없다.
+    assert store.has_fitness_norms() is False
+
+
 def test_flexibility_weakness_demo_basis(store):
-    # API.md 예시: 27M flex_cm=-3 -> 유연성 하위
+    # API.md 예시: 27M flex_cm=-3 -> 유연성 하위 (데모 폴백)
     res = assess_fitness(store, {
         "age": 27, "sex": "M",
         "measures": {"grip_kg": 30, "situp_cnt": 20, "flex_cm": -3, "shuttle_cnt": 25},

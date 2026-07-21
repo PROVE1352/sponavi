@@ -6,10 +6,15 @@
 ## 1. 시스템 개요
 
 ```
-                         ┌──────────────────────── 오프라인 파이프라인 ────────────────────────┐
-  KSPO 오픈API 5종  ──▶  bulk_fetch.py  ──▶  data/raw/*.json  ──▶  build_db.py  ──▶  sponavi.db
-  (전국 28만 행, ~282콜)   (재시도·페이지네이션)      (전량 보존)          (매핑·조인·정규화)     (SQLite 57MB)
-                         └──────────────────────────────────────────────────────────────────┘
+                    ┌───────────────────────── 오프라인 파이프라인 ─────────────────────────┐
+  KSPO 오픈API 5종 ────▶ bulk_fetch.py ──┐
+   (28만 행, ~282콜)                      │
+  운동영상 API 7종 ────▶ fetch_videos.py ─┤
+   (15,045행, ~50콜)                      ├─▶ data/raw/* ─▶ build_db.py ──▶ sponavi.db
+  sv/dv 웹 공개조회 ──▶ scrape_sv/dv.py ──┤    (전량 보존)   (매핑·조인·정규화)    (SQLite)
+   (접근성·신청기간, E74~76)               │               build_graph.py ─▶ graph_* 테이블
+  nfa 인증기준 HTML ──▶ scrape_norms.py ──┘               (지식그래프, docs/FITNESS_GRAPH.md)
+                    └──────────────────────────────────────────────────────────────────┘
 
   브라우저(모바일 우선)                          FastAPI 서버 (server/app)
  ┌─────────────────────┐   /api (JSON)   ┌──────────────────────────────────────────┐
@@ -41,6 +46,7 @@
 ### 2.2 server/ (FastAPI · Python 3.11+ · 의존 최소)
 - `engine.py` — 순수함수 규칙 평가: eligibility(사유 배열 생성) → 실패 시 alt_edges 순차 평가로 멀티홉 path 구성 → 하버사인 거리 → supply_gap(반경 3km 카운트 + coverage 조인). LLM·네트워크 무접촉.
 - `store.py` — `data/sponavi.db` 존재 시 SQL(인덱스: sigungu_cd·source·facility_id), 부재 시 fixtures. 공개 함수 시그니처가 계약이라 데이터소스 교체가 상위에 불가시.
+- **반경 쿼리 전략**: 하버사인 전행 스캔 금지 — 위경도 바운딩박스 프리필터(`idx_fac_geo`, Δ≈radius/111km)로 후보 축소 후 하버사인 정밀 계산. 15.5만 행 기준 벤치를 §9 게이트에 포함.
 - 에러 봉투 `{"error":{"code":"UPPER_SNAKE","message":"한국어"}}` 통일.
 
 ### 2.3 데이터 파이프라인 (scripts/)
@@ -50,11 +56,25 @@
   - 좌표: public=`faci_lat/lot` 실좌표, 그 외=sigungu centroid 폴백(서울 seed + public 좌표 평균).
   - 폐업 제외(public 34,925건), 강좌 조인 voucher=(brno,facil_sn) 95.9%.
   - **dvoucher 강좌는 시설과 공통키가 API에 실부재** → facility_id NULL 보존(시군구 레벨 노출).
-- 갱신 전략: 월 1회 bulk_fetch → build_db (cron 후보, 배포 후).
+- **웹 보조 소스 스크레이퍼 (2026-07-21 실사 E74~78 반영, 신규)**:
+  - `scrape_dvoucher.py` — ①목록 스윕(`memberFacilityListAjax.do`, 10,016건·페이지당 10행 ~1,000콜): 시설별 **장애지원유형**·사진·소개 ②편의시설 11종 필터 스윕(필터별 재조회, 세트 멤버십으로 태깅 ~1,100콜) ③상세는 데모 구만(차량지원·support-table). 요청 간 1s 딜레이(예의), 폼 전체 직렬화 필수(부분 파라미터 = 에러 실측).
+  - `scrape_svoucher.py` — 시설 목록(`memberFacilityListAjaxView.do`, 25,036건). **신청기간·대면/비대면**은 시설 단위 강좌 페이지(~25k콜)라 후순위(야간 배치·M2).
+  - **조인 검증**: 웹(bizrno,alsfcSn) ↔ API(brno,facil_sn) 표본 200건 대사를 build_db 게이트로 — 불일치율 기록 후 임계 초과 시 웹 필드 미적재(정직 우선).
+  - **폴백 원칙**: 웹 필드는 전부 NULL 허용 애드온 — 스크레이핑 실패해도 API-only로 전 기능 동작. 제출물 표기 "공단 웹서비스 공개 조회 파싱(보조)".
+- `scrape_norms.py` — nfa 인증기준 HTML 1페이지 → `fitness_norm`(공식 컷). 파서 주의는 FITNESS_GRAPH §4(연령군별 헤더·colspan 대체항목·어르신 표 15개·부등호 문자열 셀).
+- `fetch_videos.py` — 영상 API 7 오퍼레이션 전량(~50콜) → 그래프 Exercise 노드·V급 엣지 원천.
+- 갱신 전략: 월 1회 bulk_fetch+scrape_* → build_db → build_graph (cron 후보, 배포 후). **크론 실패 시 `/api/health`에 데이터 기준일 stale 표시.**
 
 ### 2.4 DB (SQLite 운영 · MySQL DDL 제공)
 - 테이블: `sigungu`(허브) / `facilities`(15.5만) / `courses`(9만) / `coverage`(수급 통계) + M1용 `measurement_item`·`fitness_norm`. ERD·MySQL 8.0 DDL은 `docs/schema.mysql.sql`.
 - 허브 조인: 자격판정 지역·시설검색·커버리지·공급공백이 전부 `sigungu_cd` 한 키.
+- **[스키마 v2 개정 예정 — 일괄 1회 마이그레이션(build_db 재생성이라 비용 최소)]**
+  1. `facilities.coord_source ENUM('api','centroid','geocoded')` — 좌표 배지(FR-04)·M2 지오코딩의 전제(source로 유추하는 현행 방식은 지오코딩 도입 시 붕괴).
+  2. `facility_accessibility`(facility_id, kind{disability_type|amenity|vehicle}, code, name, source, checked) — dvoucher 웹 장애유형 8종·편의시설 11종·차량지원.
+  3. `courses` 확장: `apply_start/apply_end`(신청기간)·`online_yn`(대면/비대면)·`intro`(소개) — 전부 NULL 허용(웹 소스).
+  4. `fitness_norm` 구조 교체: p20/p50/p80 → **등급컷**(grade{1,2,3}, cut_value DECIMAL NULL, cut_rule VARCHAR NULL — "BMI 18.5이상 25미만" 같은 문자열 규칙 셀 보존, 둘 중 하나 필수) + source·checked.
+  5. `measurement_field_map`(item_code ↔ api_field 'item_fNNN', 미상 필드는 미등재) — 입력폼(공식 항목명)과 백분위 규준(API 필드)의 이름공간 연결.
+  6. `graph_nodes`/`graph_edges` — FITNESS_GRAPH §2 스키마(엣지에 source·evidence·curated_status 필수).
 
 ## 3. 결정론 엔진 계약 (레인1·2)
 
@@ -77,10 +97,12 @@
 
 | 한계(실측) | 대응 |
 |---|---|
-| voucher/dvoucher 좌표 없음 | centroid 폴백 + `dist_km`에 "구 중심 기준" 라벨 → M2 카카오 지오코딩 |
+| voucher/dvoucher 좌표 없음 — **공단 자체 DB도 빈값 확인(E77: 상세페이지가 카카오 지오코더로 실시간 변환+실패 2곳 하드코딩)** | centroid 폴백 + coord_source 플래그 + "위치 근사" 배지(FR-04) → M2 카카오 지오코딩(공단과 동일 방식 — 정당성 실증됨) |
 | dvoucher 강좌 조인키 없음 | 시군구 레벨 노출 + 공단 데이터 개선 제안(제출물 소재) |
 | coverage 서울 15구뿐 | 없는 구 null → UI "데이터 없음" (거짓 통계 금지) |
-| public 접근성 필드 없음 | disability_support NULL·휴리스틱 96건만 1, UI '미상' 구분 |
+| API에 접근성 필드 없음 | **dvoucher 웹 공개조회로 해소(E76)**: 시설별 장애지원유형 8종·편의시설 11종(휠체어대여 577·수중리프트 177 실측) → facility_accessibility 적재. public은 여전히 '미상' 구분 |
+| 측정결과 API 2011~2019·유아 없음·오프셋 100만 페이징 한계(E80) | 백분위 보조 규준에 "측정 데이터 기준 시점" 표기, 판정 정본은 공식 컷(E79), 유아는 영상 콘텐츠로만 대응 |
+| 만 7~10세 공식 기준 공백(E79) | 입력폼에서 숨기지 않고 고지 + 유소년 콘텐츠 참고 제공 |
 
 ## 6. [M1 계약] AI 체력 처방 레이어
 
@@ -112,8 +134,8 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 - UI 표기: "AI 보조 처방(전문가 큐레이션 규칙 검증) · 의료 조언 아님".
 
 ### 6.4 비용·성능
-- 캐시: (연령군·성별·항목값 반올림) 해시 → SQLite 캐시 테이블, TTL 없음(같은 입력=같은 답).
-- 비동기 UI(처방 스텝만 로딩 상태), 실측 42s → 캐시 적중 시 0s.
+- 캐시 키: (연령군·성별·항목값 반올림) 해시 **+ norm_version + graph_version** — 기준표·그래프 갱신 시 스테일 처방 자동 무효화. SQLite 캐시 테이블, TTL 없음(같은 키=같은 답).
+- 비동기 UI(처방 스텝만 로딩 상태), 실측 42s → 캐시 적중 시 0s. 페르소나 4종은 배포 시 사전 캐시(워밍).
 
 ## 7. [M3] 배포 아키텍처 (기존 오라클 A1 재사용)
 
@@ -124,20 +146,22 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 ```
 - Docker 단일 컨테이너(웹 정적+API), compose로 재시작 자동. 인증서는 Caddy 자동(kro.kr LE 한도 시 ZeroSSL EAB — 기보유 노하우).
 - **PWA 주의(실전 교훈)**: nodian 서비스워커 denylist 사례처럼, 도메인 분리로 SW 간섭 원천 차단.
-- DB는 서버에서 월 1회 파이프라인 재실행(키는 서버 .env).
+- DB는 서버에서 월 1회 파이프라인 재실행(키는 서버 .env). 크론 실패 = `/api/health`의 데이터 기준일로 감지(수동 점검 주 1회, v1은 알림 없음 — 기록해두는 트레이드오프).
+- **⚠ 운영 리스크(E23)**: 이용권 등록강좌 API는 운영단계 전환 시 자동승인이 아닌 **심의승인** — 제출 일정 역산에 심의 기간 반영, 승인 전엔 개발계정(일 10,000콜)로 충분(월 1회 전량 ~282콜).
 
 ## 8. 보안·개인정보
 
-- 입력(소득계층·장애 등 민감)은 **저장하지 않음** — 요청 처리 후 폐기, 로그에 바디 미기록.
+- 입력(소득계층·장애 등 민감)은 **저장하지 않음** — 요청 처리 후 폐기, 로그에 바디 미기록. **체력측정값·PAR-Q 스크리닝 응답도 동일 원칙**(건강정보 민감도는 소득 이상).
 - LLM 전송분은 측정수치·연령군·성별만(이름·주소 없음). 캐시 키는 해시.
-- 자격 표현은 항상 "예상"+공식 링크 — 법적 판정 아님 고지.
+- 자격 표현은 항상 "예상"+공식 링크 — 법적 판정 아님 고지. 체력 등급은 항상 "참고 등급(추정)" — 공식 인증은 체력인증센터만 가능(제도상 자가측정=비인증, E79).
 
 ## 9. 품질 전략
 
 - 서버 pytest 42+ (자격 매트릭스·경계나이·라우팅·공급공백·copay·계약 형태) — CI 후보.
 - 웹 tsc+vite build + 목모드 Playwright 4페르소나.
 - 통합: 실서버 Playwright(P1~P4 기대문구+스크린샷) — 릴리스 게이트.
-- M1 추가: 프롬프트 회귀(고정 프로필 3종 스냅샷), 스키마 검증 실패→폴백 테스트.
+- M1 추가: 프롬프트 회귀(고정 프로필 3종 스냅샷), 스키마 검증 실패→폴백 테스트, **컷오프 파서 회귀(공식 페이지 수기 대조 표본 3개 — 성인남19-24·어르신남65-69·유소년남11 고정), 캐시 버전 무효화 테스트(graph_version 변경 → 재계산)**.
+- 성능 벤치: 반경 쿼리(바운딩박스+하버사인) 15.5만 행 p95 측정 — NFR-1(500ms) 게이트에 편입.
 
 ## 10. v2 로드맵(기획서 §9 이후) — 기록해두는 판단
 

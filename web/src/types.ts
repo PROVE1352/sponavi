@@ -52,6 +52,22 @@ export interface SourceRef {
   checked: string
 }
 
+// 예상 선정순위(dvoucher). 신청은 소득무관(자격)·선정은 우선순위제(예산·경쟁)를 구분(FR-02 AC5).
+export interface SelectionSource {
+  url?: string
+  checked?: string
+  note?: string
+}
+
+export interface Selection {
+  // 공식 5단계 예상 순위(1~5). 소득 구분 미정이면 null.
+  expected_rank: number | null
+  rank_label: string
+  note: string
+  tiebreak: string | null
+  source: SelectionSource | null
+}
+
 export interface ProgramEligibility {
   program_id: string
   program_name: string
@@ -61,6 +77,8 @@ export interface ProgramEligibility {
   apply: ApplyInfo
   source: SourceRef
   verified: boolean
+  // dvoucher 자격 카드에만 부착.
+  selection?: Selection
 }
 
 export type EdgeResult = 'ok' | 'fail'
@@ -144,9 +162,27 @@ export interface SupplyGap {
   coverage: CoverageStat | null
 }
 
+// 복수 대체경로(FR-02 AC3): 매칭 엣지 전부. UI는 상위 N개 렌더.
+export interface AltEdgeProgram {
+  id: string
+  name: string
+  benefit: string | null
+  apply_url: string | null
+}
+
+export interface AltEdge {
+  to: string
+  note: string
+  // 전문가 큐레이션 상태: "공식 확인(...)" | "검증 대기".
+  curated: string
+  program: AltEdgeProgram | null
+}
+
 export interface AssessResponse {
   eligibility: ProgramEligibility[]
   path: PathEdge[]
+  // 매칭 엣지 전부(주 경로는 path 최상위 1개 유지). 구버전 응답 호환 위해 옵셔널.
+  alt_edges?: AltEdge[]
   nearby: Nearby
   supply_gap: SupplyGap
 }

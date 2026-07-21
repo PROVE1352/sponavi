@@ -53,4 +53,15 @@ PERSONAS = [
             "disability": {"has": True, "type": "청각"},
         },
     },
+    {
+        "id": "P5",
+        "label": "32세 남 · 지체장애 · 비저소득 · 성북구",
+        "expected": "장애인스포츠강좌이용권 자격 ✓(신청은 소득무관) — 단 예상 5순위(성인·비저소득)라 선정 대기 가능 → '지금 바로 되는 것' 대체경로",
+        "body": {
+            "age": 32, "sex": "M",
+            "sigungu_cd": "11290", "sigungu_nm": "성북구",
+            "income_class": "그외",
+            "disability": {"has": True, "type": "지체"},
+        },
+    },
 ]

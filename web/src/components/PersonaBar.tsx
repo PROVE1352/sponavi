@@ -16,7 +16,7 @@ export function PersonaBar({
         <span className="text-sm font-bold text-slate-900 dark:text-white">데모 페르소나</span>
         <span className="text-xs text-slate-500 dark:text-slate-400">클릭 한 번으로 결과를 확인하세요</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {personas.map((p) => (
           <button
             key={p.id}

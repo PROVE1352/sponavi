@@ -16,15 +16,20 @@ def test_meta_sigungu_25(client):
         assert set(row) >= {"cd", "nm", "lat", "lon"}
 
 
-def test_personas_endpoint_p4_confirmed(client):
+def test_personas_endpoint_p5_included(client):
     r = client.get("/api/demo/personas")
     assert r.status_code == 200
     ps = r.json()
-    assert [p["id"] for p in ps] == ["P1", "P2", "P3", "P4"]
+    assert [p["id"] for p in ps] == ["P1", "P2", "P3", "P4", "P5"]
     p4 = ps[3]
     # P4 확정: 72세 청각장애(연령 초과) — dvoucher 소득무관 + 연령상한 69
     assert p4["body"]["age"] == 72
     assert p4["body"]["disability"]["has"] is True
+    # P5: 32세 지체장애 비저소득(그외) — dvoucher 자격 ✓ 이나 예상 5순위
+    p5 = ps[4]
+    assert p5["body"]["age"] == 32
+    assert p5["body"]["disability"]["has"] is True
+    assert p5["body"]["income_class"] == "그외"
 
 
 ELIG_KEYS = {"program_id", "program_name", "eligible", "reasons", "benefit", "apply", "source", "verified"}
@@ -42,7 +47,7 @@ def _assert_coord_honesty(f):
         assert f["dist_km"] is None
 
 
-@pytest.mark.parametrize("pid", ["P1", "P2", "P3", "P4"])
+@pytest.mark.parametrize("pid", ["P1", "P2", "P3", "P4", "P5"])
 def test_assess_contract_shape_for_personas(client, personas_by_id, pid):
     body = personas_by_id[pid]["body"]
     r = client.post("/api/assess", json=body)

@@ -58,6 +58,68 @@ def _primary_source(disability_has: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 예상 선정순위 (dvoucher) — 결정론. data/rules.json dvoucher.selection_priority 원천.
+# 신청은 소득무관(자격), 선정은 우선순위제(예산·경쟁) — UI가 둘을 반드시 구분(PRD §6).
+# 공식 5단계:
+#   1순위 5~18 수급·차상위·한부모 / 2순위 19+ 수급 / 3순위 19+ 차상위·한부모
+#   4순위 5~18 비저소득 / 5순위 19+ 비저소득
+# income_class 허용값(models.py)만 매핑 — 그 외('모름' 계열)는 순위 미정(None) 처리.
+# ---------------------------------------------------------------------------
+_SELECTION_CATEGORY = {
+    "기초생활수급": "수급",
+    "차상위": "차상위·한부모",
+    "한부모": "차상위·한부모",
+    "그외": "비저소득",
+}
+
+
+def _selection_category(income_class: str) -> Optional[str]:
+    """소득 자가선언 → 선정순위 소득범주. 미확인 값이면 None(순위 미정)."""
+    return _SELECTION_CATEGORY.get(income_class)
+
+
+def _is_youth(age: int) -> bool:
+    return 5 <= age <= 18
+
+
+def _selection_rank(age: int, category: Optional[str]) -> Optional[int]:
+    """(age, 소득범주) → 예상 선정순위 1~5. 소득범주 미정이면 None."""
+    if category is None:
+        return None
+    if _is_youth(age):
+        # 5~18: 수급·차상위·한부모 모두 1순위, 비저소득만 4순위
+        return 4 if category == "비저소득" else 1
+    # 19세 이상
+    if category == "수급":
+        return 2
+    if category == "차상위·한부모":
+        return 3
+    return 5  # 비저소득
+
+
+def _rank_label(rank: Optional[int], age: int, category: Optional[str]) -> str:
+    if rank is None or category is None:
+        # 순위 미정: 소득 구분 확인 후 안내 + 확인 방법
+        return "소득 구분 확인 후 안내 — 수급·차상위·한부모 해당 여부를 주민센터·복지로(bokjiro.go.kr)에서 확인하세요"
+    age_label = "유청소년" if _is_youth(age) else "성인"
+    return f"예상 {rank}순위({age_label}·{category})"
+
+
+def _build_selection(program: dict, *, age: int, income_class: str) -> dict:
+    """dvoucher 자격 카드용 selection 객체(계약). rules 원문 tiebreak·source 그대로 전달."""
+    sp = program.get("selection_priority") or {}
+    category = _selection_category(income_class)
+    rank = _selection_rank(age, category)
+    return {
+        "expected_rank": rank,
+        "rank_label": _rank_label(rank, age, category),
+        "note": "선정은 우선순위제 — 지자체 예산·경쟁에 따라 대기 가능",
+        "tiebreak": sp.get("tiebreak"),
+        "source": sp.get("source"),
+    }
+
+
+# ---------------------------------------------------------------------------
 # eligibility
 # ---------------------------------------------------------------------------
 def _eval_program(program: dict, *, age: int, income_class: str, disability_has: bool) -> dict:
@@ -115,7 +177,7 @@ def _eval_program(program: dict, *, age: int, income_class: str, disability_has:
 
     eligible = len(failed) == 0
     src = (program.get("sources") or [{}])[0]
-    return {
+    card = {
         "program_id": program["id"],
         "program_name": program["name"],
         "eligible": eligible,
@@ -126,6 +188,10 @@ def _eval_program(program: dict, *, age: int, income_class: str, disability_has:
         "verified": program.get("verified", False),
         "_failed": sorted(failed),  # internal, stripped before response
     }
+    # dvoucher: 자격(소득무관)과 별개로 예상 선정순위(우선순위제)를 부착. FR-02 AC5.
+    if program["id"] == "dvoucher" and eligible:
+        card["selection"] = _build_selection(program, age=age, income_class=income_class)
+    return card
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +457,45 @@ def _build_path(
     return path, disability_filter
 
 
+def _collect_alt_edges(
+    store: Store, *, card: dict, failed: list[str], selection_rank: Optional[int],
+) -> list[dict]:
+    """복수 대체경로: 주 제도의 매칭 엣지를 rules 순서대로 '전부' 수집(FR-02 AC3).
+    주 경로(path)는 최상위 1개만 쓰지만 응답 top-level엔 매칭 엣지 전부를 동봉해
+    UI가 상위 N개를 렌더하도록 한다.
+
+    - 자격 미충족(failed) 카드: failed 사유에 맞는 엣지 매칭.
+    - dvoucher 자격 충족이나 예상 선정순위가 낮거나(4·5) 미정: 신청은 되지만 대기 가능 →
+      income_fail 계열 '지금 바로 되는' 대안도 함께 노출.
+    """
+    pid = card["program_id"]
+    active = set(failed)
+    if card["eligible"] and pid == "dvoucher" and selection_rank in (4, 5, None):
+        active.add("income")
+
+    out: list[dict] = []
+    for e in store.edges_from(pid):
+        when = e.get("when", "any")
+        if when != "any" and _WHEN_TO_FAIL.get(when) not in active:
+            continue
+        prog = store.program(e["to"])
+        program_info = None
+        if prog:
+            program_info = {
+                "id": prog["id"],
+                "name": prog["name"],
+                "benefit": prog.get("benefit"),
+                "apply_url": (prog.get("apply") or {}).get("url"),
+            }
+        out.append({
+            "to": e["to"],
+            "note": e.get("note", e["to"]),
+            "curated": e.get("curated", "검증 대기"),
+            "program": program_info,
+        })
+    return out
+
+
 # ---------------------------------------------------------------------------
 # public entry
 # ---------------------------------------------------------------------------
@@ -457,9 +562,16 @@ def assess(store: Store, payload: dict) -> dict:
         age=age, sigungu_cd=sigungu_cd, income_class=income_class,
     )
 
+    # 복수 대체경로(매칭 엣지 전부) — UI는 상위 N개 렌더(FR-02 AC3).
+    selection_rank = (card.get("selection") or {}).get("expected_rank")
+    alt_edges = _collect_alt_edges(
+        store, card=card, failed=failed, selection_rank=selection_rank
+    )
+
     return {
         "eligibility": [card],
         "path": path,
+        "alt_edges": alt_edges,
         "nearby": {
             "voucher_facilities": voucher_facilities,
             "alternatives": alternatives,

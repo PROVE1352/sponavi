@@ -12,6 +12,8 @@ export function ResultView({ req, data }: { req: AssessRequest; data: AssessResp
   const [filterSports, setFilterSports] = useState<string[] | undefined>(undefined)
 
   const personLoc = req.location ?? { lat: 37.5665, lon: 126.978 }
+  // alt_edges(복수 대체경로)는 주 제도(비장애=svoucher / 장애=dvoucher)에 귀속 → 해당 카드에만 전달.
+  const primaryId = req.disability.has ? 'dvoucher' : 'svoucher'
 
   return (
     <div className="space-y-6">
@@ -23,7 +25,11 @@ export function ResultView({ req, data }: { req: AssessRequest; data: AssessResp
         <h2 className="text-base font-bold text-slate-900 dark:text-white">제도별 예상 자격</h2>
         <div className="grid gap-3 lg:grid-cols-3">
           {data.eligibility.map((p) => (
-            <EligibilityCard key={p.program_id} p={p} />
+            <EligibilityCard
+              key={p.program_id}
+              p={p}
+              altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
+            />
           ))}
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500">

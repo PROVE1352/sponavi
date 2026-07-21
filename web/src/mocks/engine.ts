@@ -3,6 +3,7 @@
 // ⚠️ 자격 규칙은 데모 근사다. 최종 진실은 server/rules.json (SPEC §3, §0-5). verified 플래그로 구분.
 
 import type {
+  AltEdge,
   AlternativeFacility,
   AssessRequest,
   AssessResponse,
@@ -11,6 +12,7 @@ import type {
   IncomeClass,
   PathEdge,
   ProgramEligibility,
+  Selection,
   VoucherFacility,
 } from '../types'
 import {
@@ -27,6 +29,85 @@ import {
 const SVOUCHER_SUBSIDY = 105000
 const DVOUCHER_SUBSIDY = 110000
 const INCOME_OK: IncomeClass[] = ['기초생활수급', '차상위', '한부모']
+
+// ---- 예상 선정순위(dvoucher) — 결정론. data/rules.json selection_priority 근사 ----
+const SELECTION_NOTE = '선정은 우선순위제 — 지자체 예산·경쟁에 따라 대기 가능'
+const SELECTION_TIEBREAK =
+  '우선선정: 과거 누적 24개월 미만 이용자 → 동일 기준 내 기초생활수급 가구 → 기타 동일 자격은 시군구 자율 선정'
+const SELECTION_SOURCE = {
+  url: 'https://dvoucher.kspo.or.kr/dvoucher/main/contents.do?menuNo=800011&topMenuNo=800010',
+  checked: '2026-07-21',
+  note: '공식 선정순위 5단계',
+}
+
+function selectionCategory(income: IncomeClass): '수급' | '차상위·한부모' | '비저소득' | null {
+  if (income === '기초생활수급') return '수급'
+  if (income === '차상위' || income === '한부모') return '차상위·한부모'
+  if (income === '그외') return '비저소득'
+  return null
+}
+
+function selectionRank(age: number, category: ReturnType<typeof selectionCategory>): number | null {
+  if (category === null) return null
+  const youth = age >= 5 && age <= 18
+  if (youth) return category === '비저소득' ? 4 : 1
+  if (category === '수급') return 2
+  if (category === '차상위·한부모') return 3
+  return 5
+}
+
+function buildSelection(age: number, income: IncomeClass): Selection {
+  const category = selectionCategory(income)
+  const rank = selectionRank(age, category)
+  const rankLabel =
+    rank == null || category == null
+      ? '소득 구분 확인 후 안내 — 수급·차상위·한부모 해당 여부를 주민센터·복지로에서 확인하세요'
+      : `예상 ${rank}순위(${age >= 5 && age <= 18 ? '유청소년' : '성인'}·${category})`
+  return { expected_rank: rank, rank_label: rankLabel, note: SELECTION_NOTE, tiebreak: SELECTION_TIEBREAK, source: SELECTION_SOURCE }
+}
+
+// ---- 복수 대체경로(alt_edges) — 목적지 제도 메타(data/rules.json 요약) ----
+const OFFICIAL = '공식 확인(2026-07-21)'
+const PENDING = '검증 대기'
+const ALT_PROG = {
+  public_program: { id: 'public_program', name: '공공체육시설 프로그램(무료/저가)', benefit: '무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음', apply_url: 'https://www.kspo.or.kr' },
+  tteuntteun: { id: 'tteuntteun', name: '튼튼머니(스포츠활동 인센티브)', benefit: '만 4세+ 누구나 · 소득 무관 · 연 최대 5만 포인트 적립', apply_url: 'https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo' },
+  culture_deduction: { id: 'culture_deduction', name: '체육시설 문화비 소득공제', benefit: '헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)', apply_url: 'https://www.culture.go.kr/deduction' },
+  senior_voucher: { id: 'senior_voucher', name: '어르신 스포츠 상품권', benefit: '기초연금 수급 65세+ · 상품권 최대 15만원(제로페이 스포츠시설)', apply_url: 'https://ssvoucher.co.kr' },
+  senior_free_class: { id: 'senior_free_class', name: '어르신 스포츠강좌 프로그램(무료 강좌)', benefit: '65세+ 누구나 · 소득 무관 무료 강좌', apply_url: 'https://www.mcst.go.kr' },
+}
+
+function buildAltEdges(o: {
+  disabled: boolean
+  eligible: boolean
+  ageOk: boolean
+  incomeOk: boolean
+  rank: number | null
+}): AltEdge[] {
+  const edges: AltEdge[] = []
+  if (!o.disabled) {
+    // svoucher: 소득·연령 미달 매칭 엣지 전부
+    if (!o.incomeOk) edges.push({ to: 'public_program', note: '이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램', curated: PENDING, program: ALT_PROG.public_program })
+    else if (!o.ageOk) edges.push({ to: 'public_program', note: '이용권 지원연령(5~18) 초과 → 공공체육시설 프로그램', curated: PENDING, program: ALT_PROG.public_program })
+    if (!o.incomeOk || !o.ageOk) edges.push({ to: 'tteuntteun', note: '만 4세+ 소득무관 포인트 적립', curated: OFFICIAL, program: ALT_PROG.tteuntteun })
+    if (!o.incomeOk) edges.push({ to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 30% 소득공제', curated: OFFICIAL, program: ALT_PROG.culture_deduction })
+    return edges
+  }
+  if (!o.eligible && !o.ageOk) {
+    // dvoucher 연령 초과 → 어르신 특화 대체경로
+    edges.push({ to: 'public_program', note: '장애인 이용권 연령 초과 → 장애인 지원 공공체육시설', curated: PENDING, program: ALT_PROG.public_program })
+    edges.push({ to: 'senior_voucher', note: '연령 초과 어르신 → 기초연금 수급 시 어르신 스포츠 상품권', curated: OFFICIAL, program: ALT_PROG.senior_voucher })
+    edges.push({ to: 'senior_free_class', note: '65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)', curated: OFFICIAL, program: ALT_PROG.senior_free_class })
+    return edges
+  }
+  if (o.eligible && (o.rank === 4 || o.rank === 5 || o.rank == null)) {
+    // dvoucher 자격 ✓ 이나 예상 4·5순위/미정 → '지금 바로 되는 것'(공식 확인 대안)
+    edges.push({ to: 'public_program', note: '장애인 접근성 지원 공공체육시설 — 지금 등록 가능', curated: OFFICIAL, program: ALT_PROG.public_program })
+    edges.push({ to: 'tteuntteun', note: '만 4세+ 소득무관 포인트 적립', curated: OFFICIAL, program: ALT_PROG.tteuntteun })
+    edges.push({ to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 이용료 30% 소득공제', curated: OFFICIAL, program: ALT_PROG.culture_deduction })
+  }
+  return edges
+}
 
 function centroid(cd: string) {
   return SIGUNGU.find((s) => s.cd === cd) ?? { lat: 37.5665, lon: 126.978 }
@@ -151,6 +232,17 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     },
   ]
 
+  // 예상 선정순위(dvoucher 자격 충족 시) + 복수 대체경로(alt_edges)
+  const dvoucherRank = dvoucherEligible ? selectionRank(req.age, selectionCategory(req.income_class)) : null
+  if (dvoucherEligible) eligibility[1].selection = buildSelection(req.age, req.income_class)
+  const altEdges = buildAltEdges({
+    disabled,
+    eligible: disabled ? dvoucherEligible : svoucherEligible,
+    ageOk: disabled ? ageOkDvoucher : ageOkVoucher,
+    incomeOk,
+    rank: dvoucherRank,
+  })
+
   // --- 근처 자원 ---
   const inSigungu = FACILITIES.filter((f) => f.sigungu_cd === req.sigungu_cd)
   const publicFacilities = inSigungu.filter((f) => f.source === 'public')
@@ -239,6 +331,7 @@ export function mockAssess(req: AssessRequest): AssessResponse {
   return {
     eligibility,
     path,
+    alt_edges: altEdges,
     nearby: { voucher_facilities: voucherFacilities, alternatives },
     supply_gap: {
       radius_km: radius,

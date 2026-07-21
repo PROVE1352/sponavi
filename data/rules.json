@@ -350,6 +350,20 @@
    "to": "senior_free_class",
    "note": "65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)",
    "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "dvoucher",
+   "when": "income_fail",
+   "to": "tteuntteun",
+   "note": "예상 선정순위가 낮아도(비저소득) 지금 바로: 튼튼머니 — 만 4세+ 소득 무관 운동 포인트(연 최대 5만P)",
+   "curated": "공식 확인(2026-07-21)"
+  },
+  {
+   "from": "dvoucher",
+   "when": "income_fail",
+   "to": "culture_deduction",
+   "note": "근로소득자(총급여 7천만 이하)면 헬스장·수영장 이용료 30% 문화비 소득공제(등록 시설)",
+   "curated": "공식 확인(2026-07-21)"
   }
  ],
  "fitness_map": [

@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/.venv
+data/raw
+web/e2e-shots
+web/src
+web/e2e
+scripts
+docs
+**/__pycache__
+**/.pytest_cache

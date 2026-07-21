@@ -1,0 +1,12 @@
+services:
+  sponavi:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sponavi
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8100:8100"
+    volumes:
+      # DB는 이미지에도 들어가지만, 월간 갱신 시 rsync만으로 교체 가능하게 볼륨 우선
+      - ../data/sponavi.db:/srv/data/sponavi.db:ro

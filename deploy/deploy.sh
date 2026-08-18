@@ -14,7 +14,9 @@ GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 echo "== GIT_SHA=$GIT_SHA =="
 
 echo "== 1. 웹 빌드 =="
-(cd web && npm run build)
+# VITE_MOCK=0 강제 — web/.env 에 남은 VITE_MOCK=1 이 목 번들을 몰래 굽는 사고 방지
+# (2026-08-18 실배포에서 발생: 셸 env 가 .env 보다 우선이므로 여기서 못박는다)
+(cd web && VITE_MOCK=0 npm run build)
 
 echo "== 2. rsync =="
 rsync -az --delete \

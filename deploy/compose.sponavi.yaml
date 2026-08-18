@@ -11,13 +11,14 @@ services:
     # 비밀값(OPENAI_API_KEY 등)은 이미지에 굽지 않고 런타임에만 주입한다
     # (.dockerignore 가 .env 를 제외). 호스트에 .env 가 없어도 기동은 계속돼야
     # 하므로 required:false — compose v2.24+ 문법(로컬·배포 서버 모두 v5.x 확인).
+    # 챗 NLU 스위치(SPONAVI_CHAT_LLM)·키(OPENAI_API_KEY)는 전부 이 env_file 이 공급한다.
+    # ⚠ environment: 블록으로 같은 키의 기본값을 두지 말 것 — environment 가 env_file 을
+    # 덮어쓰는데, ${VAR:-off} 치환은 compose 프로젝트 디렉터리(deploy/)의 .env 를 찾아
+    # 루트 .env 값이 무시된다(2026-08-18 배포에서 실측). 미설정 기본값(off, gpt-5.4-mini)은
+    # 서버 코드가 이미 갖고 있다.
     env_file:
       - path: ../.env
         required: false
-    environment:
-      # 챗 NLU 스위치 — 미설정이면 off(규칙 기반 모드로 정상 동작).
-      SPONAVI_CHAT_LLM: ${SPONAVI_CHAT_LLM:-off}
-      SPONAVI_OPENAI_MODEL: ${SPONAVI_OPENAI_MODEL:-gpt-5.4-mini}
     ports:
       - "8100:8100"
     volumes:

@@ -53,17 +53,29 @@ const INCOME_VALUES = INCOME_OPTIONS.map((o) => o.value)
 
 function botText(
   text: string,
-  opts: { tone?: 'plain' | 'notice'; bullets?: string[]; links?: { label: string; url: string }[] } = {},
+  opts: {
+    tone?: 'plain' | 'notice'
+    sub?: string
+    bullets?: string[]
+    links?: { label: string; url: string }[]
+  } = {},
 ): ChatMessage {
   return {
     id: nextId('b'),
     role: 'bot',
     kind: 'bot_text',
     text,
+    sub: opts.sub,
     tone: opts.tone ?? 'plain',
     bullets: opts.bullets,
     links: opts.links,
   }
+}
+
+// 인사 = 버블 1개(자기소개 + 안내 + 보조 한 줄 고지). 쪼개지 않는다 —
+// 랜딩에서 사용자가 읽어야 할 것은 "인사 1 + 첫 질문 1" 두 버블뿐이다(FR-12 AC5 v1.4).
+function greetMessage(): ChatMessage {
+  return botText(`${T.greet}\n${T.greetSub}`, { sub: T.greetPrivacy })
 }
 
 function userText(text: string): ChatMessage {
@@ -87,7 +99,9 @@ function toWire(s: ChatSlots): NluSlotsWire {
   }
 }
 
-export function useChatController() {
+// demo = 해시 라우트 `/#/demo`(chat/route.ts). 대화 계약은 메인과 동일하고
+// 인사 시퀀스(퀵스타트 칩)·경로 시각화 카드만 달라진다(FR-12 AC5 · FR-03 v1.4).
+export function useChatController(demo = false) {
   const { state, dispatch } = useChat()
   const [sigungu, setSigungu] = useState<Sigungu[]>([])
   const [personas, setPersonas] = useState<DemoPersona[]>([])
@@ -139,9 +153,14 @@ export function useChatController() {
         dispatch({ type: 'setPhase', phase: 'assessed' })
         const gap = data.supply_gap
         const followUp = followUpChips(state.faq.map((f) => ({ key: f.key, q: f.q })))
+        // 경로 시각화(FR-03 v1.4): 데모 결과에만 항시 펼침으로 넣는다.
+        // 메인 결과에는 아예 렌더하지 않는다 — 실사용 화면은 판정 카드 중심으로 경량화.
+        const pathCard: ChatMessage[] = demo
+          ? [{ id: nextId('p'), role: 'bot', kind: 'path', path: data.path }]
+          : []
         push(
           botText(verdictText(req, data)),
-          { id: nextId('p'), role: 'bot', kind: 'path', path: data.path },
+          ...pathCard,
           { id: nextId('e'), role: 'bot', kind: 'assess_cards', req, data },
           { id: nextId('g'), role: 'bot', kind: 'supply_gap', gap },
           botText(facilitySummaryText()),
@@ -172,7 +191,7 @@ export function useChatController() {
         dispatch({ type: 'setPending', pending: false })
       }
     },
-    [dispatch, push, state.faq],
+    [demo, dispatch, push, state.faq],
   )
 
   // 다음 미완 슬롯을 묻거나, 다 찼으면 판정으로 넘어간다(FR-12 AC6).
@@ -197,17 +216,26 @@ export function useChatController() {
     // 목모드는 NLU 를 호출하지 않는다 — 처음부터 칩 모드(정직 라벨은 헤더/컴포저에 상시).
     if (useMockData()) dispatch({ type: 'setLlmMode', mode: 'chips' })
 
-    push(botText(T.greet), botText(T.greetSub), botText(T.greetPrivacy, { tone: 'notice' }))
+    push(greetMessage())
+
+    // 메인(실사용 랜딩, FR-12 AC5 v1.4): 데모 안내 문구·퀵스타트 칩 없이 곧바로 첫 질문.
+    // 나이 질문은 시군구·페르소나 메타를 기다리지 않으므로 인사 직후 바로 던진다.
+    if (!demo) {
+      dispatch({ type: 'setPhase', phase: 'collect' })
+      askQuestion('age', [], [])
+    }
 
     // StrictMode 이중 마운트에서도 인사·메타 로드는 정확히 1회(booted 가드).
     // 언마운트 취소 플래그는 두지 않는다 — 첫 실행의 cleanup 이 두 번째 마운트의 결과를 버리기 때문.
     void (async () => {
       const [sg, ps] = await Promise.all([
         getSigungu().catch(() => [] as Sigungu[]),
-        getPersonas().catch(() => [] as DemoPersona[]),
+        // 페르소나는 데모 페이지 전용 데이터 — 메인에서는 조회하지 않는다.
+        demo ? getPersonas().catch(() => [] as DemoPersona[]) : Promise.resolve([] as DemoPersona[]),
       ])
       setSigungu(sg)
       setPersonas(ps)
+      if (!demo) return
       dispatch({ type: 'setPhase', phase: 'collect' })
       // 퀵스타트(P1~P5)는 "인사 메시지의 칩"이다(FR-12 AC5) — 컴포저가 아니라 메시지 안에서 렌더.
       const spec = questionSpec('greet', { sigungu: sg, personas: ps })
@@ -216,7 +244,7 @@ export function useChatController() {
         role: 'bot',
         kind: 'chip_question',
         question: 'greet',
-        text: ps.length > 0 ? '아래 상황 중 하나로 바로 체험해 보시거나, 직접 입력하실 수 있어요.' : spec.text,
+        text: ps.length > 0 ? `${T.demoIntro}\n${T.demoQuickStart}` : spec.text,
         chips: spec.chips,
         select: 'action',
         inline: true,
@@ -227,7 +255,7 @@ export function useChatController() {
     chatFaq()
       .then((f) => dispatch({ type: 'setFaq', faq: f }))
       .catch(() => undefined)
-  }, [dispatch, push])
+  }, [askQuestion, demo, dispatch, push])
 
   // ── 강등(FR-12 AC4) ─────────────────────────────────────────
   const degrade = useCallback(() => {
@@ -361,20 +389,25 @@ export function useChatController() {
   const doRestart = useCallback(() => {
     dispatch({ type: 'reset', keep: { llmMode: state.llmMode, faq: state.faq } })
     lastAttempt.current = null
-    push(botText(T.restarted), botText(T.greetSub))
+    push(botText(T.restarted, { sub: T.greetPrivacy }))
+    dispatch({ type: 'setPhase', phase: 'collect' })
+    // 메인은 다시 첫 질문부터, 데모는 다시 퀵스타트 칩부터.
+    if (!demo) {
+      askQuestion('age')
+      return
+    }
     const spec = questionSpec('greet', { sigungu, personas })
     push({
       id: nextId('q'),
       role: 'bot',
       kind: 'chip_question',
       question: 'greet',
-      text: '아래 상황 중 하나로 체험해 보시거나, 직접 입력하실 수 있어요.',
+      text: T.demoQuickStart,
       chips: spec.chips,
       select: 'action',
       inline: true,
     })
-    dispatch({ type: 'setPhase', phase: 'collect' })
-  }, [dispatch, personas, push, sigungu, state.faq, state.llmMode])
+  }, [askQuestion, demo, dispatch, personas, push, sigungu, state.faq, state.llmMode])
 
   // ── 칩 클릭(외부 API 미전송) ────────────────────────────────
   const onChip = useCallback(

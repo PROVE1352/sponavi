@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { openChat, shot, startPersona, stream } from './helpers'
+import { openDemo, shot, startPersona, stream } from './helpers'
 
 // FR-P5 (목 모드, VITE_MOCK=1): P5 퀵스타트 칩 1회 →
 //   장애인 이용권 자격 ✓(신청은 소득 무관) + 예상 5순위(성인·비저소득) +
 //   '지금 바로 되는 것' 블록에 공식 확인 대안 3개.
 
 test.beforeEach(async ({ page }) => {
-  await openChat(page)
+  await openDemo(page)
 })
 
 test('P5 · 지체장애 비저소득 성인 → 자격 ✓(소득무관) + 예상 5순위 + 지금 바로 되는 것 3개', async ({ page }) => {

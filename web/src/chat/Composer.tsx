@@ -1,11 +1,12 @@
-// 하단 고정 컴포저: 현재 질문의 칩 + 자유 입력(항상 활성) + 상시 고지(FR-12 AC7).
+// 하단 고정 컴포저: 현재 질문의 칩 + 자유 입력(항상 활성).
 // 칩·검색은 전부 로컬 처리라 외부로 전송되지 않는다. 자유 입력만 /api/chat/nlu 로 간다.
+// ★ v1.4: 상시 고지 문구는 인사 버블의 보조 한 줄로 이전했다(FR-12 AC7) — 여기엔 없다.
 
 import { useMemo, useState } from 'react'
 import type { Sigungu } from '../types'
 import type { Chip, ChipQuestionMsg, LlmMode } from '../types_chat'
 import { ChipRow } from './messages'
-import { COMPOSER_NOTICE, T, regionChips } from './policy'
+import { T, regionChips } from './policy'
 import { InfoIcon } from '../components/ui'
 
 const REGION_LIMIT = 12
@@ -129,24 +130,16 @@ export function Composer({
         </button>
       </form>
 
-      {/* 상시 고지(FR-12 AC7) — 문구 고정 */}
-      <p
-        data-testid="composer-notice"
-        className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-400"
-      >
-        <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>
-          {COMPOSER_NOTICE}
-          {llmMode === 'chips' && (
-            <>
-              {' '}
-              <b data-testid="chips-mode-label" className="text-amber-700 dark:text-amber-300">
-                {T.degraded}
-              </b>
-            </>
-          )}
-        </span>
-      </p>
+      {/* 비저장·외부 전송 고지는 인사 버블의 보조 한 줄로 통합됐다(FR-12 AC7 v1.4) —
+          여기 남는 것은 강등됐을 때의 정직 라벨뿐이다(FR-12 AC4). */}
+      {llmMode === 'chips' && (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-400">
+          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <b data-testid="chips-mode-label" className="text-amber-700 dark:text-amber-300">
+            {T.degraded}
+          </b>
+        </p>
+      )}
     </div>
   )
 }

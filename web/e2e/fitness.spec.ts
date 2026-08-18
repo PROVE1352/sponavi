@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { openChat, shot, startFitnessThroughParq, startPersona, stream } from './helpers'
+import { openDemo, shot, startFitnessThroughParq, startPersona, stream } from './helpers'
 
 // 체력 레인 3턴(목 모드, VITE_MOCK=1):
 //   판정 결과 → "체력 처방 시작" 칩 → PAR-Q 게이트(통과 전 폼 미노출) → 연령군 동적 폼 →
@@ -7,7 +7,7 @@ import { openChat, shot, startFitnessThroughParq, startPersona, stream } from '.
 //   "이 운동 되는 근처 강좌" 적용 시 패널 목록 탭 전환.
 
 test.beforeEach(async ({ page }) => {
-  await openChat(page)
+  await openDemo(page)
 })
 
 test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배지·영상 카드 → 기본 규칙 처방', async ({ page }) => {

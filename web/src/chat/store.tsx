@@ -99,6 +99,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         lastAssess: { req: action.req, data: action.data },
+        // 결과 도착 → 컨텍스트 패널 자동 표시(FR-12 AC3 v1.4).
+        // 데스크톱은 원래 상시 노출이고, 모바일에서 이게 "상단 시트가 내려오는" 동작이 된다.
+        panel: { ...state.panel, open: true },
         fitness: { laneId: state.fitness.laneId + 1, active: false, parqOk: false, resultMsgId: null },
       }
     case 'setPersona':

@@ -152,6 +152,9 @@ export interface BotTextMsg extends MsgBase {
   role: 'bot'
   kind: 'bot_text'
   text: string
+  // 같은 버블 안의 보조 한 줄(뮤트 톤). 인사 버블의 비저장·외부 전송 고지처럼
+  // "본문보다 작게, 그러나 항상 보이게" 두어야 하는 문장에 쓴다(FR-12 AC7 v1.4).
+  sub?: string
   tone: BotTone
   // 목록형 보조 문장(안내 블록 등). 사실 문장은 전부 템플릿·엔진 출력이다(FR-12 AC2).
   bullets?: string[]

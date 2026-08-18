@@ -1,7 +1,8 @@
 // 챗 단일 UI 셸(App 대체, ARCHITECTURE §11.4).
 //   헤더(로고·데모 배지·다크 토글) + 오프라인 배너
 //   본문 = 채팅 스트림 + 하단 고정 컴포저 + 컨텍스트 패널
-//   푸터(데이터 기준일·출처·면책) 상시 — PRD §6 사전.
+//   푸터(데이터 기준일·출처·면책)는 **데모 페이지 전용**(v1.4) — 실사용 랜딩은 대화만 남긴다.
+//   OSM 저작자 표시는 지도 안의 Leaflet attribution 컨트롤이 소유한다(제거 금지).
 
 import { useEffect, useMemo, useState } from 'react'
 import { DATA_BUILT_FALLBACK, IS_MOCK, getHealth, type HealthResponse } from '../api/client'
@@ -12,14 +13,23 @@ import { useChatController } from './useChatController'
 import { ChatStream } from './ChatStream'
 import { Composer } from './Composer'
 import { ContextPanel } from './ContextPanel'
+import { useIsDemo } from './route'
 import { BOT_NAME } from './policy'
 import type { MessageHandlers } from './messages'
 
-function Header({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
+function Header({
+  demo,
+  dark,
+  onToggleTheme,
+}: {
+  demo: boolean
+  dark: boolean
+  onToggleTheme: () => void
+}) {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5">
-        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="스포내비 홈으로">
+        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="스포내비 맨 위로">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg font-black text-white">
             S
           </span>
@@ -33,10 +43,13 @@ function Header({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => v
           </span>
         </a>
         <div className="flex shrink-0 items-center gap-2">
-          {IS_MOCK && (
-            <Badge tone="warn" icon={<WarnIcon className="w-3.5 h-3.5" />}>
-              데모 데이터
-            </Badge>
+          {/* 목모드 "데모 데이터" 배지는 데모 페이지 소관(FR-12 AC5 v1.4) */}
+          {IS_MOCK && demo && (
+            <span data-testid="demo-badge">
+              <Badge tone="warn" icon={<WarnIcon className="w-3.5 h-3.5" />}>
+                데모 데이터
+              </Badge>
+            </span>
           )}
           <button
             type="button"
@@ -56,7 +69,10 @@ function Footer({ health }: { health: HealthResponse | null }) {
   const dataBuilt = health?.data_built ?? DATA_BUILT_FALLBACK
   const version = typeof health?.version === 'string' ? health.version : null
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60">
+    <footer
+      data-testid="page-footer"
+      className="mt-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60"
+    >
       <div className="mx-auto w-full max-w-7xl space-y-1.5 px-4 py-4 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
         <p>
           <span data-testid="footer-data-built">데이터 기준 {dataBuilt}</span>
@@ -70,18 +86,20 @@ function Footer({ health }: { health: HealthResponse | null }) {
   )
 }
 
-function ChatShell() {
+function ChatShell({ demo }: { demo: boolean }) {
   const { state, sigungu, onChip, onSend, onRetry, setPanel, setFilterSports, applyFilter, fitness } =
-    useChatController()
+    useChatController(demo)
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
   )
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
 
+  // 푸터(데이터 기준일·버전)는 데모 페이지에만 있으므로 health 조회도 거기서만 한다.
   useEffect(() => {
+    if (!demo) return
     getHealth().then(setHealth).catch(() => setHealth(null))
-  }, [])
+  }, [demo])
 
   useEffect(() => {
     const goOnline = () => setOnline(true)
@@ -129,7 +147,7 @@ function ChatShell() {
         </div>
       )}
 
-      <Header dark={dark} onToggleTheme={toggleTheme} />
+      <Header demo={demo} dark={dark} onToggleTheme={toggleTheme} />
 
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 lg:flex-row lg:items-start lg:gap-6">
         {state.lastAssess && (
@@ -159,15 +177,19 @@ function ChatShell() {
         </main>
       </div>
 
-      <Footer health={health} />
+      {demo && <Footer health={health} />}
     </div>
   )
 }
 
 export default function ChatApp() {
+  const demo = useIsDemo()
+  // 해시 라우트 전환은 "다른 페이지로 이동"이다 — key 로 대화를 통째로 새로 시작한다.
+  // (메인↔데모 사이에서 인사 시퀀스가 다르므로 부팅을 다시 태워야 하고,
+  //  지난 페이지의 대화·판정이 넘어오지 않는 편이 P-3 비저장 원칙에도 맞다.)
   return (
-    <ChatProvider>
-      <ChatShell />
+    <ChatProvider key={demo ? 'demo' : 'main'}>
+      <ChatShell demo={demo} />
     </ChatProvider>
   )
 }

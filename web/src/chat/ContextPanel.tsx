@@ -63,8 +63,15 @@ export function ContextPanel({
           </button>
         </div>
 
-        {/* 본문 — 모바일은 접힘 가능, 데스크톱(lg)은 상시 표시 */}
-        <div id={`${baseId}-body`} className={open ? 'block' : 'hidden lg:block'}>
+        {/* 본문 — 모바일은 접힘 가능, 데스크톱(lg)은 상시 표시.
+            나타날 때만 위에서 아래로 슬라이드(sheet-slide-down, 240ms ease-out).
+            접힘은 display:none 이라 애니메이션 없이 즉시 사라진다 —
+            숨김을 transform 으로 흉내내지 않으므로 접힌 본문은 포커스·낭독 대상에서도 빠진다. */}
+        <div
+          id={`${baseId}-body`}
+          data-testid="panel-body"
+          className={open ? 'sheet-slide-down block' : 'hidden lg:block'}
+        >
           <div role="tablist" aria-label="패널 보기 전환" className="flex gap-1 px-3 pt-3">
             <button
               type="button"

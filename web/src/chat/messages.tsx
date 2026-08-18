@@ -318,6 +318,14 @@ export function MessageView({
         <BotLane showSender={showSender}>
           <BotBubble tone={msg.tone}>
             <p className="break-words whitespace-pre-line">{msg.text}</p>
+            {msg.sub && (
+              <p
+                data-testid="bot-sub"
+                className="mt-2 text-[13px] leading-snug break-words whitespace-pre-line text-slate-600 dark:text-slate-400"
+              >
+                {msg.sub}
+              </p>
+            )}
             {msg.bullets && msg.bullets.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                 {msg.bullets.map((b, i) => (
@@ -351,7 +359,7 @@ export function MessageView({
       return (
         <BotLane showSender={showSender}>
           <BotBubble>
-            <p className="break-words">{msg.text}</p>
+            <p className="break-words whitespace-pre-line">{msg.text}</p>
           </BotBubble>
           {msg.inline && (
             <div className="mt-2">

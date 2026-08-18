@@ -153,9 +153,11 @@ async function stubAmbient(page: Page) {
   await page.route('**/api/accessibility**', (r) => json(r, ACCESS_OK))
 }
 
-// ?live=1 랜딩 — 퀵스타트 칩(P1)이 뜰 때까지.
+// ?live=1 데모 페이지 — 퀵스타트 칩(P1)이 뜰 때까지.
+// v1.4: 퀵스타트 칩·푸터는 데모 페이지 소관이라 해시(#/demo)까지 붙여 들어간다.
+// (?live=1 은 search 라 해시와 무관하게 그대로 읽힌다 — api/client.ts liveOverride)
 async function openLive(page: Page) {
-  await page.goto('/?live=1')
+  await page.goto('/?live=1#/demo')
   await expect(page.getByTestId('chat-stream')).toBeVisible()
   await expect(page.getByTestId('chip-persona-P1')).toBeVisible()
 }

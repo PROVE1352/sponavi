@@ -177,6 +177,35 @@ body {
   }
 }
 
+/* 컨텍스트 패널 상단 시트(FR-12 AC3 v1.4) — 결과가 도착해 패널이 나타날 때
+   위에서 아래로 부드럽게 내려온다. display:none → block 전환마다 다시 재생된다.
+   접힘(display:none)은 애니메이션 없이 즉시. 성능상 transform+opacity 만 건드린다. */
+@keyframes sheet-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.sheet-slide-down {
+  animation: sheet-slide-down 240ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+/* 데스크톱(lg)에서는 패널이 상시 노출 컬럼이라 슬라이드하지 않는다 */
+@media (min-width: 64rem) {
+  .sheet-slide-down {
+    animation: none;
+  }
+}
+/* 동작 최소화 선호 → 즉시 표시(전역 규칙과 이중 방어) */
+@media (prefers-reduced-motion: reduce) {
+  .sheet-slide-down {
+    animation: none;
+  }
+}
+
 /* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
 .leaflet-container {
   font-family: var(--font-sans);

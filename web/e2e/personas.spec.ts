@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { openChat, openPanel, panel, shot, startPersona, stream } from './helpers'
+import { openDemo, openPanel, panel, shot, startPersona, stream } from './helpers'
 
 // 페르소나 퀵스타트 칩(FR-12 AC5) → 채팅 스트림 카드 검증 + 심사용 스크린샷.
 // 목 모드(VITE_MOCK=1)라 서버·LLM 없이 동작한다(칩 경로는 챗 엔드포인트를 호출하지 않는다).
 
 test.beforeEach(async ({ page }) => {
-  await openChat(page)
+  await openDemo(page)
 })
 
 test('P1 · 10세 여아 기초수급 → 스포츠강좌이용권 예상 자격 ✓ 카드', async ({ page }) => {

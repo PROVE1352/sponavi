@@ -75,13 +75,13 @@ export const SEX_LABEL: Record<Sex, string> = { F: '여성', M: '남성' }
 
 export const BOT_NAME = '나비'
 
-export const COMPOSER_NOTICE =
-  '자유 입력은 AI 이해를 위해 외부 API로 전송됩니다. 버튼 입력은 전송되지 않습니다.'
-
 export const T = {
   greet: '안녕하세요, 스포내비 안내자 나비예요.',
   greetSub: '몇 가지만 알려주시면 받으실 수 있는 제도와 근처 시설을 함께 찾아드릴게요.',
-  greetPrivacy: '입력하신 내용은 저장하지 않아요. 이름·연락처·주민등록번호는 묻지 않습니다.',
+  // 비저장 고지 + 외부 AI 전송 고지를 한 구절로 통합(FR-12 AC7 v1.4 · P-3).
+  // 컴포저 하단 상시 고지는 삭제되었고, 이 문장이 그 역할을 대신한다 — 인사 버블의 보조 텍스트.
+  greetPrivacy:
+    '입력하신 내용은 저장하지 않고, 자유 입력 문장은 AI 이해를 위해서만 외부 AI에 전달돼요. 이름·연락처는 묻지 않습니다.',
 
   askAge: '먼저 나이를 알려주세요. 아래 버튼으로 고르시거나 직접 입력하셔도 돼요.',
   askSex: '성별을 골라 주세요.',
@@ -106,6 +106,10 @@ export const T = {
 
   assessing: '알려주신 내용으로 확인하고 있어요.',
 
+  // 데모 페이지(/#/demo) 전용 안내. 메인(실사용 랜딩)에는 나오지 않는다(FR-12 AC5 v1.4).
+  demoIntro: '여기는 시연용 데모 페이지예요.',
+  demoQuickStart: '아래 상황 중 하나로 바로 체험해 보시거나, 직접 입력하실 수 있어요.',
+
   // LLM 강등 정직 라벨(PRD §6 사전 문구 그대로 · FR-12 AC4). AI인 척 하지 않는다.
   degraded: '지금은 규칙 기반 모드예요 — 버튼으로 선택해 주세요.',
   degradedChips: '아래 버튼으로 골라 주시면 그대로 이어서 안내해 드릴게요.',
@@ -114,7 +118,7 @@ export const T = {
   restartKeep: '그대로 이어서 진행할게요.',
   restarted: '처음부터 다시 시작할게요.',
 
-  mapOpened: '지도와 시설 목록을 옆 패널에 열어 두었어요. 화면이 좁으면 위쪽에서 펼쳐 보실 수 있어요.',
+  mapOpened: '지도와 시설 목록을 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
   mapNeedsResult: '지도는 먼저 몇 가지를 알려주신 뒤에 보여드릴 수 있어요.',
 
   // 체력 레인 3턴(PAR-Q → 측정 폼 → 결과). 안내만 하고, 문진·판정·처방의 내용은 카드가 말한다.
@@ -257,7 +261,8 @@ export function disabilityTypeChips(): Chip[] {
   }))
 }
 
-// 인사 메시지의 퀵스타트 칩(FR-12 AC5) — 클릭 1회 완주 + 기대 결과 라벨.
+// 퀵스타트 칩(FR-12 AC5) — 클릭 1회 완주 + 기대 결과 라벨.
+// ★ v1.4: 데모 페이지(/#/demo) 전용이다. 메인 랜딩에는 렌더하지 않는다.
 export function personaChips(personas: DemoPersona[]): Chip[] {
   const chips: Chip[] = personas.map((p) => ({
     id: `persona-${p.id}`,

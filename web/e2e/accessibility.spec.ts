@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { openChat, openPanel, panel, shot, startPersona, stream } from './helpers'
+import { openDemo, openPanel, panel, shot, startPersona, stream } from './helpers'
 
 // FR-10 접근성(dvoucher 웹 보조 소스) — 목 모드(VITE_MOCK=1).
 // P3(지체장애) 퀵스타트 칩 → 스트림 시설 카드에 접근성 태그 + 패널 목록 탭의
@@ -9,7 +9,7 @@ import { openChat, openPanel, panel, shot, startPersona, stream } from './helper
 //    카운트 검사는 항상 패널로 스코프한다.
 
 test.beforeEach(async ({ page }) => {
-  await openChat(page)
+  await openDemo(page)
   await startPersona(page, 'P3')
 })
 

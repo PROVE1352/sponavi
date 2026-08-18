@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { PERSONA_IDS, openChat, startPersona, stream } from './helpers'
+import { PERSONA_IDS, openDemo, startPersona, stream } from './helpers'
 
 // 릴리스 게이트 9 (PRD §9-9) —
 //   "칩 경로 P1~P5가 LLM off 상태로 e2e 완주(강등 라벨 포함) + 채팅 스트림 axe critical 0"
@@ -40,7 +40,7 @@ for (const id of PERSONA_IDS) {
       if (r.url().includes('/api/chat/')) chatCalls.push(`${r.method()} ${r.url()}`)
     })
 
-    await openChat(page)
+    await openDemo(page)
 
     // 강등 라벨(FR-12 AC4): AI 인 척 하지 않고 "규칙 기반 모드"임을 상시 표기한다.
     await expect(page.getByTestId('chips-mode-label')).toHaveText(
@@ -62,7 +62,7 @@ for (const id of PERSONA_IDS) {
 }
 
 test('게이트9 · 후속 칩(FAQ → 지도 → 처음부터)으로 대화가 이어진다', async ({ page }) => {
-  await openChat(page)
+  await openDemo(page)
   await startPersona(page, 'P1')
 
   // FAQ 칩 → 확인된 답변 카드(출처·확인일 동반)

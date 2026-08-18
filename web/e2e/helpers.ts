@@ -15,13 +15,38 @@ export function panel(page: Page): Locator {
   return page.getByTestId('context-panel')
 }
 
-// 랜딩(챗) 준비 — 인사 3버블 + 퀵스타트 칩(P1~P5)이 인사 메시지 안에 렌더될 때까지.
-export async function openChat(page: Page): Promise<void> {
+// 메인 랜딩(실사용 전용, v1.4) — 인사 버블 1개 다음 곧바로 첫 질문(나이 칩)까지.
+// 데모 문구·P1~P5 칩은 여기 없다(FR-12 AC5).
+export async function openMain(page: Page): Promise<void> {
   await page.goto('/')
+  await expect(stream(page)).toBeVisible()
+  await expect(page.getByTestId('composer')).toBeVisible()
+  await expect(page.getByTestId('chip-age-27')).toBeVisible()
+}
+
+// 데모 페이지(/#/demo) — 심사·시연 진입로. 퀵스타트 칩(P1~P5)이 인사 메시지 안에 렌더될 때까지.
+// 페르소나 1클릭 완주에 기대는 스펙은 전부 이 문 하나로 들어온다(FR-12 AC5 v1.4).
+export async function openDemo(page: Page): Promise<void> {
+  await page.goto('/#/demo')
   await expect(stream(page)).toBeVisible()
   await expect(page.getByTestId('composer')).toBeVisible()
   await expect(page.getByTestId('chip-persona-P1')).toBeVisible()
   await expect(page.getByTestId('chip-persona-P5')).toBeVisible()
+}
+
+// 메인에서 칩만으로 슬롯 5개를 채워 판정까지 간다(퀵스타트 없이 실사용 경로 완주).
+export async function fillMainSlots(
+  page: Page,
+  opts: { age?: string; sex?: string; regionCd?: string; income?: string; disability?: string } = {},
+): Promise<void> {
+  await page.getByTestId(`chip-age-${opts.age ?? '27'}`).click()
+  await page.getByTestId(`chip-sex-${opts.sex ?? 'M'}`).click()
+  await page.getByTestId('region-search').fill('성북')
+  await page.getByTestId(`chip-region-${opts.regionCd ?? '11290'}`).click()
+  await page.getByTestId(`chip-income-${opts.income ?? '기초생활수급'}`).click()
+  await page.getByTestId(`chip-dis-${opts.disability ?? 'no'}`).click()
+  await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
+  await expect(page.getByTestId('chip-act-restart')).toBeVisible()
 }
 
 // 퀵스타트 칩 1회 클릭 → 판정 턴 완료(카드 + 후속 칩)까지 대기.
@@ -33,7 +58,8 @@ export async function startPersona(page: Page, id: string): Promise<void> {
   await expect(page.getByTestId('chip-act-restart')).toBeVisible()
 }
 
-// 후속 칩으로 컨텍스트 패널을 연다(모바일에서도 본문이 펼쳐진다).
+// 후속 칩으로 컨텍스트 패널의 특정 탭을 연다.
+// v1.4부터 패널은 결과 도착 시 이미 펼쳐져 있으므로 이 함수는 탭 전환이 본체다.
 export async function openPanel(page: Page, tab: 'map' | 'list'): Promise<void> {
   await page.getByTestId(tab === 'map' ? 'chip-act-map' : 'chip-act-list').click()
   const t = page.getByTestId(`panel-tab-${tab}`)

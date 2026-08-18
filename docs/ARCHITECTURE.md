@@ -39,7 +39,8 @@
 ## 2. 컴포넌트 상세
 
 ### 2.1 web/ (React 19 · Vite 7 · TS · Tailwind v4 · Leaflet+OSM)
-- 화면: 위저드(입력) → 결과[자격카드 | 경로 스텝다이어그램 | 지도+리스트] + 공급공백 배너 + 체력처방 스텝 + 페르소나 4버튼.
+- **[v2 2026-08-18] UX 전면 전환**: 위저드 → 챗 단일 UI + 컨텍스트 패널(계약 §11). 아래 결과 블록 컴포넌트들은 챗 스트림·패널에 그대로 재사용.
+- 화면(v1, §11 전환 전 기록): 위저드(입력) → 결과[자격카드 | 경로 스텝다이어그램 | 지도+리스트] + 공급공백 배너 + 체력처방 스텝 + 페르소나 4버튼.
 - `VITE_MOCK=1` 목모드: 서버 없이 계약-형태 목으로 완전 동작(개발·시연 이중화).
 - `api/client.ts`가 서버 응답 변형(personas 중첩 body 등)을 흡수 — 계약 방어층.
 
@@ -169,3 +170,58 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 - **운동명 온톨로지 → 체력 지식그래프로 승격 (2026-07-21 갱신)**: GraphRAG 판단을 레인별로 분리 — **자격·경로 레인은 비채택 유지**(결정론이어야 하고, 정형 데이터라 SQL이 정확·저렴 — 2026-07-20 판단 유효), **처방 레인은 채택**. 처방 질의는 멀티홉(약점요인→운동→종목→접근성→강좌)이고 매 홉에 출처 있는 엣지가 필요해 그래프가 정합. 설계 전문: `docs/FITNESS_GRAPH.md` (공식 컷오프 스크레이핑·엣지 provenance 5등급·공급 인지 처방). 임베딩은 운동명 정규화 잔여분에만 — R은 벡터가 아니라 그래프 탐색.
 - 커버리지 전국화, 지자체용 공백 대시보드(발전가능성 축), 알림(신규 가맹 시 재안내).
 - **3심 확정 우선순위 (2026-07-21)**: 실접수마감 10/2(재판부 확인). 범위 압박 시 **드롭 순서 고정 — ①문화비 소득공제 크롤링(유일 미실증 경로) ②FR-11 신청기간(~25k콜) ③그래프 B티어 큐레이션**. 헤드라인은 PRD §0.5(삼중 장벽, 3번 절 7/27 조건부). 작업 규율: 조사·문서 1건 = 구현 FR 1개 선행(3심 명령 1의 커플링 규칙) — "완벽한 기소장, 미완성 제품" 궤도 차단.
+
+## 11. [C 계약] 챗 오케스트레이션 (v2 UX, 2026-08-18)
+
+> UX 전면 전환: 위저드 → **챗 단일 UI + 컨텍스트 패널**(데스크톱 우측 ~40%, 모바일 상단 접이식 시트).
+> FITNESS_GRAPH §5와 동일 문법: **[결정론 대화정책(클라)] → [LLM은 NLU만] → [후처리 결정론(서버)] → [카드 렌더(기존 컴포넌트)]**.
+> 요구는 PRD FR-12·13, HTTP 계약은 API.md `/api/chat/*`.
+
+### 11.1 역할 분담 — 서버 무상태 유지가 제1 제약
+
+```
+[칩/버튼 입력]   → 클라 상태기계(policy.ts)가 슬롯 직접 갱신 — LLM 0회, 서버 챗 엔드포인트 무호출
+[자유 텍스트]    → POST /api/chat/nlu — LLM 허용 역할 3가지뿐:
+                   ① 슬롯 추출(지역은 원문 문자열까지 — 코드 매칭은 서버 결정론)
+                   ② 연결 멘트(후필터 통과분만 — 숫자·제도명 감지 시 폐기)
+                   ③ FAQ 라우팅(faq_key만 — 답변 본문은 rules.json 조립 사전)
+[슬롯 완성]      → 클라가 기존 /api/assess 호출 → 판정·경로·시설·공백 카드를 스트림에 임베드
+[체력 레인]      → PAR-Q 턴 → 측정 폼 턴 → /api/fitness → /api/fitness/ai (기존 계약 §6 그대로)
+```
+
+- 대화 상태(messages·slots·phase)는 **전부 클라이언트**(P-3 비저장, 2-worker 무상태 유지). 서버 세션 금지.
+- 자격 오판은 무응답보다 나쁘다(1심 판사2) — LLM이 자격·금액·위치·순위를 문장으로 생성하는 경로는 구조적으로 존재하지 않는다.
+
+### 11.2 프로바이더 (ai.py 패턴 미러 — server/app/chat.py)
+
+```python
+class ChatProvider(Protocol):
+    name: str
+    def nlu(self, text: str, slots: dict, phase: str) -> dict: ...
+
+OpenAIProvider   # httpx → chat.completions + structured output.
+                 # env SPONAVI_OPENAI_MODEL(기본 gpt-5.4-mini), 타임아웃 12s
+RulesFallback    # 빈 slot_updates + provider="rules" — 클라가 칩 모드 강등(정직 라벨)
+# 선택: env SPONAVI_CHAT_LLM=openai|off · OPENAI_API_KEY는 compose environment 주입
+# (.env는 이미지에 미포함 — .dockerignore에 .env 추가가 이 계약의 일부)
+```
+
+- 재시도: 스키마 검증 실패 시 1회(예외는 즉시 폴백) — `ai._run_provider` 문법.
+- 캐시 없음(발화 유일성으로 무의미). SSE 없음(턴 응답이 짧아 v1 불필요 — 도입 시 starlette `text/event-stream` GZip 제외 동작의 버전 핀 필요, 기록만).
+- 쿼터: OpenAI 무료 일일 토큰(250만/일). 소진·429·타임아웃 → RulesFallback. 레이트리밋 `chat` 버킷 20/min(자유 텍스트에만 발생).
+- `/api/health`에 `chat_llm` 라벨 추가(기존 `llm` 라벨과 별도).
+
+### 11.3 프라이버시 (무료 티어 = 데이터 공유 조건)
+
+- NLU 전송분 = **현재 발화 + 범주화 슬롯 상태만**. 대화 이력 전문 미전송. 이름·연락처는 애초에 수집하지 않음(FR-01 AC4 계승).
+- 컴포저 고지 상시: "자유 입력은 AI 이해를 위해 외부 API로 전송됩니다. 버튼 입력은 전송되지 않습니다."(FR-12 AC7)
+- 로그: 발화·슬롯 금지. `{provider, ms, ok, fallback_reason}`만(기존 sponavi.access 규약 연장).
+
+### 11.4 웹 구조
+
+- `ChatApp.tsx`(App 대체): 헤더(다크토글·데모배지 유지) + 스트림(`role="log"` aria-live) + 컴포저(입력+칩) + 패널.
+- `chat/store.tsx`: useReducer+Context(신규 의존성 없음) — messages·slots·phase·panel·filterSports(구 ResultView 소유분 이주)·llmMode.
+- `chat/policy.ts`: 결정론 대화 정책 — 질문 순서(나이→성별→지역→소득→장애→판정), 칩 정의, 발화 템플릿(§6 정직성 사전 준수), P1~P5 퀵스타트 칩.
+- 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할.
+- Leaflet은 **패널 상주 1인스턴스**(메시지별 재마운트 금지 — fitBounds·타일 재요청 방지).
+- 목모드: 칩 경로가 기존 mocks/engine·personas를 그대로 소비 — nlu 목 불필요, e2e는 서버·LLM 없이 완주.

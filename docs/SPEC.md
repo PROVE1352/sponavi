@@ -105,6 +105,9 @@ fixtures에는 성북구 인근 장애인 지원 시설을 0~1개만 넣어 **�
   API 베이스 `/api` (vite dev proxy → :8000). 모바일 우선(심사위원 폰).
 - `scripts/` — fetch_data.py(키 주입형), geocode.py, build_db.py.
 - 배포(빌드 후 단계): Docker + 기존 오라클 서버 Caddy. MVP 단계에선 미포함.
+- **[v2 2026-08-18] 챗 NLU**: OpenAI API(무료 일일 토큰 250만, 기본 `gpt-5.4-mini`) — 자유 텍스트 이해 전용,
+  칩 경로는 LLM 무호출. 계약은 `ARCHITECTURE.md §11`·`API.md /api/chat/*`·`PRD FR-12·13`. **§0 판결 제약 전부 계승** —
+  특히 §0-3(대체경로를 "AI 추론"이라 부르지 않음)·§0-5(자격 날조 금지)는 챗 발화에도 그대로 적용된다.
 
 ## 7. 검증 바 (통과 못 하면 미완)
 

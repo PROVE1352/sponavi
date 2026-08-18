@@ -69,3 +69,58 @@
 
 ## GET /api/demo/personas
 SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼 4개로 렌더.
+
+## POST /api/chat/nlu (v2 챗 — 자유 텍스트 이해 전용, 2026-08-18)
+
+칩(버튼) 입력은 이 엔드포인트를 호출하지 않는다 — 클라 상태기계가 슬롯을 직접 갱신하고
+기존 `/api/assess` 등을 호출한다. 자유 텍스트가 왔을 때만 호출.
+
+요청:
+```json
+{
+  "text": "저 14살이고 성북구 살아요",
+  "slots": {
+    "age": null, "sex": null, "sigungu_cd": null,
+    "income_class": null, "disability": { "has": null, "type": null }
+  },
+  "phase": "collect"
+}
+```
+`phase`: `collect | fitness | qa` — 현재 대화 단계 힌트(추출 대상 슬롯 제한용).
+
+응답:
+```json
+{
+  "slot_updates": { "age": 14, "sigungu_cd": "11290", "sigungu_nm": "서울특별시 성북구" },
+  "intent": "provide_info",
+  "faq_key": null,
+  "region_candidates": [],
+  "reply": "성북구에 사시는군요!",
+  "provider": "openai"
+}
+```
+- `intent`: `provide_info | ask_faq | start_fitness | show_map | restart | unknown`
+- `region_candidates`: 시군구 모호 시 `[{cd, nm}]` — 클라가 칩으로 재질문 (예: "서구" → 인천/광주/대구 서구)
+- `reply`: 후필터 통과분만. 폐기·폴백 시 `null` — 클라는 템플릿 발화 사용.
+- `provider`: `openai | rules`
+
+규칙:
+- LLM은 지역을 **원문 문자열까지만** 추출한다. 시군구 코드 확정은 서버가 sigungu 테이블 대조로
+  결정론 수행(정확 1건→확정, 복수→region_candidates, 0건→미갱신). LLM이 코드를 고르지 않는다.
+- `slot_updates`는 AssessRequest 필드 검증(pydantic) 통과분만 반영. enum 밖 값은 버린다.
+- `reply` 후필터: 숫자·금액·%·프로그램명·자격 단정 표현 감지 시 폐기(null). 사실 문장은 전부
+  클라 템플릿+엔진 출력(P-2).
+- `provider:"rules"`(off/실패/쿼터 소진)면 `slot_updates`는 항상 빈 객체 — 클라는 칩 모드 강등 +
+  정직 라벨("규칙 기반 모드").
+- 발화 원문·슬롯은 서버 로그에 기록하지 않는다(P-3). 관측 로그는 `{provider, ms, ok, fallback_reason}`만.
+- 레이트리밋: `chat` 버킷 20/min.
+
+## GET /api/chat/faq (v2 챗)
+
+```json
+[ { "key": "dvoucher_income", "q": "장애인 이용권도 소득 기준이 있나요?",
+    "answer": "…", "source_url": "…", "checked": "2026-07-20" } ]
+```
+- 답변 본문은 rules.json의 `verified` 필드에서만 조립(SPEC §0-5 날조 금지) — LLM은 자유 질문을
+  `faq_key`로 라우팅만 하고 답을 쓰지 않는다.
+- 칩 모드(FAQ 목록 버튼)와 NLU 라우팅(`intent:ask_faq`) 양쪽이 같은 사전을 소비한다. 정적·캐시 가능.

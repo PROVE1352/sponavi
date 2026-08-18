@@ -17,10 +17,10 @@ import type { MessageHandlers } from './messages'
 
 function Header({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/80">
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5">
         <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="스포내비 홈으로">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg font-black text-white shadow-sm ring-1 ring-inset ring-white/25">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg font-black text-white">
             S
           </span>
           <span className="min-w-0 leading-none">
@@ -42,7 +42,7 @@ function Header({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => v
             type="button"
             onClick={onToggleTheme}
             aria-label={dark ? '라이트 모드로 전환' : '다크 모드로 전환'}
-            className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors duration-200 ease-out hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
           >
             {dark ? '라이트' : '다크'}
           </button>
@@ -56,7 +56,7 @@ function Footer({ health }: { health: HealthResponse | null }) {
   const dataBuilt = health?.data_built ?? DATA_BUILT_FALLBACK
   const version = typeof health?.version === 'string' ? health.version : null
   return (
-    <footer className="mt-auto border-t border-slate-200 bg-white/70 dark:border-slate-800 dark:bg-slate-950/50">
+    <footer className="mt-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60">
       <div className="mx-auto w-full max-w-7xl space-y-1.5 px-4 py-4 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
         <p>
           <span data-testid="footer-data-built">데이터 기준 {dataBuilt}</span>

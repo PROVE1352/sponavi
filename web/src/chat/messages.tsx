@@ -17,29 +17,41 @@ import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
 import { BOT_NAME, primaryProgramId } from './policy'
 
-// 나비 아바타 — brand 토큰 색 SVG(본문 텍스트에는 이모지를 쓰지 않는다).
-export function NabiAvatar({ className = 'h-8 w-8' }: { className?: string }) {
+// 나비 아바타 — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
+// 액션 블루 디스크 위에 흰 나비: 윗날개는 불투명, 아랫날개는 반투명(투톤).
+export function NabiAvatar({ className = 'h-7 w-7' }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={`grid shrink-0 place-items-center rounded-full bg-brand-600 text-white ring-1 ring-inset ring-white/25 ${className}`}
+      className={`grid shrink-0 place-items-center rounded-full bg-brand-600 text-white ${className}`}
     >
-      <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5">
+      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
+        {/* 윗날개 한 쌍 */}
+        <path
+          d="M11.2 8.5C9.7 6 7 4.8 5.15 5.9 3.35 7 3.45 9.7 5.05 11.25c1.05 1.05 3.1 1.7 6.15 1.95V8.5Z"
+          fill="currentColor"
+        />
+        <path
+          d="M12.8 8.5c1.5-2.5 4.2-3.7 6.05-2.6 1.8 1.1 1.7 3.8.1 5.35-1.05 1.05-3.1 1.7-6.15 1.95V8.5Z"
+          fill="currentColor"
+        />
+        {/* 아랫날개 한 쌍(반투명 = 투톤) */}
+        <path
+          d="M11.2 14.05c-2.6.2-4.25.95-4.95 2.15-.8 1.4.1 3.05 1.75 3.25 1.7.2 2.9-1.35 3.2-3.35v-2.05Z"
+          fill="currentColor"
+          fillOpacity="0.62"
+        />
+        <path
+          d="M12.8 14.05c2.6.2 4.25.95 4.95 2.15.8 1.4-.1 3.05-1.75 3.25-1.7.2-2.9-1.35-3.2-3.35v-2.05Z"
+          fill="currentColor"
+          fillOpacity="0.62"
+        />
         {/* 몸통 + 더듬이 */}
         <path
-          d="M12 7.6v9.2M12 7.6c0-.9-.7-1.6-1.6-1.6M12 7.6c0-.9.7-1.6 1.6-1.6"
+          d="M12 7.8v9.1M12 7.8c-.1-1-.8-1.7-1.8-1.85M12 7.8c.1-1 .8-1.7 1.8-1.85"
           stroke="currentColor"
-          strokeWidth="1.6"
+          strokeWidth="1.5"
           strokeLinecap="round"
-        />
-        {/* 좌우 날개(위·아래 각 한 쌍) */}
-        <path
-          d="M11.2 9.2C9.7 6.9 7.3 6 5.6 6.9 3.9 7.8 3.9 10 5.3 11.4c1 1 2.8 1.6 5.9 1.9M11.2 13.6c-2.6.2-4.2.9-4.9 2-.8 1.3 0 2.9 1.6 3.1 1.6.2 3.1-1.2 3.9-3.4M12.8 9.2c1.5-2.3 3.9-3.2 5.6-2.3 1.7.9 1.7 3.1.3 4.5-1 1-2.8 1.6-5.9 1.9M12.8 13.6c2.6.2 4.2.9 4.9 2 .8 1.3 0 2.9-1.6 3.1-1.6.2-3.1-1.2-3.9-3.4"
-          fill="currentColor"
-          fillOpacity="0.9"
-          stroke="currentColor"
-          strokeWidth="0.8"
-          strokeLinejoin="round"
         />
       </svg>
     </span>
@@ -67,10 +79,10 @@ export function BotLane({
 }) {
   return (
     <div className="flex w-full min-w-0 items-start gap-2">
-      {showSender ? <NabiAvatar /> : <span aria-hidden="true" className="w-8 shrink-0" />}
+      {showSender ? <NabiAvatar /> : <span aria-hidden="true" className="w-7 shrink-0" />}
       <div className="min-w-0 flex-1">
         {showSender && (
-          <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+          <p className="mb-1 text-[11px] font-semibold tracking-wide text-slate-600 dark:text-slate-400">
             {label ?? BOT_NAME}
           </p>
         )}
@@ -87,7 +99,7 @@ function BotBubble({ children, tone = 'plain' }: { children: ReactNode; tone?: '
       : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
   return (
     <div
-      className={`max-w-[46rem] rounded-2xl rounded-tl-md border px-4 py-3 text-[15px] leading-relaxed shadow-card ${styles}`}
+      className={`max-w-[46rem] rounded-2xl rounded-tl-md border px-4 py-3 text-base leading-[1.6] shadow-card ${styles}`}
     >
       {children}
     </div>
@@ -97,13 +109,13 @@ function BotBubble({ children, tone = 'plain' }: { children: ReactNode; tone?: '
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex w-full min-w-0 items-start justify-end gap-2">
-      <div className="max-w-[36rem] min-w-0 rounded-2xl rounded-tr-md bg-brand-700 px-4 py-2.5 text-[15px] leading-relaxed text-white shadow-card">
+      <div className="max-w-[36rem] min-w-0 rounded-2xl rounded-tr-md bg-brand-700 px-4 py-2.5 text-base leading-[1.6] text-white shadow-card">
         <span className="sr-only">내가 보낸 말: </span>
         <span className="break-words">{text}</span>
       </div>
       <span
         aria-hidden="true"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-700 text-white dark:bg-slate-600"
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-700 text-white dark:bg-slate-600"
       >
         <UserIcon className="h-4 w-4" />
       </span>
@@ -147,10 +159,10 @@ export function ChipRow({
             disabled={disabled}
             onClick={() => onPick(c)}
             className={
-              'inline-flex min-h-11 max-w-full flex-col justify-center rounded-xl border px-3.5 py-2 text-left text-sm font-semibold transition disabled:opacity-60 ' +
+              'inline-flex min-h-11 max-w-full flex-col justify-center rounded-full border-[1.5px] px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out disabled:opacity-60 ' +
               (chosen
-                ? 'border-brand-600 bg-brand-600 text-white'
-                : 'border-brand-200 bg-white text-brand-800 hover:bg-brand-50 dark:border-brand-500/40 dark:bg-slate-900 dark:text-brand-100 dark:hover:bg-brand-700/25')
+                ? 'border-brand-600 bg-brand-600 text-white shadow-card'
+                : 'border-brand-200 bg-white text-brand-800 hover:border-brand-300 hover:bg-brand-50 dark:border-brand-500/40 dark:bg-slate-900 dark:text-brand-100 dark:hover:border-brand-300/60 dark:hover:bg-brand-700/25')
             }
           >
             <span className="inline-flex items-center gap-1.5">
@@ -198,7 +210,7 @@ function FacilitySummaryCard({
       className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold text-slate-900 dark:text-white">근처 자원</h3>
+        <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">근처 자원</h3>
         <div className="flex flex-wrap gap-1.5">
           {/* 이용권은 구 단위 카운트(반경 문구 금지, FR-04 AC2) */}
           <Badge tone="brand">
@@ -249,7 +261,7 @@ function FacilitySummaryCard({
           type="button"
           data-testid="open-list-panel"
           onClick={() => onOpenPanel('list')}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-brand-300 px-4 py-2 text-sm font-semibold text-brand-800 transition hover:bg-brand-50 dark:border-brand-500/40 dark:text-brand-100 dark:hover:bg-brand-700/25"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 transition-colors duration-200 ease-out hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
         >
           시설 목록 전체 보기
         </button>
@@ -323,7 +335,7 @@ export function MessageView({
                       href={l.url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="inline-flex min-h-11 items-center rounded-lg border border-brand-300 px-3 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/40 dark:text-brand-100 dark:hover:bg-brand-700/25"
+                      className="inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-brand-500 px-4 text-sm font-semibold text-brand-800 transition-colors duration-200 ease-out hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
                     >
                       {l.label}
                     </a>
@@ -441,7 +453,7 @@ export function MessageView({
               <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
               {msg.entry.q}
             </p>
-            <p className="mt-2 text-[15px] leading-relaxed text-slate-700 dark:text-slate-200">
+            <p className="mt-2 text-base leading-[1.6] text-slate-700 dark:text-slate-200">
               {msg.entry.answer}
             </p>
             <p className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">

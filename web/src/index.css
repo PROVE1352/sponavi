@@ -3,46 +3,116 @@
 /* 다크 모드: 클래스 기반(.dark). 시스템 선호는 main.tsx 초기화에서 반영 + 수동 토글. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── 스포내비 디자인 시스템 토큰 ─────────────────────────────────
-   주색: 공공 신뢰 네이비블루(brand) + 청록 보조(accent).
+/* ── Atkinson Hyperlegible (셀프호스팅) ───────────────────────────────
+   Braille Institute 의 저시력 가독성 폰트. 라틴·숫자 전용(한글 글리프 없음)이라
+   --font-sans 첫 자리에 두고 한글은 Pretendard 이하 폴백이 렌더한다.
+   CSP 가 font-src 'self' 라서 구글 CDN import 대신 /fonts 로 자급한다.
+   서브셋 구분(latin / latin-ext)은 구글 웹폰트 배포본 그대로. */
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/AtkinsonHyperlegible-Regular-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/AtkinsonHyperlegible-Regular-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/AtkinsonHyperlegible-Bold-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/AtkinsonHyperlegible-Bold-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
+    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
+    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── 스포내비 디자인 시스템 토큰 v2 ──────────────────────────────────
+   "accessible-ethical + soft-ui-evolution(절제)" 번역본.
+   중립 램프는 Tailwind slate 를 그대로 쓴다 — 배경 slate-50(#F8FAFC),
+   보더 slate-200(#E2E8F0), 본문 slate-950(#020617), 뮤트 slate-600(#475569).
+   브랜드 스케일은 CTA 액션 블루(600 = #0369A1, 흰 글자 5.93:1)에서
+   네이비(950 = #0F172A)로 내려가는 하나의 램프다.
    상태색은 색맹 안전 — UI에서 항상 아이콘·텍스트를 함께 쓴다.
    초록=자격 / 로즈=불가 / 호박=근사·주의 / 보라=장애인. */
 @theme {
   --font-sans:
-    'Pretendard', 'Pretendard Variable', -apple-system, BlinkMacSystemFont,
-    'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+    'Atkinson Hyperlegible', 'Pretendard', 'Pretendard Variable', -apple-system,
+    BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR',
+    system-ui, sans-serif;
 
-  /* Brand — 네이비블루(공공 신뢰) */
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #d9e6ff;
-  --color-brand-200: #bcd2fe;
-  --color-brand-300: #8fb2fb;
-  --color-brand-400: #5b8def;
-  --color-brand-500: #2563eb;
-  --color-brand-600: #1d4ed8;
-  --color-brand-700: #1e40af;
-  --color-brand-800: #1b3592;
-  --color-brand-900: #172b6e;
-  --color-brand-950: #101d47;
+  /* Brand — 액션 블루 → 네이비 단일 램프(공공 신뢰).
+     600 = CTA 채움(흰 글자 5.93:1) · 700 = 유저 버블/호버(7.56:1)
+     800 = 라이트 본문 강조(9.46:1) · 950 = 네이비 앵커 */
+  --color-brand-50: #f0f9ff;
+  --color-brand-100: #bae6fd;
+  --color-brand-200: #7dd3fc;
+  --color-brand-300: #38bdf8;
+  --color-brand-400: #0ea5e9;
+  --color-brand-500: #0284c7;
+  --color-brand-600: #0369a1;
+  --color-brand-700: #075985;
+  --color-brand-800: #0c4a6e;
+  --color-brand-900: #0f3a5a;
+  --color-brand-950: #0f172a;
 
-  /* Accent — 청록(보조 신뢰·생동) */
-  --color-accent-50: #ecfeff;
-  --color-accent-100: #cffafe;
-  --color-accent-300: #67e8f9;
-  --color-accent-400: #22d3ee;
-  --color-accent-500: #0891b2;
-  --color-accent-600: #0e7490;
-  --color-accent-700: #155e75;
+  /* Accent — 브랜드와 같은 액션 블루 계열(과거 청록 팔레트 폐기).
+     지금은 컴포넌트에서 직접 쓰지 않고, 나비(봇)·포인트용 예비 슬롯이다. */
+  --color-accent-50: #f0f9ff;
+  --color-accent-100: #e0f2fe;
+  --color-accent-300: #38bdf8;
+  --color-accent-400: #0ea5e9;
+  --color-accent-500: #0284c7;
+  --color-accent-600: #0369a1;
+  --color-accent-700: #075985;
 
-  /* 마커/상태 색(색맹 안전: 항상 아이콘·텍스트 병기). */
-  --color-marker-voucher: #1d4ed8; /* 이용권 가맹 = 파랑 */
-  --color-marker-public: #059669; /* 공공/대안 = 초록 */
+  /* 위험(danger) — 기존 rose 클래스명을 유지한 채 값만 순수 레드로 교체한다.
+     600 = #DC2626 (흰 글자 4.83:1). 자홍기 없는 레드가 '불가/오류' 신호로 더 또렷하다. */
+  --color-rose-50: #fef2f2;
+  --color-rose-100: #fee2e2;
+  --color-rose-200: #fecaca;
+  --color-rose-300: #fca5a5;
+  --color-rose-400: #f87171;
+  --color-rose-500: #ef4444;
+  --color-rose-600: #dc2626;
+  --color-rose-700: #b91c1c;
+  --color-rose-800: #991b1b;
+  --color-rose-900: #7f1d1d;
+  --color-rose-950: #450a0a;
+
+  /* 마커/상태 색(색맹 안전: 항상 아이콘·텍스트 병기).
+     ★ 변수명 고정 — lib/format.ts markerColor() 가 이 이름을 읽는다. */
+  --color-marker-voucher: #0369a1; /* 이용권 가맹 = 파랑(액션 블루) */
+  --color-marker-public: #047857; /* 공공/대안 = 초록 */
   --color-marker-disability: #7c3aed; /* 장애인 = 보라 */
 
-  /* 카드 그림자 — 은은한 깊이(공공 톤: 과하지 않게). */
+  /* 카드 그림자 — Soft UI 절제형: 1px 보더가 경계를 맡고, 그림자는 깊이만 아주 옅게. */
   --shadow-card:
-    0 1px 2px 0 rgb(15 23 42 / 0.05), 0 10px 26px -14px rgb(15 23 42 / 0.18);
-  --shadow-hero: 0 20px 48px -20px rgb(23 43 110 / 0.55);
+    0 1px 2px 0 rgb(2 6 23 / 0.04), 0 2px 6px -1px rgb(2 6 23 / 0.06),
+    0 12px 24px -14px rgb(2 6 23 / 0.14);
+  --shadow-hero: 0 20px 48px -22px rgb(15 23 42 / 0.45);
 }
 
 :root {
@@ -62,22 +132,35 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  background: #f1f5f9;
-  color: #0f172a;
+  /* 스트림 배경 — 패널·버블의 흰 카드와 미묘하게 분리되는 한 단계 아래 톤. */
+  background: #f8fafc;
+  color: #020617;
 }
 .dark body {
-  background: #0b1120;
+  background: #0b1220;
   color: #e2e8f0;
 }
 
-/* 키보드 포커스 링(접근성) — 라이트/다크 모두 또렷하게. */
+/* 키보드 포커스 링(접근성) — 라이트는 네이비블루, 다크는 밝은 스카이. */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 3px solid var(--color-brand-500);
+  outline: 3px solid var(--color-brand-700);
   outline-offset: 2px;
   border-radius: 6px;
 }
 .dark :where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline-color: var(--color-brand-400);
+  outline-color: var(--color-brand-300);
+}
+
+/* 클릭 가능한 컨트롤은 손가락 커서.
+   Tailwind v4 preflight 는 button 기본을 cursor:default 로 되돌렸으므로 여기서 되살린다. */
+:where(button, [role='button'], summary, select, input[type='checkbox']):not(:disabled) {
+  cursor: pointer;
+}
+:where(label):has(> input[type='checkbox']:not(:disabled)) {
+  cursor: pointer;
+}
+:where(button, [role='button'], select, input[type='checkbox']):disabled {
+  cursor: not-allowed;
 }
 
 /* 모션 최소화 선호 존중 */
@@ -97,7 +180,7 @@ body {
 /* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
 .leaflet-container {
   font-family: var(--font-sans);
-  background: #dbeafe;
+  background: #e0f2fe;
 }
 .dark .leaflet-container {
   background: #1e293b;
@@ -118,8 +201,8 @@ body {
   height: 20px;
   border-radius: 9999px;
   border: 3px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 4px rgb(2 6 23 / 0.35);
 }
 .dark .marker-pin {
-  border-color: #0b1120;
+  border-color: #0b1220;
 }

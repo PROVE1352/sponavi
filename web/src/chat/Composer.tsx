@@ -37,7 +37,7 @@ function RegionSearch({
           data-testid="region-search"
           placeholder="예: 성북, 인천 서구"
           autoComplete="off"
-          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 transition-colors duration-200 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:hover:border-slate-600"
         />
       </label>
       {matches.length > 0 ? (
@@ -84,7 +84,7 @@ export function Composer({
   return (
     <div
       data-testid="composer"
-      className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95"
+      className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95"
     >
       {/* 칩 영역 — 현재 질문 */}
       {question && (
@@ -116,14 +116,14 @@ export function Composer({
             data-testid="composer-input"
             placeholder="자유롭게 입력하셔도 돼요"
             autoComplete="off"
-            className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-slate-900 placeholder:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-400"
+            className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 transition-colors duration-200 placeholder:text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400 dark:hover:border-slate-600"
           />
         </label>
         <button
           type="submit"
           data-testid="composer-send"
           disabled={pending || text.trim() === ''}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-brand-600 px-4 text-sm font-bold text-white transition hover:bg-brand-700 disabled:opacity-50"
+          className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-brand-600 px-5 text-sm font-bold text-white transition-colors duration-200 ease-out hover:bg-brand-700 disabled:opacity-50"
         >
           보내기
         </button>

@@ -57,7 +57,7 @@ export function ContextPanel({
             onClick={() => onToggle(!open)}
             aria-expanded={open}
             aria-controls={`${baseId}-body`}
-            className="inline-flex min-h-11 items-center rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 lg:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-slate-300 px-4 text-xs font-semibold text-slate-700 transition-colors duration-200 ease-out hover:border-slate-400 hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
           >
             {open ? '접기' : '지도·목록 펼치기'}
           </button>
@@ -75,10 +75,10 @@ export function ContextPanel({
               data-testid="panel-tab-map"
               onClick={() => onTab('map')}
               className={
-                'min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition ' +
+                'min-h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors duration-200 ease-out ' +
                 (tab === 'map'
                   ? 'bg-brand-600 text-white'
-                  : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800')
+                  : 'border-[1.5px] border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800')
               }
             >
               지도
@@ -92,10 +92,10 @@ export function ContextPanel({
               data-testid="panel-tab-list"
               onClick={() => onTab('list')}
               className={
-                'min-h-11 flex-1 rounded-lg px-3 text-sm font-semibold transition ' +
+                'min-h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors duration-200 ease-out ' +
                 (tab === 'list'
                   ? 'bg-brand-600 text-white'
-                  : 'border border-slate-300 text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800')
+                  : 'border-[1.5px] border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800')
               }
             >
               시설 목록

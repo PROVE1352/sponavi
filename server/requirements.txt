@@ -2,7 +2,9 @@
 fastapi>=0.110,<1.0
 uvicorn[standard]>=0.27,<1.0
 pydantic>=2.6,<3.0
+# 챗 NLU 프로바이더(app/chat.py)의 OpenAI HTTP 호출 — 런타임 의존(신규 SDK 미도입).
+# TestClient 도 같은 패키지를 쓴다.
+httpx>=0.27,<1.0
 
 # dev / test
 pytest>=8.0,<9.0
-httpx>=0.27,<1.0

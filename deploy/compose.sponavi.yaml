@@ -8,6 +8,16 @@ services:
         GIT_SHA: ${GIT_SHA:-unknown}
     container_name: sponavi
     restart: unless-stopped
+    # 비밀값(OPENAI_API_KEY 등)은 이미지에 굽지 않고 런타임에만 주입한다
+    # (.dockerignore 가 .env 를 제외). 호스트에 .env 가 없어도 기동은 계속돼야
+    # 하므로 required:false — compose v2.24+ 문법(로컬·배포 서버 모두 v5.x 확인).
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      # 챗 NLU 스위치 — 미설정이면 off(규칙 기반 모드로 정상 동작).
+      SPONAVI_CHAT_LLM: ${SPONAVI_CHAT_LLM:-off}
+      SPONAVI_OPENAI_MODEL: ${SPONAVI_OPENAI_MODEL:-gpt-5.4-mini}
     ports:
       - "8100:8100"
     volumes:

@@ -2,7 +2,7 @@
 by engine/fitness to keep the contract shape verbatim (docs/API.md)."""
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -27,6 +27,21 @@ class AssessRequest(BaseModel):
     income_class: Literal["기초생활수급", "차상위", "한부모", "그외"] = "그외"
     disability: Disability = Field(default_factory=Disability)
     location: Optional[Location] = None
+
+
+class ChatNluRequest(BaseModel):
+    """POST /api/chat/nlu (docs/API.md · PRD FR-13).
+
+    text  : 사용자 자유 발화(칩 입력은 이 엔드포인트를 호출하지 않는다). 500자 상한.
+    slots : 현재 클라 슬롯 상태(범주값). 서버는 화이트리스트 통과분만 LLM 에 싣는다.
+    phase : 대화 단계 힌트 — 추출 대상 슬롯 제한용.
+    """
+
+    model_config = {"extra": "ignore"}
+
+    text: str = Field(min_length=1, max_length=500)
+    slots: dict[str, Any] = Field(default_factory=dict)
+    phase: Literal["collect", "fitness", "qa"] = "collect"
 
 
 class FitnessRequest(BaseModel):

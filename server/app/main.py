@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from . import engine, fitness
-from .models import AssessRequest, FitnessRequest
+from .models import AssessRequest, ChatNluRequest, FitnessRequest
 from .personas import PERSONAS
 from .store import REPO_ROOT, get_store
 
@@ -140,15 +140,17 @@ class RateLimiter:
     """IP·버킷별 슬라이딩 윈도우(메모리). 단일 컨테이너 기준 충분(외부 의존 0).
 
     - /api/fitness/ai : 분당 ai_per_min(기본 6) — LLM/무거운 경로 보호
+    - /api/chat/nlu   : 분당 chat_per_min(기본 20) — 자유 텍스트 NLU(API.md `chat` 버킷)
     - 그 외 /api/*    : 분당 default_per_min(기본 120)
     - 정적/그 외 경로 : 무제한
     워커>1 이면 카운트가 워커별이라 실효 한도는 워커수 배로 근사된다(계약 허용
     — '단일 컨테이너라 충분'). enabled 는 ENV SPONAVI_RATE_LIMIT(off 로 비활성)."""
 
     def __init__(self, default_per_min: int = 120, ai_per_min: int = 6,
-                 window_s: int = 60) -> None:
+                 chat_per_min: int = 20, window_s: int = 60) -> None:
         self.default_per_min = default_per_min
         self.ai_per_min = ai_per_min
+        self.chat_per_min = chat_per_min
         self.window_s = window_s
         self.enabled = os.environ.get(
             "SPONAVI_RATE_LIMIT", "on").strip().lower() not in (
@@ -162,6 +164,8 @@ class RateLimiter:
     def _limit_for(self, path: str):
         if path == "/api/fitness/ai":
             return self.ai_per_min, "ai"
+        if path == "/api/chat/nlu":
+            return self.chat_per_min, "chat"
         if path.startswith("/api/"):
             return self.default_per_min, "api"
         return None, None  # 정적 자산 등 — 무제한
@@ -252,7 +256,7 @@ async def _assess_error_handler(request: Request, exc: engine.AssessError) -> JS
 @app.get("/api/health")
 def health() -> dict:
     # mode는 store 소스 선택 로직과 동일 기준 (db=전국 실데이터, fixtures=데모)
-    from . import ai
+    from . import ai, chat
     from .store import db_mtime_iso, db_path
 
     store = get_store()
@@ -260,6 +264,8 @@ def health() -> dict:
         "status": "ok",
         "mode": "db" if db_path().exists() else "fixtures",
         "llm": ai.provider_label(),
+        # 챗 NLU 프로바이더 라벨(정직 라벨) — 체력처방 llm 과 별도 스위치.
+        "chat_llm": chat.provider_label(),
         # 데이터 기준일: DB 내 빌드 스탬프 우선, 없으면 파일 mtime(ISO) 폴백.
         "data_built": store.build_stamp() or db_mtime_iso(),
         "version": VERSION,          # 빌드 시 주입된 git short hash
@@ -336,6 +342,33 @@ def get_fitness_items(age: int) -> dict:
     elif group == "유아":
         resp["message"] = "유아기(만4~6)는 4단계 비인증 기준으로, 등급 판정 항목이 없습니다."
     return resp
+
+
+# --- 챗 NLU (v2 UX) — docs/API.md `/api/chat/*` · PRD FR-13 --------------
+# LLM 은 슬롯 추출·연결 멘트·FAQ 라우팅만. 코드 확정·자격 문장은 서버 결정론이다.
+@app.post("/api/chat/nlu")
+def post_chat_nlu(req: ChatNluRequest) -> dict:
+    from . import chat
+
+    start = time.perf_counter()
+    resp, meta = chat.run_nlu(get_store(), req.model_dump())
+    # ★ P-3: 발화 원문·슬롯은 로그에 남기지 않는다. 관측은 아래 4개 필드만.
+    _access_log.info(json.dumps({
+        "event": "chat_nlu",
+        "provider": resp["provider"],
+        "ms": round((time.perf_counter() - start) * 1000, 1),
+        "ok": meta["ok"],
+        "fallback_reason": meta["fallback_reason"],
+    }, ensure_ascii=False))
+    return resp
+
+
+# rules.json verified 필드로 조립한 고정 FAQ 사전(정적·캐시 가능). LLM 무관.
+@app.get("/api/chat/faq")
+def get_chat_faq() -> list[dict]:
+    from . import chat
+
+    return chat.faq_list(get_store())
 
 
 @app.get("/api/meta/sigungu")

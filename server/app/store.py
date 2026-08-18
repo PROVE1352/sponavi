@@ -220,6 +220,22 @@ class Store:
         # GET /api/meta/sigungu -> Seoul 25 (docs/API.md; pilot region SPEC §1).
         return [self._centroids[k] for k in self._centroids]
 
+    def sigungu_all(self) -> list[dict]:
+        """전국 시군구 마스터 [{cd, nm}] — 좌표 유무 무관(실 DB 278개).
+        챗 NLU 의 지역 원문 → 코드 결정론 대조용(chat.py). 테이블이 없는
+        데모/레거시 DB 는 시드(서울 25) 로 폴백한다."""
+        try:
+            cur = self.conn.execute(
+                "SELECT cd, nm FROM sigungu WHERE nm IS NOT NULL AND nm != '' "
+                "ORDER BY cd"
+            )
+            rows = [{"cd": r["cd"], "nm": r["nm"]} for r in cur.fetchall()]
+        except sqlite3.Error:
+            rows = []
+        if rows:
+            return rows
+        return [{"cd": c["cd"], "nm": c.get("nm")} for c in self._centroids.values()]
+
     # -- facilities ---------------------------------------------------------
     @staticmethod
     def _facility_row(row: sqlite3.Row) -> dict:

@@ -4,13 +4,15 @@
 
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
-import type { AssessRequest, AssessResponse, Nearby, Sex } from '../types'
-import type { Chip, ChatMessage, FacilitySummaryMsg } from '../types_chat'
+import type { AssessRequest, AssessResponse } from '../types'
+import type { Chip, ChatMessage, FacilitySummaryMsg, FitnessTurnApi } from '../types_chat'
 import { EligibilityCard } from '../components/EligibilityCard'
 import { PathDiagram } from '../components/PathDiagram'
 import { SupplyGapBanner } from '../components/SupplyGapBanner'
 import { AltRow, VoucherRow, useFacilityAccessibility } from '../components/NearbyList'
-import { FitnessStep } from '../components/FitnessStep'
+import { ParqGate } from '../components/ParqGate'
+import { FitnessFormCard } from '../components/FitnessForm'
+import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
 import { BOT_NAME, primaryProgramId } from './policy'
@@ -276,36 +278,13 @@ function AssessCards({ req, data }: { req: AssessRequest; data: AssessResponse }
   )
 }
 
-function FitnessBlock({
-  age,
-  sex,
-  nearby,
-  openSignal,
-  onApplyFilter,
-}: {
-  age: number
-  sex: Sex
-  nearby: Nearby
-  openSignal: number
-  onApplyFilter: (sports: string[]) => void
-}) {
-  return (
-    <FitnessStep
-      age={age}
-      sex={sex}
-      nearby={nearby}
-      onApplyFilter={onApplyFilter}
-      openSignal={openSignal}
-    />
-  )
-}
-
 export interface MessageHandlers {
   onChip: (chip: Chip, msgId: string) => void
   onRetry: () => void
   onOpenPanel: (tab: 'map' | 'list') => void
   onApplyFilter: (sports: string[]) => void
-  fitnessOpenSignal: number
+  // 체력 레인 3턴의 상태·액션(useFitness + 스토어 진행도).
+  fitness: FitnessTurnApi
 }
 
 export function MessageView({
@@ -410,15 +389,43 @@ export function MessageView({
         </BotLane>
       )
 
-    case 'fitness_block':
+    // ── 체력 레인 3턴 ────────────────────────────────────────────────
+    case 'fitness_parq':
       return (
         <BotLane showSender={showSender}>
-          <FitnessBlock
-            age={msg.age}
-            sex={msg.sex}
+          <ParqGate
+            done={h.fitness.parqOk && msg.laneId === h.fitness.laneId}
+            locked={msg.laneId !== h.fitness.laneId}
+            onContinue={h.fitness.onParqContinue}
+          />
+        </BotLane>
+      )
+
+    case 'fitness_form':
+      return (
+        <BotLane showSender={showSender}>
+          <FitnessFormCard
+            lane={h.fitness}
+            locked={msg.laneId !== h.fitness.laneId}
+            onSubmit={h.fitness.onSubmit}
+          />
+        </BotLane>
+      )
+
+    case 'fitness_result':
+      return (
+        <BotLane showSender={showSender}>
+          <FitnessResultCard
+            result={msg.result}
             nearby={msg.nearby}
-            openSignal={h.fitnessOpenSignal}
             onApplyFilter={h.onApplyFilter}
+            ai={h.fitness.ai}
+            aiLoading={h.fitness.aiLoading}
+            aiError={h.fitness.aiError}
+            onRequestAi={h.fitness.requestAi}
+            onCancelAi={h.fitness.cancelAi}
+            // AI 조작부는 현재 회차의 최신 결과 카드에만(지난 결과는 기록으로 고정).
+            showAi={msg.laneId === h.fitness.laneId && msg.id === h.fitness.resultMsgId}
           />
         </BotLane>
       )

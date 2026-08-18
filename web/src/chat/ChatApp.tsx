@@ -71,7 +71,8 @@ function Footer({ health }: { health: HealthResponse | null }) {
 }
 
 function ChatShell() {
-  const { state, sigungu, onChip, onSend, onRetry, setPanel, setFilterSports } = useChatController()
+  const { state, sigungu, onChip, onSend, onRetry, setPanel, setFilterSports, applyFilter, fitness } =
+    useChatController()
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -110,11 +111,9 @@ function ChatShell() {
     onChip,
     onRetry,
     onOpenPanel: (tab) => setPanel(true, tab),
-    onApplyFilter: (sports) => {
-      setFilterSports(sports)
-      setPanel(true, 'list')
-    },
-    fitnessOpenSignal: state.fitnessOpenSignal,
+    // 종목 필터 + 목록 탭 전환 + 나비 한 줄 안내(부수효과는 컨트롤러가 소유).
+    onApplyFilter: applyFilter,
+    fitness,
   }
 
   return (

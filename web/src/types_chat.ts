@@ -6,6 +6,9 @@ import type {
   AssessRequest,
   AssessResponse,
   DisabilityType,
+  FitnessAiResponse,
+  FitnessItem,
+  FitnessResponse,
   IncomeClass,
   Nearby,
   PathEdge,
@@ -199,11 +202,30 @@ export interface FacilitySummaryMsg extends MsgBase {
   totalAlternatives: number
 }
 
-export interface FitnessBlockMsg extends MsgBase {
+// ── 체력 레인 3턴(FR-07~09를 챗 대화 턴으로 분해) ──────────────────────────
+//   턴1 fitness_parq  : PAR-Q 문진 게이트(통과해야 다음 턴, FR-07 AC5)
+//   턴2 fitness_form  : 연령군 동적 측정 폼(FR-07 AC1~3·AC6)
+//   턴3 fitness_result: 판정·추천·AI 처방 카드(FR-08·09)
+// laneId = 레인 회차. 새 판정(=다른 상황)으로 갈아타면 지난 턴 메시지는 기록으로만 남는다.
+
+export interface FitnessParqMsg extends MsgBase {
   role: 'bot'
-  kind: 'fitness_block'
-  age: number
-  sex: Sex
+  kind: 'fitness_parq'
+  laneId: number
+}
+
+export interface FitnessFormMsg extends MsgBase {
+  role: 'bot'
+  kind: 'fitness_form'
+  laneId: number
+}
+
+export interface FitnessResultMsg extends MsgBase {
+  role: 'bot'
+  kind: 'fitness_result'
+  laneId: number
+  // 결과는 메시지에 고정한다(대화 기록의 사실은 나중에 바뀌지 않는다).
+  result: FitnessResponse
   nearby: Nearby
 }
 
@@ -227,13 +249,61 @@ export type ChatMessage =
   | SupplyGapMsg
   | PathMsg
   | FacilitySummaryMsg
-  | FitnessBlockMsg
+  | FitnessParqMsg
+  | FitnessFormMsg
+  | FitnessResultMsg
   | ErrorMsg
   | FaqAnswerMsg
+
+// ────────────────────────────── 체력 레인 계약 ──────────────────────────────
+
+// 동적 폼 한 행: 단일 항목 / alt_group 택1(셀렉트+입력 한 슬롯, FR-07 AC1).
+export type FitnessFormRow =
+  | { kind: 'single'; item: FitnessItem }
+  | { kind: 'alt'; altGroup: string; factor: string; options: FitnessItem[] }
+
+// useFitness() 가 소유하는 레인 상태·액션. 뷰 3분할은 이 계약만 보고 순수 렌더한다.
+// ★ PAR-Q 응답은 여기 없다 — 게이트 컴포넌트의 로컬 상태이며 저장·전송되지 않는다(P-3).
+export interface FitnessLaneApi {
+  itemsLoading: boolean
+  itemsError: boolean
+  reloadItems: () => void
+  // 만 7~10 공백 고지(FR-07 AC6). null 이면 배너 없음.
+  gapMessage: string | null
+  // 등급 판정 항목이 없는 연령군(유아) 안내. null 이면 폼을 그린다.
+  emptyMessage: string | null
+  grouped: [string, FitnessFormRow[]][]
+  submitting: boolean
+  submitError: AppError | null
+  ai: FitnessAiResponse | null
+  aiLoading: boolean
+  aiError: AppError | null
+  requestAi: () => void
+  cancelAi: () => void
+}
+
+// 메시지 렌더러가 받는 체력 턴 계약 = 레인 상태 + 턴 진행 액션.
+export interface FitnessTurnApi extends FitnessLaneApi {
+  laneId: number
+  parqOk: boolean
+  // 마지막 결과 메시지 id — AI 처방 조작부는 최신 결과 카드에만 붙는다.
+  resultMsgId: string | null
+  onParqContinue: () => void
+  onSubmit: (measures: Record<string, number>) => void
+}
 
 // ────────────────────────────── 스토어 상태 ──────────────────────────────
 
 export type LlmMode = 'llm' | 'chips'
+
+// 체력 레인 진행 상태(대화 턴의 진행도만 — 측정값·문진 응답은 여기 없다).
+export interface FitnessLaneState {
+  // 레인 회차. 새 판정마다 증가 → 지난 회차의 턴 메시지는 기록으로 잠긴다.
+  laneId: number
+  active: boolean
+  parqOk: boolean
+  resultMsgId: string | null
+}
 
 export interface ChatState {
   messages: ChatMessage[]
@@ -248,7 +318,7 @@ export interface ChatState {
   activeQuestionId: string | null
   pending: boolean
   activePersonaId: string | null
-  // 체력 블록 전개 신호(intent=start_fitness). 증가할 때마다 블록이 열린다.
-  fitnessOpenSignal: number
+  // 체력 레인(3턴) 진행 상태.
+  fitness: FitnessLaneState
   faq: FaqEntry[]
 }

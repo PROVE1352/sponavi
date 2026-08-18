@@ -117,8 +117,15 @@ export const T = {
   mapOpened: '지도와 시설 목록을 옆 패널에 열어 두었어요. 화면이 좁으면 위쪽에서 펼쳐 보실 수 있어요.',
   mapNeedsResult: '지도는 먼저 몇 가지를 알려주신 뒤에 보여드릴 수 있어요.',
 
-  fitnessIntro: '체력 처방은 아래 블록에서 이어서 하실 수 있어요. 원하실 때 천천히 하셔도 돼요.',
+  // 체력 레인 3턴(PAR-Q → 측정 폼 → 결과). 안내만 하고, 문진·판정·처방의 내용은 카드가 말한다.
+  fitnessIntro: '체력 처방을 함께 해볼게요. 먼저 아래 문진만 확인해 주세요.',
+  fitnessFormIntro: '이제 측정값을 넣어 주세요. 아는 항목만 넣으셔도 괜찮아요.',
+  fitnessResultIntro: '아래 카드에 판정과 추천을 정리해 두었어요.',
+  fitnessAlready: '체력 처방은 위 카드에서 이어서 하실 수 있어요.',
   fitnessNeedsResult: '체력 처방은 예상 자격을 먼저 확인한 뒤에 이어서 하실 수 있어요.',
+  fitnessFilterApplied: '고르신 종목만 남겨서 시설 목록을 옆 패널에 열어 두었어요.',
+
+  followUpPrompt: '더 필요하신 게 있으면 아래에서 골라 주세요.',
 
   faqEmpty: '그 질문은 아직 확인된 답변을 준비하지 못했어요. 공식 신청처에서 확인해 주시면 정확해요.',
 
@@ -428,16 +435,28 @@ export function slotEditChips(changed: QuestionId[], slots: ChatSlots): Chip[] {
 }
 
 // 결과 뒤 후속 액션 칩(패널 열기 · 체력 · 다시 시작 · FAQ).
-export function followUpChips(faqKeys: { key: string; q: string }[]): Chip[] {
+// 체력 레인을 막 끝낸 뒤에는 fitness=false 로 "체력 처방 시작"을 빼고 복귀 칩만 남긴다.
+export function followUpChips(
+  faqKeys: { key: string; q: string }[],
+  // suffix = 같은 칩 묶음이 스트림에 두 번 이상 나올 때 id 충돌을 막는 꼬리표.
+  opts: { fitness?: boolean; suffix?: string } = {},
+): Chip[] {
+  const tail = opts.suffix ? `-${opts.suffix}` : ''
   const chips: Chip[] = [
-    { id: 'act-map', label: '지도에서 보기', action: { kind: 'open_panel', tab: 'map' } },
-    { id: 'act-list', label: '시설 목록 보기', action: { kind: 'open_panel', tab: 'list' } },
-    { id: 'act-fitness', label: '체력 처방 시작', action: { kind: 'start_fitness' } },
+    { id: `act-map${tail}`, label: '지도에서 보기', action: { kind: 'open_panel', tab: 'map' } },
+    { id: `act-list${tail}`, label: '시설 목록 보기', action: { kind: 'open_panel', tab: 'list' } },
   ]
-  for (const f of faqKeys.slice(0, 3)) {
-    chips.push({ id: `faq-${f.key}`, label: f.q, action: { kind: 'faq', faqKey: f.key } })
+  if (opts.fitness !== false) {
+    chips.push({ id: `act-fitness${tail}`, label: '체력 처방 시작', action: { kind: 'start_fitness' } })
   }
-  chips.push({ id: 'act-restart', label: '처음부터 다시', action: { kind: 'restart', step: 'ask' } })
+  for (const f of faqKeys.slice(0, 3)) {
+    chips.push({ id: `faq-${f.key}${tail}`, label: f.q, action: { kind: 'faq', faqKey: f.key } })
+  }
+  chips.push({
+    id: `act-restart${tail}`,
+    label: '처음부터 다시',
+    action: { kind: 'restart', step: 'ask' },
+  })
   return chips
 }
 

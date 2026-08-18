@@ -20,6 +20,7 @@ import type {
   ChatMessage,
   ChatSlots,
   Chip,
+  FitnessTurnApi,
   NluPhase,
   NluSlotsWire,
   PanelTab,
@@ -27,6 +28,7 @@ import type {
 } from '../types_chat'
 import { toAppError } from '../components/ErrorPanel'
 import { nextId, useChat } from './store'
+import { useFitness } from './useFitness'
 import {
   DISABILITY_TYPES,
   INCOME_OPTIONS,
@@ -92,6 +94,13 @@ export function useChatController() {
   const lastAttempt = useRef<AssessRequest | null>(null)
   const booted = useRef(false)
 
+  // 체력 레인(FR-07~09)의 조회·제출·AI 상태. 판정 결과의 나이·성별을 그대로 따른다.
+  const lane = useFitness({
+    age: state.lastAssess?.req.age ?? null,
+    sex: state.lastAssess?.req.sex ?? null,
+    active: state.fitness.active,
+  })
+
   const push = useCallback(
     (...messages: ChatMessage[]) => dispatch({ type: 'push', messages }),
     [dispatch],
@@ -147,19 +156,11 @@ export function useChatController() {
             totalAlternatives: data.nearby.alternatives.length,
           },
           {
-            id: nextId('fit'),
-            role: 'bot',
-            kind: 'fitness_block',
-            age: req.age,
-            sex: req.sex,
-            nearby: data.nearby,
-          },
-          {
             id: nextId('q'),
             role: 'bot',
             kind: 'chip_question',
             question: 'greet',
-            text: '더 필요하신 게 있으면 아래에서 골라 주세요.',
+            text: T.followUpPrompt,
             chips: followUp,
             select: 'action',
             inline: true,
@@ -247,14 +248,89 @@ export function useChatController() {
     [dispatch, push, state.lastAssess],
   )
 
+  // ── 체력 레인 3턴(PAR-Q → 측정 폼 → 결과) ──────────────────────
+  // 나비는 안내만 한다. 문진 내용·측정 항목·판정·처방은 전부 카드가 말한다(FR-12 AC2).
   const startFitness = useCallback(() => {
     if (!state.lastAssess) {
       push(botText(T.fitnessNeedsResult))
       return
     }
-    dispatch({ type: 'openFitness' })
-    push(botText(T.fitnessIntro))
-  }, [dispatch, push, state.lastAssess])
+    if (state.fitness.active) {
+      push(botText(T.fitnessAlready))
+      return
+    }
+    dispatch({ type: 'fitnessStart' })
+    dispatch({ type: 'setPhase', phase: 'fitness' })
+    push(botText(T.fitnessIntro), {
+      id: nextId('fitq'),
+      role: 'bot',
+      kind: 'fitness_parq',
+      laneId: state.fitness.laneId + 1,
+    })
+  }, [dispatch, push, state.fitness.active, state.fitness.laneId, state.lastAssess])
+
+  // 턴1 통과 → 턴2(측정 폼). 게이트를 통과해야만 폼이 나온다(FR-07 AC5).
+  const onParqContinue = useCallback(() => {
+    if (state.fitness.parqOk) return
+    dispatch({ type: 'fitnessParqOk' })
+    push(botText(T.fitnessFormIntro), {
+      id: nextId('fitf'),
+      role: 'bot',
+      kind: 'fitness_form',
+      laneId: state.fitness.laneId,
+    })
+  }, [dispatch, push, state.fitness.laneId, state.fitness.parqOk])
+
+  // 턴2 제출 → 턴3(결과 카드). 실패는 폼 카드 안 인라인 패널이 말한다(재시도 버튼 포함).
+  const onFitnessSubmit = useCallback(
+    (measures: Record<string, number>) => {
+      const assessed = state.lastAssess
+      if (!assessed) return
+      void (async () => {
+        const res = await lane.submit(measures)
+        if (!res) return
+        const id = nextId('fitr')
+        const first = state.fitness.resultMsgId == null
+        dispatch({ type: 'fitnessResult', msgId: id })
+        push(botText(T.fitnessResultIntro), {
+          id,
+          role: 'bot',
+          kind: 'fitness_result',
+          laneId: state.fitness.laneId,
+          result: res,
+          nearby: assessed.data.nearby,
+        })
+        // 레인을 마치면 질의응답 단계로 복귀 + 후속 칩(지도·목록·FAQ·처음부터).
+        dispatch({ type: 'setPhase', phase: 'qa' })
+        if (first) {
+          push({
+            id: nextId('q'),
+            role: 'bot',
+            kind: 'chip_question',
+            question: 'greet',
+            text: T.followUpPrompt,
+            chips: followUpChips(
+              state.faq.map((f) => ({ key: f.key, q: f.q })),
+              { fitness: false, suffix: 'fit' },
+            ),
+            select: 'action',
+            inline: true,
+          })
+        }
+      })()
+    },
+    [dispatch, lane, push, state.faq, state.fitness.laneId, state.fitness.resultMsgId, state.lastAssess],
+  )
+
+  // 처방 → 강좌 연결(FR-09 AC1): 종목 필터 + 목록 탭 전환 + 한 줄 안내.
+  const applyFilter = useCallback(
+    (sports: string[]) => {
+      dispatch({ type: 'setFilterSports', sports })
+      dispatch({ type: 'setPanel', open: true, tab: 'list' })
+      push(botText(T.fitnessFilterApplied))
+    },
+    [dispatch, push],
+  )
 
   const answerFaq = useCallback(
     (key: string | null) => {
@@ -543,6 +619,16 @@ export function useChatController() {
     [dispatch],
   )
 
+  // 메시지 렌더러가 받는 체력 턴 계약 = 레인 훅 + 스토어 진행도 + 턴 진행 액션.
+  const fitness: FitnessTurnApi = {
+    ...lane,
+    laneId: state.fitness.laneId,
+    parqOk: state.fitness.parqOk,
+    resultMsgId: state.fitness.resultMsgId,
+    onParqContinue,
+    onSubmit: onFitnessSubmit,
+  }
+
   return {
     state,
     sigungu,
@@ -552,5 +638,7 @@ export function useChatController() {
     onRetry,
     setPanel,
     setFilterSports,
+    applyFilter,
+    fitness,
   }
 }

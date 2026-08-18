@@ -27,7 +27,7 @@ export const INITIAL_STATE: ChatState = {
   activeQuestionId: null,
   pending: false,
   activePersonaId: null,
-  fitnessOpenSignal: 0,
+  fitness: { laneId: 0, active: false, parqOk: false, resultMsgId: null },
   faq: [],
 }
 
@@ -46,7 +46,10 @@ export type ChatAction =
   | { type: 'setFilterSports'; sports?: string[] }
   | { type: 'setAssess'; req: AssessRequest; data: AssessResponse }
   | { type: 'setPersona'; id: string | null }
-  | { type: 'openFitness' }
+  // 체력 레인 3턴: 시작 → PAR-Q 통과 → 결과 턴 게시
+  | { type: 'fitnessStart' }
+  | { type: 'fitnessParqOk' }
+  | { type: 'fitnessResult'; msgId: string }
   | { type: 'setFaq'; faq: FaqEntry[] }
   | { type: 'reset'; keep: { llmMode: LlmMode; faq: FaqEntry[] } }
 
@@ -91,11 +94,24 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'setFilterSports':
       return { ...state, filterSports: action.sports }
     case 'setAssess':
-      return { ...state, lastAssess: { req: action.req, data: action.data } }
+      // 새 판정 = 다른 상황. 진행 중이던 체력 레인은 닫고 회차를 넘긴다
+      // (지난 턴 메시지는 기록으로 남되 더 이상 조작되지 않는다).
+      return {
+        ...state,
+        lastAssess: { req: action.req, data: action.data },
+        fitness: { laneId: state.fitness.laneId + 1, active: false, parqOk: false, resultMsgId: null },
+      }
     case 'setPersona':
       return { ...state, activePersonaId: action.id }
-    case 'openFitness':
-      return { ...state, fitnessOpenSignal: state.fitnessOpenSignal + 1 }
+    case 'fitnessStart':
+      return {
+        ...state,
+        fitness: { laneId: state.fitness.laneId + 1, active: true, parqOk: false, resultMsgId: null },
+      }
+    case 'fitnessParqOk':
+      return { ...state, fitness: { ...state.fitness, parqOk: true } }
+    case 'fitnessResult':
+      return { ...state, fitness: { ...state.fitness, resultMsgId: action.msgId } }
     case 'setFaq':
       return { ...state, faq: action.faq }
     case 'reset':

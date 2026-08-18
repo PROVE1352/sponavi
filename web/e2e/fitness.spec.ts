@@ -1,39 +1,25 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import { openChat, shot, startFitnessThroughParq, startPersona, stream } from './helpers'
 
-// 체력 처방 전면 재구축(목 모드, VITE_MOCK=1):
-//   페르소나 결과 → 체력 섹션 열기 → PAR-Q 게이트 통과 → 연령군 동적 폼 →
-//   판정 칩+비교문+출처 배지+영상 카드 → AI 처방 버튼 → "기본 규칙 처방" 라벨.
-
-async function openResultFor(page: Page, id: string) {
-  await page.getByTestId(`persona-${id}`).click()
-  await expect(page.getByRole('region', { name: '추천 경로 시각화' })).toBeVisible()
-}
-
-async function openFitness(page: Page) {
-  await page.getByTestId('fitness-section').getByRole('button').first().click()
-}
+// 체력 레인 3턴(목 모드, VITE_MOCK=1):
+//   판정 결과 → "체력 처방 시작" 칩 → PAR-Q 게이트(통과 전 폼 미노출) → 연령군 동적 폼 →
+//   판정 칩+비교문+참고등급(추정)+출처 배지+영상 카드 → AI 처방(rules) "기본 규칙 처방" →
+//   "이 운동 되는 근처 강좌" 적용 시 패널 목록 탭 전환.
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/')
-  await expect(page.getByRole('heading', { name: '스포내비', level: 1 })).toBeVisible()
-  await expect(page.getByTestId('persona-P2')).toBeVisible()
+  await openChat(page)
 })
 
 test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배지·영상 카드 → 기본 규칙 처방', async ({ page }) => {
-  await openResultFor(page, 'P2') // 27세 성인
-  await openFitness(page)
-
-  // PAR-Q 게이트: 폼 앞단 고지 + 체크 후 계속
-  const parq = page.getByTestId('parq-gate')
-  await expect(parq).toBeVisible()
-  await expect(parq).toContainText('160/100mmHg')
-  await page.getByTestId('parq-check').check()
-  await page.getByTestId('parq-continue').click()
+  await startPersona(page, 'P2') // 27세 성인
+  await startFitnessThroughParq(page)
 
   // 연령군(성인) 동적 폼 — 성인 전용 항목이 렌더된다
   const form = page.getByTestId('fitness-form')
   await expect(form).toBeVisible()
   await expect(form).toContainText('교차윗몸 일으키기')
+  // 대체항목(alt_group) 택1은 한 슬롯(셀렉트 + 입력)
+  await expect(page.getByTestId('fit-alt-심폐_왕복스텝')).toBeVisible()
 
   // 값 입력(둘 다 기준 미달 유도) → 판정
   await page.getByTestId('fit-input-crunch_cross').fill('5')
@@ -67,12 +53,36 @@ test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배�
   await expect(page.getByTestId('ai-provider-label')).toHaveText('기본 규칙 처방')
   await expect(page.getByTestId('ai-rx').first()).toBeVisible()
 
-  await page.screenshot({ path: 'e2e-shots/F1-fitness-prescription.png', fullPage: true })
+  // 레인 종료 후에는 후속 칩이 '체력 처방 시작' 없이 다시 제시된다(-fit 묶음)
+  await expect(page.getByTestId('chip-act-restart-fit')).toBeVisible()
+  await expect(page.getByTestId('chip-act-fitness-fit')).toHaveCount(0)
+
+  await shot(page, 'e2e-shots/F1-fitness-prescription.png')
 })
 
-test('P1 만10세 → 체력 섹션에 만7~10 공백 고지 배너', async ({ page }) => {
-  await openResultFor(page, 'P1') // 10세 → age_gap
-  await openFitness(page)
+test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + 패널 목록 탭 전환 (FR-09 AC1)', async ({ page }) => {
+  await startPersona(page, 'P2')
+  await startFitnessThroughParq(page)
+
+  await page.getByTestId('fit-input-sit_reach').fill('-3')
+  await page.getByTestId('fitness-submit').click()
+  await expect(page.getByTestId('fitness-result')).toBeVisible()
+
+  const apply = page.getByTestId('facility-filter-apply')
+  await expect(apply).toContainText('요가')
+  await apply.click()
+
+  // 목록 탭으로 전환 + 필터 배지 + 나비 한 줄 안내
+  const tab = page.getByTestId('panel-tab-list')
+  await expect(tab).toBeVisible()
+  await expect(tab).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('context-panel').getByText(/운동 필터:/)).toBeVisible()
+  await expect(stream(page).getByText(/고르신 종목만 남겨서/)).toBeVisible()
+})
+
+test('P1 만10세 → 측정 폼에 만7~10 공백 고지 배너 (FR-07 AC6)', async ({ page }) => {
+  await startPersona(page, 'P1') // 10세 → age_gap
+  await startFitnessThroughParq(page)
 
   const banner = page.getByTestId('fitness-gap-banner')
   await expect(banner).toBeVisible()

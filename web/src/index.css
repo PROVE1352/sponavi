@@ -206,6 +206,93 @@ body {
   }
 }
 
+/* ── 마이크로 모션(FR-12 AC11) ────────────────────────────────────────
+   "부드러움"은 여기 세 개가 전부다: 메시지 등장 · 누름 피드백 · 스냅 스크롤.
+   패럴랙스·바운스·장식 애니메이션은 두지 않는다(디자인 시스템 anti-pattern).
+   전부 prefers-reduced-motion 에서 비활성 — 전역 규칙과 이중 방어. */
+
+/* 신규 버블·카드 등장: fade + 미세 상승(8px), 200ms ease-out.
+   transform+opacity 만 건드려 레이아웃 재계산이 없다. */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.msg-in {
+  animation: msg-in 200ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-in {
+    animation: none;
+  }
+}
+
+/* 칩·버튼 누름 피드백: 미세한 scale(0.98). hover 색 전이는 각 컴포넌트의
+   transition-colors 가 이미 담당하고, 여기서는 transform 만 얹는다. */
+/* ★ 이 파일의 규칙은 레이어 밖이라 Tailwind 의 transition-colors 유틸을 덮는다 —
+   그래서 hover 색 전이까지 여기서 함께 선언한다(일관화, AC11). */
+.press {
+  transition:
+    transform 120ms cubic-bezier(0, 0, 0.2, 1),
+    color 200ms cubic-bezier(0, 0, 0.2, 1),
+    background-color 200ms cubic-bezier(0, 0, 0.2, 1),
+    border-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+.press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+  .press {
+    transition: none;
+  }
+  .press:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ── 카드 가로 스와이프 카루셀(FR-12 AC9) ──────────────────────────────
+   판정 카드·시설 카드가 세로로 쌓여 스트림이 길어지는 것을 막는다.
+   스크롤은 카루셀 컨테이너가 자체적으로 갖는다 — 페이지 가로 스크롤은 0(NFR-4).
+   트랙 직계 아이템(li)에 스냅·폭을 주는 이유: 시설 행 컴포넌트(VoucherRow/AltRow)가
+   이미 <li> 를 소유하고 있어 시그니처를 바꾸지 않고 붙이기 위해서다.
+   폭 85% = 다음 카드가 15% 보이는 피크 — "넘길 수 있음"이 글자 없이도 읽힌다. */
+.snap-track {
+  display: flex;
+  gap: 0.75rem;
+}
+.snap-track > * {
+  flex: 0 0 85%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+/* 데스크톱(lg+)은 카루셀을 풀어 준다 — 스트림 폭이 넉넉해 넘길 이유가 없다.
+   판정 카드는 기존 그리드(xl 에서 2열), 시설 카드는 세로 목록. */
+@media (min-width: 64rem) {
+  .snap-track > * {
+    flex: initial;
+  }
+  .snap-track--grid {
+    display: grid;
+    gap: 0.75rem;
+  }
+  .snap-track--stack {
+    display: block;
+  }
+  .snap-track--stack > * + * {
+    margin-top: 0.5rem;
+  }
+}
+@media (min-width: 80rem) {
+  .snap-track--grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
 .leaflet-container {
   font-family: var(--font-sans);

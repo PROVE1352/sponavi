@@ -115,7 +115,7 @@ export function Composer({
             value={text}
             onChange={(e) => setText(e.target.value)}
             data-testid="composer-input"
-            placeholder="자유롭게 입력하셔도 돼요"
+            placeholder="메시지를 입력하세요"
             autoComplete="off"
             className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 transition-colors duration-200 placeholder:text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400 dark:hover:border-slate-600"
           />
@@ -124,7 +124,7 @@ export function Composer({
           type="submit"
           data-testid="composer-send"
           disabled={pending || text.trim() === ''}
-          className="inline-flex min-h-11 shrink-0 items-center rounded-xl bg-brand-600 px-5 text-sm font-bold text-white transition-colors duration-200 ease-out hover:bg-brand-700 disabled:opacity-50"
+          className="press inline-flex min-h-11 shrink-0 items-center rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           보내기
         </button>

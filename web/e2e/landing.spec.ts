@@ -21,10 +21,12 @@ test('① 메인 랜딩은 실사용 전용 — 데모 문구·퀵스타트 칩�
   await expect(sub).toContainText('외부 AI')
   await expect(sub).toContainText('이름·연락처는 묻지 않습니다')
 
-  // 곧바로 첫 질문(나이) — 질문 버블 + 나이 칩이 이미 렌더돼 있다
+  // 곧바로 첫 질문(나이 1단계 = 연령대) — 질문 버블 + 연령대 칩이 이미 렌더돼 있다(v1.5)
   await expect(stream(page).getByText(/먼저 나이를 알려주세요/)).toBeVisible()
-  await expect(page.getByTestId('chip-age-10')).toBeVisible()
-  await expect(page.getByTestId('chip-age-72')).toBeVisible()
+  await expect(page.getByTestId('chip-ageband-u9')).toBeVisible()
+  await expect(page.getByTestId('chip-ageband-70s')).toBeVisible()
+  // 세부 나이 칩은 연령대를 고르기 전에는 없다
+  await expect(page.getByTestId('chip-age-27')).toHaveCount(0)
 
   // 데모 요소는 하나도 없다
   for (const id of ['P1', 'P2', 'P3', 'P4', 'P5']) {

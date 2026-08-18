@@ -2,10 +2,16 @@
 // 버블 구분은 색 + 정렬 + 아이콘 삼중(색맹 안전, A11Y-3).
 // 사실을 말하는 것은 나비 버블이 아니라 카드다 — 카드는 기존 컴포넌트를 그대로 재사용한다.
 
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { AssessRequest, AssessResponse } from '../types'
-import type { Chip, ChatMessage, FacilitySummaryMsg, FitnessTurnApi } from '../types_chat'
+import type {
+  Chip,
+  ChatMessage,
+  BotTextMsg,
+  FacilitySummaryMsg,
+  FitnessTurnApi,
+} from '../types_chat'
 import { EligibilityCard } from '../components/EligibilityCard'
 import { PathDiagram } from '../components/PathDiagram'
 import { SupplyGapBanner } from '../components/SupplyGapBanner'
@@ -15,7 +21,9 @@ import { FitnessFormCard } from '../components/FitnessForm'
 import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
+import { CardCarousel } from '../components/Carousel'
 import { BOT_NAME, primaryProgramId } from './policy'
+import { Typewriter } from './Typewriter'
 
 // 나비 아바타 — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
 // 액션 블루 디스크 위에 흰 나비: 윗날개는 불투명, 아랫날개는 반투명(투톤).
@@ -159,7 +167,7 @@ export function ChipRow({
             disabled={disabled}
             onClick={() => onPick(c)}
             className={
-              'inline-flex min-h-11 max-w-full flex-col justify-center rounded-full border-[1.5px] px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out disabled:opacity-60 ' +
+              'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-full border-[1.5px] px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out disabled:opacity-60 ' +
               (chosen
                 ? 'border-brand-600 bg-brand-600 text-white shadow-card'
                 : 'border-brand-200 bg-white text-brand-800 hover:border-brand-300 hover:bg-brand-50 dark:border-brand-500/40 dark:bg-slate-900 dark:text-brand-100 dark:hover:border-brand-300/60 dark:hover:bg-brand-700/25')
@@ -202,6 +210,7 @@ function FacilitySummaryCard({
   const { access, error } = useFacilityAccessibility(dvoucherIds)
   const restV = msg.totalVouchers - msg.vouchers.length
   const restA = msg.totalAlternatives - msg.alternatives.length
+  const cards = msg.vouchers.length + msg.alternatives.length
 
   return (
     <section
@@ -220,21 +229,27 @@ function FacilitySummaryCard({
         </div>
       </div>
 
-      {msg.vouchers.length > 0 && (
-        <ul className="mt-3 space-y-2">
-          {msg.vouchers.map((v) => (
-            <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-          ))}
-        </ul>
+      {/* 시설 카드는 가로 스와이프 카루셀(FR-12 AC9) — 이용권 가맹 → 공공·대안 순.
+          lg+ 에서는 카드 폭이 넉넉해 세로 목록으로 되돌린다. */}
+      {cards > 0 && (
+        <div className="mt-3">
+          <CardCarousel
+            testId="facility-carousel"
+            ariaLabel={`근처 자원 카드 ${cards}장, 좌우로 이동`}
+            count={cards}
+            layout="stack"
+            fade="card"
+          >
+            {msg.vouchers.map((v) => (
+              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+            ))}
+            {msg.alternatives.map((a) => (
+              <AltRow key={a.id} a={a} />
+            ))}
+          </CardCarousel>
+        </div>
       )}
-      {msg.alternatives.length > 0 && (
-        <ul className="mt-2 space-y-2">
-          {msg.alternatives.map((a) => (
-            <AltRow key={a.id} a={a} />
-          ))}
-        </ul>
-      )}
-      {msg.vouchers.length === 0 && msg.alternatives.length === 0 && (
+      {cards === 0 && (
         <p className="mt-3 rounded-xl bg-slate-100 p-4 text-sm text-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
           이 조건으로 보여드릴 근처 시설이 없습니다. 빈자리를 임의로 채우지 않고 있는 그대로 알려드려요.
         </p>
@@ -253,7 +268,7 @@ function FacilitySummaryCard({
           type="button"
           data-testid="open-map-panel"
           onClick={() => onOpenPanel('map')}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+          className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
         >
           지도에서 보기
         </button>
@@ -261,7 +276,7 @@ function FacilitySummaryCard({
           type="button"
           data-testid="open-list-panel"
           onClick={() => onOpenPanel('list')}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 transition-colors duration-200 ease-out hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
+          className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
         >
           시설 목록 전체 보기
         </button>
@@ -274,19 +289,94 @@ function AssessCards({ req, data }: { req: AssessRequest; data: AssessResponse }
   const primaryId = primaryProgramId(req)
   return (
     <section data-testid="assess-cards" aria-label="제도별 예상 자격" className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-2">
+      {/* 판정 카드는 가로 스와이프 카루셀(FR-12 AC9). lg+ 는 기존 그리드(xl 2열)로 복귀. */}
+      <CardCarousel
+        testId="assess-carousel"
+        ariaLabel={`예상 자격 카드 ${data.eligibility.length}장, 좌우로 이동`}
+        count={data.eligibility.length}
+        layout="grid"
+        fade="page"
+      >
         {data.eligibility.map((p) => (
-          <EligibilityCard
-            key={p.program_id}
-            p={p}
-            altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
-          />
+          <li key={p.program_id} className="min-w-0">
+            <EligibilityCard
+              p={p}
+              altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
+            />
+          </li>
         ))}
-      </div>
+      </CardCarousel>
       <p className="text-xs text-slate-600 dark:text-slate-400">
         ※ 여기 표시된 것은 <b>예상 자격</b>입니다. 최종 자격은 각 공식 신청처에서 확인됩니다.
       </p>
     </section>
+  )
+}
+
+// 나비 발화 버블(FR-12 AC10 타이프라이터 적용 대상은 여기 본문 텍스트뿐이다 —
+// 카드·고지 블록·사용자 버블에는 적용하지 않는다).
+function BotTextBubble({
+  msg,
+  showSender,
+  typing,
+}: {
+  msg: BotTextMsg
+  showSender: boolean
+  typing: boolean
+}) {
+  // 본문이 다 나온 뒤에야 보조 줄을 보여 준다(그 전엔 자리만 잡고 투명).
+  const [done, setDone] = useState(!typing)
+  const onDone = useCallback(() => setDone(true), [])
+  useEffect(() => {
+    if (!typing) setDone(true)
+  }, [typing])
+
+  return (
+    <BotLane showSender={showSender}>
+      <BotBubble tone={msg.tone}>
+        <p className="break-words whitespace-pre-line">
+          <Typewriter text={msg.text} animate={typing} onDone={onDone} />
+        </p>
+        {/* 보조 줄은 DOM 에 처음부터 있어 낭독은 1회 — 시각적으로만 뒤늦게 나타난다.
+            투명도만 바뀌므로 버블 높이가 도중에 변하지 않는다(스트림 흔들림 0). */}
+        {msg.sub && (
+          <p
+            data-testid="bot-sub"
+            className={
+              'mt-2 text-[13px] leading-snug break-words whitespace-pre-line text-slate-600 transition-opacity duration-200 ease-out dark:text-slate-400 ' +
+              (done ? 'opacity-100' : 'opacity-0')
+            }
+          >
+            {msg.sub}
+          </p>
+        )}
+        {msg.bullets && msg.bullets.length > 0 && (
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+            {msg.bullets.map((b, i) => (
+              <li key={i} className="break-words">
+                {b}
+              </li>
+            ))}
+          </ul>
+        )}
+        {msg.links && msg.links.length > 0 && (
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {msg.links.map((l) => (
+              <li key={l.url}>
+                <a
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="press inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-brand-500 px-4 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
+                >
+                  {l.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </BotBubble>
+    </BotLane>
   )
 }
 
@@ -303,57 +393,21 @@ export function MessageView({
   msg,
   h,
   showSender = true,
+  typing = false,
 }: {
   msg: ChatMessage
   h: MessageHandlers
   // 연속된 나비 발화 묶음의 첫 메시지에서만 아바타·이름을 보여 준다.
   showSender?: boolean
+  // 타이프라이터를 재생할 최신 봇 발화인가(FR-12 AC10). 나머지는 완성 상태로 그린다.
+  typing?: boolean
 }) {
   switch (msg.kind) {
     case 'user_text':
       return <UserBubble text={msg.text} />
 
     case 'bot_text':
-      return (
-        <BotLane showSender={showSender}>
-          <BotBubble tone={msg.tone}>
-            <p className="break-words whitespace-pre-line">{msg.text}</p>
-            {msg.sub && (
-              <p
-                data-testid="bot-sub"
-                className="mt-2 text-[13px] leading-snug break-words whitespace-pre-line text-slate-600 dark:text-slate-400"
-              >
-                {msg.sub}
-              </p>
-            )}
-            {msg.bullets && msg.bullets.length > 0 && (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                {msg.bullets.map((b, i) => (
-                  <li key={i} className="break-words">
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {msg.links && msg.links.length > 0 && (
-              <ul className="mt-2 flex flex-wrap gap-2">
-                {msg.links.map((l) => (
-                  <li key={l.url}>
-                    <a
-                      href={l.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-brand-500 px-4 text-sm font-semibold text-brand-800 transition-colors duration-200 ease-out hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
-                    >
-                      {l.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </BotBubble>
-        </BotLane>
-      )
+      return <BotTextBubble msg={msg} showSender={showSender} typing={typing} />
 
     case 'chip_question':
       return (

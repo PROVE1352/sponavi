@@ -55,15 +55,46 @@ export const DISABILITY_TYPES: DisabilityType[] = [
   '기타',
 ]
 
-// 나이 질문의 빠른 선택(자유 입력·검색과 병행). 값은 각 구간의 대표 나이가 아니라
-// 실제 입력값이므로, 칩은 "대표 연령"이 아니라 정확한 나이를 고르게 하는 보조 수단이다.
-const AGE_QUICK: { label: string; age: number }[] = [
-  { label: '10세', age: 10 },
-  { label: '14세', age: 14 },
-  { label: '27세', age: 27 },
-  { label: '32세', age: 32 },
-  { label: '72세', age: 72 },
+// ── 연령 2단계 칩(FR-12 AC6 v1.5) ──────────────────────────────────────
+//   1단계 연령대 → 2단계 그 구간의 세부 나이(+ 어느 단계서든 자유 입력 병행)
+//
+// ★ 구간은 "어떤 나이 칩을 보여줄지"만 정한다. 판정은 정확 나이로만 한다 —
+//   구간 대표값(예: 20대 → 25세) 추정은 금지다(P-1·P-2). 자격 경계가
+//   5·18·65세처럼 한 살 단위로 갈리기 때문에 대표값은 곧 오답이다.
+export interface AgeBand {
+  id: string
+  label: string
+  from: number
+  to: number
+  // 마지막 칸에서 한 단계 더 올라가는 상위 구간(70대 이상 → 80세 이상 → 90세 이상).
+  next?: string
+}
+
+export const AGE_BANDS: AgeBand[] = [
+  { id: 'u9', label: '9세 이하', from: 3, to: 9 },
+  { id: '10s', label: '10대', from: 10, to: 19 },
+  { id: '20s', label: '20대', from: 20, to: 29 },
+  { id: '30s', label: '30대', from: 30, to: 39 },
+  { id: '40s', label: '40대', from: 40, to: 49 },
+  { id: '50s', label: '50대', from: 50, to: 59 },
+  { id: '60s', label: '60대', from: 60, to: 69 },
+  { id: '70s', label: '70대 이상', from: 70, to: 79, next: '80s' },
+  // 아래 둘은 1단계 목록엔 없고, 앞 구간의 "더 위" 칩으로만 도달한다.
+  { id: '80s', label: '80세 이상', from: 80, to: 89, next: '90s' },
+  { id: '90s', label: '90세 이상', from: 90, to: 99 },
 ]
+
+// 1단계에 노출하는 연령대(9세 이하 ~ 70대 이상 8개).
+const AGE_BANDS_TOP = AGE_BANDS.filter((b) => b.id !== '80s' && b.id !== '90s')
+
+export function ageBandOf(id: string | null): AgeBand | null {
+  return AGE_BANDS.find((b) => b.id === id) ?? null
+}
+
+// 정확 나이 → 소속 구간(정정·프리필 시 세부 칩을 바로 그리기 위해).
+export function ageBandForAge(age: number): string | null {
+  return AGE_BANDS.find((b) => age >= b.from && age <= b.to)?.id ?? null
+}
 
 export const SEX_LABEL: Record<Sex, string> = { F: '여성', M: '남성' }
 
@@ -83,7 +114,9 @@ export const T = {
   greetPrivacy:
     '입력하신 내용은 저장하지 않고, 자유 입력 문장은 AI 이해를 위해서만 외부 AI에 전달돼요. 이름·연락처는 묻지 않습니다.',
 
-  askAge: '먼저 나이를 알려주세요. 아래 버튼으로 고르시거나 직접 입력하셔도 돼요.',
+  // 연령 2단계(FR-12 AC6 v1.5): 연령대 → 세부 나이. 어느 쪽이든 자유 입력 병행.
+  askAge: '먼저 나이를 알려주세요. 연령대를 고르시거나 직접 입력하셔도 돼요.',
+  askAgeDetail: '몇 세이신지 골라 주세요.',
   askSex: '성별을 골라 주세요.',
   askRegion: '어느 지역에 사시나요? 아래 검색창에서 찾아 고르실 수 있어요.',
   askIncome: '소득 구분을 골라 주세요. 심사가 아니라 스스로 고르는 항목이고, 저장하지 않아요.',
@@ -165,12 +198,36 @@ export const REGION_AMBIGUOUS_PROMPT = '같은 이름의 지역이 여러 곳이
 
 // ────────────────────────────── 질문 → 칩 ──────────────────────────────
 
-export function ageChips(): Chip[] {
-  return AGE_QUICK.map((a) => ({
-    id: `age-${a.age}`,
-    label: a.label,
-    action: { kind: 'answer', question: 'age', slots: { age: a.age } },
+// 1단계: 연령대 칩.
+export function ageBandChips(): Chip[] {
+  return AGE_BANDS_TOP.map((b) => ({
+    id: `ageband-${b.id}`,
+    label: b.label,
+    action: { kind: 'answer', question: 'age_band', slots: { age_band: b.id } },
   }))
+}
+
+// 2단계: 해당 구간의 세부 나이 칩. 마지막 구간에는 상위 구간으로 넘어가는 칩을 덧붙인다.
+export function ageChips(bandId: string | null): Chip[] {
+  const band = ageBandOf(bandId) ?? AGE_BANDS[0]
+  const chips: Chip[] = []
+  for (let a = band.from; a <= band.to; a += 1) {
+    chips.push({
+      id: `age-${a}`,
+      label: `${a}세`,
+      action: { kind: 'answer', question: 'age', slots: { age: a } },
+    })
+  }
+  const next = ageBandOf(band.next ?? null)
+  if (next) {
+    chips.push({
+      id: `ageband-${next.id}`,
+      label: next.label,
+      hint: '더 위 연령대를 볼게요',
+      action: { kind: 'answer', question: 'age_band', slots: { age_band: next.id } },
+    })
+  }
+  return chips
 }
 
 export function sexChips(): Chip[] {
@@ -289,7 +346,10 @@ export interface QuestionSpec {
   searchable?: boolean
 }
 
-export function questionSpec(q: QuestionId, ctx: { sigungu: Sigungu[]; personas: DemoPersona[] }): QuestionSpec {
+export function questionSpec(
+  q: QuestionId,
+  ctx: { sigungu: Sigungu[]; personas: DemoPersona[]; slots?: ChatSlots },
+): QuestionSpec {
   switch (q) {
     case 'greet':
       return {
@@ -298,8 +358,17 @@ export function questionSpec(q: QuestionId, ctx: { sigungu: Sigungu[]; personas:
         chips: personaChips(ctx.personas),
         select: 'action',
       }
-    case 'age':
-      return { question: 'age', text: T.askAge, chips: ageChips(), select: 'single' }
+    case 'age_band':
+      return { question: 'age_band', text: T.askAge, chips: ageBandChips(), select: 'single' }
+    case 'age': {
+      const band = ageBandOf(ctx.slots?.age_band ?? null)
+      return {
+        question: 'age',
+        text: band ? `${band.label} 중에서 ${T.askAgeDetail}` : T.askAgeDetail,
+        chips: ageChips(ctx.slots?.age_band ?? null),
+        select: 'single',
+      }
+    }
     case 'sex':
       return { question: 'sex', text: T.askSex, chips: sexChips(), select: 'single' }
     case 'region':
@@ -329,9 +398,11 @@ export function questionSpec(q: QuestionId, ctx: { sigungu: Sigungu[]; personas:
   }
 }
 
-// 질문 순서: 나이 → 성별 → 지역 → 소득 → 장애(유무 → 유형).
+// 질문 순서: 나이(연령대 → 세부 나이) → 성별 → 지역 → 소득 → 장애(유무 → 유형).
+// ★ age 가 채워지기 전에는 절대 다음으로 넘어가지 않는다 — 정확 나이 없이 판정 금지.
+//   자유 입력("32살")이 age 를 바로 채우면 2단계는 통째로 건너뛴다.
 export function nextQuestion(slots: ChatSlots): QuestionId | null {
-  if (slots.age == null) return 'age'
+  if (slots.age == null) return slots.age_band == null ? 'age_band' : 'age'
   if (slots.sex == null) return 'sex'
   if (slots.sigungu_cd == null) return 'region'
   if (slots.income_class == null) return 'income'
@@ -377,6 +448,7 @@ export function toAssessRequest(slots: ChatSlots, sigungu: Sigungu[]): AssessReq
 export function slotsFromRequest(req: AssessRequest): ChatSlots {
   return {
     age: req.age,
+    age_band: ageBandForAge(req.age),
     sex: req.sex,
     sigungu_cd: req.sigungu_cd,
     sigungu_nm: req.sigungu_nm,
@@ -390,6 +462,8 @@ export function slotsFromRequest(req: AssessRequest): ChatSlots {
 // 답변 에코(사용자 버블) 라벨.
 export function answerEcho(q: QuestionId, chip: Chip): string {
   switch (q) {
+    case 'age_band':
+      return `연령대: ${chip.label}`
     case 'age':
       return `나이: ${chip.label}`
     case 'sex':
@@ -411,6 +485,9 @@ export function answerEcho(q: QuestionId, chip: Chip): string {
 export function slotEditChips(changed: QuestionId[], slots: ChatSlots): Chip[] {
   const label = (q: QuestionId): string | null => {
     switch (q) {
+      // 연령대는 그 자체로 정정 대상이 아니다 — 나이 정정 칩이 2단계 흐름 전체를 다시 연다.
+      case 'age_band':
+        return null
       case 'age':
         return slots.age != null ? `나이 ${slots.age}세` : null
       case 'sex':

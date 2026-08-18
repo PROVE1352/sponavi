@@ -23,6 +23,9 @@ import type { AppError } from './components/ErrorPanel'
 // AssessRequest 의 부분형(수집 중 상태). 전부 채워지면 판정 요청을 만든다.
 export interface ChatSlots {
   age: number | null
+  // 연령 2단계 칩의 1단계 결과(FR-12 AC6 v1.5). 판정에는 절대 쓰이지 않는다 —
+  // 구간 대표값 추정 금지(P-1). 오직 "어떤 세부 나이 칩을 보여줄지"만 정한다.
+  age_band: string | null
   sex: Sex | null
   sigungu_cd: string | null
   sigungu_nm: string | null
@@ -36,6 +39,7 @@ export interface ChatSlots {
 
 export const EMPTY_SLOTS: ChatSlots = {
   age: null,
+  age_band: null,
   sex: null,
   sigungu_cd: null,
   sigungu_nm: null,
@@ -111,7 +115,16 @@ export interface FaqEntry {
 
 // ────────────────────────────── 칩(버튼) ──────────────────────────────
 
-export type QuestionId = 'greet' | 'age' | 'sex' | 'region' | 'income' | 'disability' | 'disability_type'
+export type QuestionId =
+  | 'greet'
+  // age_band = 연령대(1단계) · age = 그 구간의 세부 나이(2단계, FR-12 AC6 v1.5)
+  | 'age_band'
+  | 'age'
+  | 'sex'
+  | 'region'
+  | 'income'
+  | 'disability'
+  | 'disability_type'
 
 // 칩 1개가 하는 일. 칩 입력은 외부 API로 전송되지 않는다(FR-12 AC7).
 export type ChipAction =

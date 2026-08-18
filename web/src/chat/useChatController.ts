@@ -26,6 +26,7 @@ import type {
   PanelTab,
   QuestionId,
 } from '../types_chat'
+import { EMPTY_SLOTS } from '../types_chat'
 import { toAppError } from '../components/ErrorPanel'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
@@ -122,8 +123,15 @@ export function useChatController(demo = false) {
 
   // ── 질문 던지기 ──────────────────────────────────────────────
   const askQuestion = useCallback(
-    (q: QuestionId, list: Sigungu[] = sigungu, ps: DemoPersona[] = personas) => {
-      const spec = questionSpec(q, { sigungu: list, personas: ps })
+    (
+      q: QuestionId,
+      list: Sigungu[] = sigungu,
+      ps: DemoPersona[] = personas,
+      // 세부 나이 칩(2단계)은 방금 고른 연령대에 따라 달라진다 — 스토어 반영을 기다리지 않도록
+      // 호출부가 "지금 시점의 슬롯"을 함께 넘긴다.
+      slots: ChatSlots = state.slots,
+    ) => {
+      const spec = questionSpec(q, { sigungu: list, personas: ps, slots })
       const id = nextId('q')
       push({
         id,
@@ -138,7 +146,7 @@ export function useChatController(demo = false) {
       })
       dispatch({ type: 'setActiveQuestion', id })
     },
-    [dispatch, personas, push, sigungu],
+    [dispatch, personas, push, sigungu, state.slots],
   )
 
   // ── 판정 실행 ────────────────────────────────────────────────
@@ -199,13 +207,13 @@ export function useChatController(demo = false) {
     (slots: ChatSlots, list: Sigungu[] = sigungu) => {
       const q = nextQuestion(slots)
       if (q) {
-        askQuestion(q, list)
+        askQuestion(q, list, personas, slots)
         return
       }
       const req = toAssessRequest(slots, list)
       if (req) void runAssess(req)
     },
-    [askQuestion, runAssess, sigungu],
+    [askQuestion, personas, runAssess, sigungu],
   )
 
   // ── 부팅: 메타 로드 + 인사 ───────────────────────────────────
@@ -222,7 +230,8 @@ export function useChatController(demo = false) {
     // 나이 질문은 시군구·페르소나 메타를 기다리지 않으므로 인사 직후 바로 던진다.
     if (!demo) {
       dispatch({ type: 'setPhase', phase: 'collect' })
-      askQuestion('age', [], [])
+      // 1단계는 연령대 칩(FR-12 AC6 v1.5) — 시군구·페르소나 메타와 무관하다.
+      askQuestion('age_band', [], [], EMPTY_SLOTS)
     }
 
     // StrictMode 이중 마운트에서도 인사·메타 로드는 정확히 1회(booted 가드).
@@ -391,9 +400,9 @@ export function useChatController(demo = false) {
     lastAttempt.current = null
     push(botText(T.restarted, { sub: T.greetPrivacy }))
     dispatch({ type: 'setPhase', phase: 'collect' })
-    // 메인은 다시 첫 질문부터, 데모는 다시 퀵스타트 칩부터.
+    // 메인은 다시 첫 질문(연령대)부터, 데모는 다시 퀵스타트 칩부터.
     if (!demo) {
-      askQuestion('age')
+      askQuestion('age_band', sigungu, personas, EMPTY_SLOTS)
       return
     }
     const spec = questionSpec('greet', { sigungu, personas })
@@ -452,6 +461,15 @@ export function useChatController(demo = false) {
         }
         case 'edit': {
           push(userText(`${chip.label} 고치기`))
+          // 나이 정정은 2단계 흐름으로 다시 들어간다(FR-12 AC6 v1.5).
+          // 옛 나이를 비우지 않으면 연령대만 고른 순간 슬롯이 다 찬 것으로 보여
+          // 옛 나이로 판정이 튀어나간다 — 정확 나이 재확인이 이 흐름의 요점이다.
+          if (a.question === 'age' || a.question === 'age_band') {
+            const cleared: ChatSlots = { ...state.slots, age: null, age_band: null }
+            dispatch({ type: 'patchSlots', slots: { age: null, age_band: null } })
+            askQuestion('age_band', sigungu, personas, cleared)
+            return
+          }
           askQuestion(a.question)
           return
         }
@@ -490,6 +508,7 @@ export function useChatController(demo = false) {
       personas,
       push,
       runAssess,
+      sigungu,
       startFitness,
       state.slots,
     ],

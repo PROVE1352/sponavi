@@ -1,10 +1,11 @@
 // 채팅 스트림. role="log" + aria-live="polite" 로 새 봇 메시지를 낭독한다(FR-12 AC8).
 // 자동 스크롤은 "바닥에 붙어 있을 때만" — 사용자가 위로 스크롤 중이면 강제로 끌어내리지 않는다.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { ChatMessage } from '../types_chat'
 import { MessageView, NabiAvatar, type MessageHandlers } from './messages'
 import { BOT_NAME, T } from './policy'
+import { prefersReducedMotion } from './Typewriter'
 
 const STICK_THRESHOLD_PX = 160
 
@@ -17,6 +18,19 @@ export function ChatStream({
   pending: boolean
   handlers: MessageHandlers
 }) {
+  // 타이프라이터는 "가장 마지막 나비 발화" 하나만 재생한다(FR-12 AC10).
+  //   · 뒤에 새 나비 발화가 붙으면 → 앞의 것은 그 즉시 완성(스캔이 최신 것만 잡는다)
+  //   · 뒤에 사용자 발화가 붙으면(= 칩을 눌렀다) → 재생 중이던 것도 즉시 완성(null)
+  // 어느 쪽이든 최종 상태는 항상 완전한 문장이다 — 끊긴 채 남는 버블이 없다.
+  const typingId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i]
+      if (m.role === 'user') return null
+      if (m.kind === 'bot_text') return m.id
+    }
+    return null
+  }, [messages])
+
   const endRef = useRef<HTMLDivElement>(null)
   // 바닥에 붙어 있는가. 사용자가 위로 스크롤하면 false → 강제 스크롤하지 않는다.
   const stick = useRef(true)
@@ -39,7 +53,8 @@ export function ChatStream({
     const el = endRef.current
     if (!el) return
     autoUntil.current = Date.now() + 1400
-    el.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    // 부드럽게 따라간다(AC11). 모션 최소화 선호면 즉시 이동 — CSS 로는 못 막는 JS 스크롤이다.
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'end' })
     const timers = [250, 700, 1200].map((ms) =>
       setTimeout(() => {
         const doc = document.documentElement
@@ -64,16 +79,20 @@ export function ChatStream({
       className="flex min-w-0 flex-col gap-4 py-4"
     >
       {messages.map((m, i) => (
-        <MessageView
-          key={m.id}
-          msg={m}
-          h={handlers}
-          showSender={m.role === 'bot' && (i === 0 || messages[i - 1].role !== 'bot')}
-        />
+        // msg-in = 등장 모션(fade + 8px 상승, 200ms ease-out · FR-12 AC11).
+        // 마운트 시 한 번만 재생되고 reduced-motion 에서는 비활성.
+        <div key={m.id} className="msg-in min-w-0">
+          <MessageView
+            msg={m}
+            h={handlers}
+            showSender={m.role === 'bot' && (i === 0 || messages[i - 1].role !== 'bot')}
+            typing={m.id === typingId}
+          />
+        </div>
       ))}
 
       {pending && (
-        <div className="flex items-start gap-2" data-testid="chat-pending">
+        <div className="msg-in flex items-start gap-2" data-testid="chat-pending">
           <NabiAvatar />
           <div className="min-w-0">
             <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">{BOT_NAME}</p>

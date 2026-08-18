@@ -21,7 +21,18 @@ export async function openMain(page: Page): Promise<void> {
   await page.goto('/')
   await expect(stream(page)).toBeVisible()
   await expect(page.getByTestId('composer')).toBeVisible()
-  await expect(page.getByTestId('chip-age-27')).toBeVisible()
+  // v1.5: 첫 질문은 연령대(1단계) 칩이다 — 세부 나이 칩은 그 다음 턴에 나온다.
+  await expect(page.getByTestId('chip-ageband-20s')).toBeVisible()
+}
+
+// 연령 2단계 칩(FR-12 AC6 v1.5): 연령대 → 세부 나이.
+// 80·90대는 "70대 이상"의 마지막 칩을 타고 한 단계씩 올라간다.
+export async function pickAge(page: Page, age: number): Promise<void> {
+  const top = age <= 9 ? 'u9' : age >= 70 ? '70s' : `${Math.floor(age / 10)}0s`
+  await page.getByTestId(`chip-ageband-${top}`).click()
+  if (age >= 80) await page.getByTestId('chip-ageband-80s').click()
+  if (age >= 90) await page.getByTestId('chip-ageband-90s').click()
+  await page.getByTestId(`chip-age-${age}`).click()
 }
 
 // 데모 페이지(/#/demo) — 심사·시연 진입로. 퀵스타트 칩(P1~P5)이 인사 메시지 안에 렌더될 때까지.
@@ -37,9 +48,9 @@ export async function openDemo(page: Page): Promise<void> {
 // 메인에서 칩만으로 슬롯 5개를 채워 판정까지 간다(퀵스타트 없이 실사용 경로 완주).
 export async function fillMainSlots(
   page: Page,
-  opts: { age?: string; sex?: string; regionCd?: string; income?: string; disability?: string } = {},
+  opts: { age?: number; sex?: string; regionCd?: string; income?: string; disability?: string } = {},
 ): Promise<void> {
-  await page.getByTestId(`chip-age-${opts.age ?? '27'}`).click()
+  await pickAge(page, opts.age ?? 27)
   await page.getByTestId(`chip-sex-${opts.sex ?? 'M'}`).click()
   await page.getByTestId('region-search').fill('성북')
   await page.getByTestId(`chip-region-${opts.regionCd ?? '11290'}`).click()
@@ -85,8 +96,18 @@ export async function startFitnessThroughParq(page: Page): Promise<void> {
 // 캡처 직전에만 문서 흐름(static)으로 되돌려 헤더는 맨 위, 컴포저는 맨 아래에 담는다.
 // (레이아웃 검사인 assertNoHorizontalScroll 은 반드시 이 호출 전에 한다.)
 export async function shot(page: Page, path: string): Promise<void> {
+  // 타이프라이터(FR-12 AC10)가 재생 중이면 문장이 잘린 채로 찍힌다 — 완료를 기다린다.
+  await settleTypewriter(page)
   await page.addStyleTag({ content: '[class*="sticky"]{position:static !important}' })
-  await page.screenshot({ path, fullPage: true })
+  // 등장 모션(msg-in)이 진행 중인 프레임을 잡지 않도록 애니메이션은 종료 상태로 고정.
+  await page.screenshot({ path, fullPage: true, animations: 'disabled' })
+}
+
+// 진행 중인 봇 발화 타이프라이터가 전부 완성될 때까지(최대 2.5s 설계 상한).
+export async function settleTypewriter(page: Page): Promise<void> {
+  await page.waitForFunction(() => document.querySelectorAll('[data-typing="true"]').length === 0, {
+    timeout: 5_000,
+  })
 }
 
 // 모바일 가로 스크롤 0(요건 4): 문서 스크롤폭이 뷰포트를 넘지 않는다(지도·표는 자체 스크롤).

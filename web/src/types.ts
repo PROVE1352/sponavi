@@ -5,12 +5,16 @@ export type Sex = 'M' | 'F'
 // 소득계층 자가선언 (API.md: 기초생활수급 | 차상위 | 한부모 | 그외)
 export type IncomeClass = '기초생활수급' | '차상위' | '한부모' | '그외'
 
+// 장애 유형 8택(FR-01/FR-12 AC6). 법정 유형 명칭을 그대로 쓴다(A11Y-5 존중 표현).
+// 서버 계약(models.py Disability.type)은 자유 문자열이라 값 추가는 하위호환.
 export type DisabilityType =
   | '지체'
+  | '뇌병변'
   | '시각'
   | '청각'
+  | '언어'
   | '지적'
-  | '뇌병변'
+  | '자폐성'
   | '기타'
 
 export interface Disability {

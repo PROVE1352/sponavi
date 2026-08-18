@@ -56,6 +56,20 @@ function markerTitle(p: MapPoint): string {
   return [p.name, kindLabel(p.kind), where].filter(Boolean).join(' · ')
 }
 
+// 패널 상주 1인스턴스라 탭 전환·시트 접힘으로 컨테이너 크기가 바뀐다(재마운트 금지, §11.4).
+// 크기 변화 시 invalidateSize 로 타일 레이아웃을 되살린다.
+function AutoResize() {
+  const map = useMap()
+  useEffect(() => {
+    const el = map.getContainer()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => map.invalidateSize())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [map])
+  return null
+}
+
 function FitBounds({ points }: { points: MapPoint[] }) {
   const map = useMap()
   useEffect(() => {
@@ -113,6 +127,7 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 기여자'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        <AutoResize />
         <FitBounds points={points} />
         {points.map((p) => (
           <Marker

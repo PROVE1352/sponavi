@@ -92,15 +92,23 @@ export function FitnessStep({
   sex,
   nearby,
   onApplyFilter,
+  openSignal = 0,
 }: {
   age: number
   sex: Sex
   nearby: Nearby
   onApplyFilter: (sports: string[]) => void
+  // 챗에서 intent=start_fitness 로 블록을 펼칠 때 증가한다(0이면 아무 일도 하지 않음).
+  openSignal?: number
 }) {
   const [open, setOpen] = useState(false)
   // PAR-Q 스크리닝 응답: 로컬 상태로만 두고 어디에도 저장·전송하지 않는다(ARCHITECTURE §8).
   const [parqOk, setParqOk] = useState(false)
+
+  // 외부(챗 정책)에서 블록 전개를 요청한 경우. 닫는 조작은 사용자만 한다.
+  useEffect(() => {
+    if (openSignal > 0) setOpen(true)
+  }, [openSignal])
 
   const [items, setItems] = useState<FitnessItemsResponse | null>(null)
   const [itemsError, setItemsError] = useState(false)

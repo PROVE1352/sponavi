@@ -20,6 +20,8 @@ import type {
   Sigungu,
 } from '../types'
 import type { AccessibilityMap } from '../types_accessibility'
+import type { ChatNluRequest, ChatNluResponse, FaqEntry } from '../types_chat'
+import { MOCK_FAQ, MOCK_NLU_RULES } from '../mocks/chat'
 import {
   FITNESS_RESPONSE,
   PERSONA_REQUESTS,
@@ -262,6 +264,24 @@ export async function getPersonas(): Promise<DemoPersona[]> {
     10_000,
   )
   return raw.map(normalizePersona)
+}
+
+// ---- v2 챗 (API.md /api/chat/*) ----
+//
+// 칩(버튼) 입력은 이 엔드포인트를 절대 호출하지 않는다 — 클라 상태기계가 슬롯을 직접 갱신한다.
+// 자유 텍스트가 왔을 때만 호출(FR-12 AC7 고지의 근거).
+
+// 자유 텍스트 이해 전용. POST 라 재시도 없음, 타임아웃 15s(서버 LLM 12s + 여유).
+// 목모드에서는 애초에 호출하지 않지만(칩 모드 강등), 호출되더라도 rules 폴백 형태를 준다.
+export function chatNlu(body: ChatNluRequest): Promise<ChatNluResponse> {
+  if (useMockData()) return delay(MOCK_NLU_RULES, 0)
+  return post<ChatNluRequest, ChatNluResponse>('/chat/nlu', body, 15_000)
+}
+
+// FAQ 고정 사전(정적·캐시 가능). 답변 본문은 서버가 rules.json verified 필드로 조립한다.
+export function chatFaq(): Promise<FaqEntry[]> {
+  if (useMockData()) return delay(MOCK_FAQ, 0)
+  return get<FaqEntry[]>('/chat/faq', 10_000)
 }
 
 // FR-10 접근성 배치 조회. id 배열 → {id: {types, amenities, source, checked}}.

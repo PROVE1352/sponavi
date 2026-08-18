@@ -12,6 +12,55 @@ function matchesFilter(sports: string[], filter?: string[]): boolean {
   return sports.some((s) => filter.includes(s))
 }
 
+// FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
+// 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
+// 챗 스트림의 시설 요약 카드도 같은 규약을 쓰도록 훅으로 분리해 export 한다(§11.4).
+export function useFacilityAccessibility(ids: string[]): {
+  access: AccessibilityMap
+  loading: boolean
+  error: boolean
+  reload: () => void
+} {
+  const [access, setAccess] = useState<AccessibilityMap>({})
+  const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const loadToken = useRef(0)
+  const key = ids.join(',')
+
+  const load = useCallback((list: string[]) => {
+    if (list.length === 0) {
+      setAccess({})
+      setError(false)
+      setLoading(false)
+      return
+    }
+    const token = ++loadToken.current
+    setLoading(true)
+    setError(false)
+    getAccessibility(list)
+      .then((m) => {
+        if (token !== loadToken.current) return
+        setAccess(m)
+        setError(false)
+      })
+      .catch(() => {
+        if (token !== loadToken.current) return
+        setAccess({}) // 거짓 데이터로 채우지 않는다(정직 원칙) — 미상으로 남긴다
+        setError(true)
+      })
+      .finally(() => {
+        if (token === loadToken.current) setLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    load(key === '' ? [] : key.split(','))
+  }, [key, load])
+
+  const reload = useCallback(() => load(key === '' ? [] : key.split(',')), [key, load])
+  return { access, loading, error, reload }
+}
+
 export function NearbyList({
   nearby,
   filterSports,
@@ -21,13 +70,7 @@ export function NearbyList({
   filterSports?: string[]
   onClearFilter?: () => void
 }) {
-  // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
-  // 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
-  const [access, setAccess] = useState<AccessibilityMap>({})
-  const [accessError, setAccessError] = useState(false)
-  const [accessLoading, setAccessLoading] = useState(false)
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
-  const loadToken = useRef(0)
 
   const dvoucherIds = useMemo(
     () =>
@@ -37,37 +80,15 @@ export function NearbyList({
     [nearby],
   )
   const dvoucherKey = dvoucherIds.join(',')
-
-  const loadAccess = useCallback((ids: string[]) => {
-    if (ids.length === 0) {
-      setAccess({})
-      setAccessError(false)
-      setAccessLoading(false)
-      return
-    }
-    const token = ++loadToken.current
-    setAccessLoading(true)
-    setAccessError(false)
-    getAccessibility(ids)
-      .then((m) => {
-        if (token !== loadToken.current) return
-        setAccess(m)
-        setAccessError(false)
-      })
-      .catch(() => {
-        if (token !== loadToken.current) return
-        setAccess({}) // 거짓 데이터로 채우지 않는다(정직 원칙) — 미상으로 남긴다
-        setAccessError(true)
-      })
-      .finally(() => {
-        if (token === loadToken.current) setAccessLoading(false)
-      })
-  }, [])
+  const {
+    access,
+    loading: accessLoading,
+    error: accessError,
+    reload: reloadAccess,
+  } = useFacilityAccessibility(dvoucherIds)
 
   useEffect(() => {
     setSelectedAmenities([]) // 새 결과마다 필터 초기화
-    loadAccess(dvoucherIds)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dvoucherKey])
 
   const hasDvoucher = dvoucherIds.length > 0
@@ -152,7 +173,7 @@ export function NearbyList({
           <button
             type="button"
             data-testid="accessibility-retry"
-            onClick={() => loadAccess(dvoucherIds)}
+            onClick={reloadAccess}
             className="rounded-md px-2 py-1 text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
           >
             다시 시도
@@ -286,7 +307,8 @@ function AccessibilityTags({ data, error }: { data?: FacilityAccessibility; erro
   )
 }
 
-function VoucherRow({
+// 챗 스트림의 시설 요약 카드가 같은 행 컴포넌트를 재사용한다(§11.4 export 승격).
+export function VoucherRow({
   v,
   accessibility,
   accessError,
@@ -343,7 +365,7 @@ function VoucherRow({
   )
 }
 
-function AltRow({ a }: { a: AlternativeFacility }) {
+export function AltRow({ a }: { a: AlternativeFacility }) {
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-2">

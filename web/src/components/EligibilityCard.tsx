@@ -102,7 +102,8 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
 }
 
 // 예상 선정순위 블록: "신청은 소득 무관" 강조 + 선정은 우선순위제(대기 가능) 구분.
-function SelectionBlock({ selection }: { selection: Selection }) {
+// 챗 스트림에서도 단독 임베드할 수 있도록 export (ARCHITECTURE §11.4).
+export function SelectionBlock({ selection }: { selection: Selection }) {
   const undetermined = selection.expected_rank == null
   return (
     <div
@@ -141,7 +142,7 @@ function SelectionBlock({ selection }: { selection: Selection }) {
 
 // 대체경로 블록: 자격 충족·저순위(4·5/미정) dvoucher → '지금 바로 되는 것'(공식 확인 대안 상위 3),
 // 자격 미충족 제도 → 일반 대체경로 상위 3.
-function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges: AltEdge[] }) {
+export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges: AltEdge[] }) {
   const rank = card.selection?.expected_rank
   const lowOrUndetermined = rank === 4 || rank === 5 || rank == null
   const nowAvailable = card.eligible && card.selection != null && lowOrUndetermined

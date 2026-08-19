@@ -122,7 +122,7 @@
 - AC5: `reply` 후필터 — 숫자·금액·%·프로그램명·자격 단정 표현 감지 시 reply 폐기(null), 클라는 템플릿 사용(FR-08 AC6 문법, `_whitelist_filter` 미러).
 - AC6: 발화 원문·슬롯을 서버 로그에 기록하지 않는다(P-3). 관측 로그는 `{provider, ms, ok, fallback_reason}`만.
 - AC7: 프롬프트 인젝션 방어 — 발화가 무엇이든 판정 입력은 pydantic 검증 통과 슬롯만 반영됨을 테스트로 증명(발화로 자격·순위 조작 불가).
-- AC8: FAQ 자유 질문은 intent=ask_faq + faq_key 라우팅만 — **답변 본문은 rules.json verified 필드로 조립한 고정 사전**(`GET /api/chat/faq`)에서 나온다. LLM이 답을 쓰지 않는다(§0-5 날조 금지).
+- AC8: FAQ 자유 질문은 intent=ask_faq + faq_key 라우팅만 — **답변 본문은 rules.json verified 필드로 조립한 고정 사전**(`GET /api/chat/faq`)에서 나온다. LLM이 답을 쓰지 않는다(§0-5 날조 금지). *(v1.8 단서, 친구 QA 반영)* 자격 사실이 아닌 **서비스 자체 설명 항목**(`how_it_works` — 데이터 출처·판정 방식·비저장 고지, 자격 수치 미포함)은 코드 소유 고정 문안으로 허용. 꼭 맞는 키가 없으면 faq_key=null(억지 유사 매칭 금지 — "조사 방식" 질문이 신청방법 카드로 오라우팅되던 실사례 봉합).
 
 ## 3. 기능 요구사항 — AI 체력처방 (M1)
 

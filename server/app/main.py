@@ -104,20 +104,24 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# self + inline style 허용(Tailwind v4 / Leaflet 인라인 스타일 특성).
-# 지도 타일은 https://{s}.tile.openstreetmap.org 이므로 img-src 에 필수 허용.
-# 마커는 L.divIcon(인라인 HTML)이라 외부 이미지 CDN 불필요. data: 는 파비콘/
-# leaflet 내부 1x1 gif 등. 외부 kspo/svoucher 링크는 <a href> 네비게이션이라
-# 리소스 지시자 대상이 아님(허용 호스트 추가 불필요).
+# self + inline style 허용(Tailwind v4 / MapLibre 인라인 스타일 특성).
+# 지도는 MapLibre GL + OpenFreeMap 벡터 타일(v1.8) — 스타일 JSON·타일(pbf)·글리프·
+# 스프라이트를 전부 fetch 로 받으므로 connect-src 에 https://tiles.openfreemap.org 가
+# 필수다(래스터 타일 <img> 시절의 *.tile.openstreetmap.org 는 더 이상 필요 없음).
+# MapLibre 는 워커를 blob: URL 로 띄우므로 worker-src blob: 도 필요하고,
+# 스프라이트/래스터(ne2_shaded)는 blob:·data: 로도 그려진다.
+# 마커는 자체 DOM 엘리먼트라 외부 이미지 CDN 불필요. 외부 kspo/svoucher 링크는
+# <a href> 네비게이션이라 리소스 지시자 대상이 아님(허용 호스트 추가 불필요).
 _CSP = (
     "default-src 'self'; "
     "base-uri 'self'; "
     "object-src 'none'; "
     "frame-ancestors 'none'; "
-    "img-src 'self' data: https://*.tile.openstreetmap.org; "
+    "img-src 'self' data: blob: https://tiles.openfreemap.org; "
     "style-src 'self' 'unsafe-inline'; "
     "script-src 'self'; "
-    "connect-src 'self'; "
+    "worker-src 'self' blob:; "
+    "connect-src 'self' https://tiles.openfreemap.org; "
     "font-src 'self' data:"
 )
 

@@ -509,3 +509,16 @@ def test_access_log_has_no_utterance(client, caplog, monkeypatch):
     assert "chat_nlu" in text
     assert secret not in text
     assert "slot" not in text and "text" not in text
+
+
+def test_faq_how_it_works_service_facts_only():
+    """how_it_works(서비스 원리)는 자격 수치를 담지 않는다 — 친구 QA 오라우팅 공백 보완."""
+    st = _fresh_store()
+    items = {i["key"]: i for i in chat.faq_list(st)}
+    item = items["how_it_works"]
+    assert "공공데이터" in item["answer"] and "저장하지 않아요" in item["answer"]
+    assert "예상 자격" in item["answer"], "예상 자격 고지(P-4)"
+    import re
+    assert not re.search(r"\d+\s*(원|만원|세|순위)", item["answer"]), "자격 수치는 제도 FAQ 소관"
+    assert item["source_url"].startswith("http") and item["checked"]
+    assert "how_it_works" in chat.FAQ_KEYS  # NLU 라우팅 enum에 포함(스키마 자동 반영)

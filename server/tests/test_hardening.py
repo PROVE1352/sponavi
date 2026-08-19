@@ -39,8 +39,13 @@ def test_security_headers_present(client):
     assert h["Referrer-Policy"] == "strict-origin-when-cross-origin"
     csp = h["Content-Security-Policy"]
     assert "default-src 'self'" in csp
-    assert "'unsafe-inline'" in csp                       # Tailwind/Leaflet
-    assert "https://*.tile.openstreetmap.org" in csp      # 지도 타일 필수
+    assert "'unsafe-inline'" in csp                       # Tailwind/MapLibre
+    # 지도 = MapLibre GL + OpenFreeMap 벡터 타일(v1.8): 스타일 JSON·pbf·글리프·
+    # 스프라이트를 fetch 로 받으므로 connect-src 허용이 필수, 워커는 blob: 로 뜬다.
+    assert "connect-src 'self' https://tiles.openfreemap.org" in csp
+    assert "worker-src 'self' blob:" in csp
+    assert "blob:" in csp.split("img-src")[1].split(";")[0]
+    assert "openstreetmap.org" not in csp                 # 래스터 타일 시절 잔재 없음
     assert "frame-ancestors 'none'" in csp
 
 

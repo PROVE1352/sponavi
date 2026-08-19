@@ -21,6 +21,7 @@ export const INITIAL_STATE: ChatState = {
   slots: { ...EMPTY_SLOTS },
   phase: 'greet',
   panel: { open: false, tab: 'map' },
+  panelFocus: 0,
   filterSports: undefined,
   llmMode: 'llm',
   lastAssess: null,
@@ -42,7 +43,8 @@ export type ChatAction =
   | { type: 'setPhase'; phase: ChatPhase }
   | { type: 'setPending'; pending: boolean }
   | { type: 'setLlmMode'; mode: LlmMode }
-  | { type: 'setPanel'; open?: boolean; tab?: PanelTab }
+  // focus = "패널을 봐 달라"는 명시적 요청(지도·목록 버튼/칩) — 셸이 패널로 스크롤한다.
+  | { type: 'setPanel'; open?: boolean; tab?: PanelTab; focus?: boolean }
   | { type: 'setFilterSports'; sports?: string[] }
   | { type: 'setAssess'; req: AssessRequest; data: AssessResponse }
   | { type: 'setPersona'; id: string | null }
@@ -90,6 +92,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           open: action.open ?? state.panel.open,
           tab: action.tab ?? state.panel.tab,
         },
+        panelFocus: action.focus ? state.panelFocus + 1 : state.panelFocus,
       }
     case 'setFilterSports':
       return { ...state, filterSports: action.sports }

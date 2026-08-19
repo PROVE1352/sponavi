@@ -140,16 +140,25 @@ export function SelectionBlock({ selection }: { selection: Selection }) {
   )
 }
 
-// 대체경로 블록: 자격 충족·저순위(4·5/미정) dvoucher → '지금 바로 되는 것'(공식 확인 대안 상위 3),
-// 자격 미충족 제도 → 일반 대체경로 상위 3.
-export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges: AltEdge[] }) {
+// 대체경로 블록에 실제로 무엇이 들어가는지 — 블록을 카드 밖(모바일 결과 덱의 슬라이드)에서
+// 그릴 때 "빈 슬라이드"를 만들지 않으려면 렌더 전에 개수를 알아야 한다(FR-12 AC9 v1.7).
+export function altRouteItems(
+  card: ProgramEligibility,
+  altEdges: AltEdge[],
+): { items: AltEdge[]; nowAvailable: boolean } {
   const rank = card.selection?.expected_rank
   const lowOrUndetermined = rank === 4 || rank === 5 || rank == null
   const nowAvailable = card.eligible && card.selection != null && lowOrUndetermined
-
   const items = nowAvailable
     ? altEdges.filter((a) => a.curated.startsWith('공식 확인')).slice(0, 3)
     : altEdges.slice(0, 3)
+  return { items, nowAvailable }
+}
+
+// 대체경로 블록: 자격 충족·저순위(4·5/미정) dvoucher → '지금 바로 되는 것'(공식 확인 대안 상위 3),
+// 자격 미충족 제도 → 일반 대체경로 상위 3.
+export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges: AltEdge[] }) {
+  const { items, nowAvailable } = altRouteItems(card, altEdges)
   if (items.length === 0) return null
 
   const heading = nowAvailable ? '지금 바로 되는 것' : '대체경로 · 지금 이용 가능한 대안'

@@ -4,16 +4,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AssessRequest, AssessResponse, Sigungu } from '../types'
+import type { AssessRequest, AssessResponse } from '../types'
 import type {
   Chip,
   ChatMessage,
   BotTextMsg,
   ChipQuestionMsg,
-  FacilitySummaryMsg,
+  AssessResultMsg,
   FitnessTurnApi,
 } from '../types_chat'
-import { EligibilityCard } from '../components/EligibilityCard'
+import { AltRoutesBlock, EligibilityCard, altRouteItems } from '../components/EligibilityCard'
 import { PathDiagram } from '../components/PathDiagram'
 import { SupplyGapBanner } from '../components/SupplyGapBanner'
 import { AltRow, VoucherRow, useFacilityAccessibility } from '../components/NearbyList'
@@ -22,9 +22,27 @@ import { FitnessFormCard } from '../components/FitnessForm'
 import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
-import { CardCarousel } from '../components/Carousel'
-import { BOT_NAME, primaryProgramId, regionChips } from './policy'
+import { CardCarousel, CardDeck } from '../components/Carousel'
+import { BOT_NAME, T, primaryProgramId } from './policy'
 import { Typewriter } from './Typewriter'
+
+// 데스크톱(lg = 64rem) 여부. 결과는 이 한 가지로 두 형태 중 하나만 마운트한다 —
+// CSS 로 둘 다 그려 놓고 숨기면 같은 카드가 DOM 에 두 벌 생겨 낭독·검사가 겹친다.
+const LG_QUERY = '(min-width: 64rem)'
+
+function useIsWide(): boolean {
+  const [wide, setWide] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(LG_QUERY).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(LG_QUERY)
+    const onChange = () => setWide(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return wide
+}
 
 // 나비 아바타 — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
 // 액션 블루 디스크 위에 흰 나비: 윗날개는 불투명, 아랫날개는 반투명(투톤).
@@ -192,51 +210,6 @@ export function ChipRow({
   )
 }
 
-// ── 지역 검색(FR-12 AC6) ────────────────────────────────────────────────
-// 질문 버블 아래 칩 컨테이너 안에 들어가는 소형 검색창 + 결과 칩.
-// 입력한 글자는 전부 로컬 필터링이라 외부로 전송되지 않는다(P-3).
-const REGION_LIMIT = 12
-
-function RegionSearch({ sigungu, onPick }: { sigungu: Sigungu[]; onPick: (chip: Chip) => void }) {
-  const [q, setQ] = useState('')
-  const matches = useMemo(() => {
-    const needle = q.trim()
-    const list = needle === '' ? sigungu : sigungu.filter((s) => s.nm.includes(needle))
-    return regionChips(list, REGION_LIMIT)
-  }, [q, sigungu])
-
-  return (
-    <div className="space-y-2">
-      <label className="block max-w-sm">
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-          지역 검색 (입력한 글자는 전송되지 않아요)
-        </span>
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          data-testid="region-search"
-          placeholder="예: 성북, 인천 서구"
-          autoComplete="off"
-          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 transition-colors duration-200 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:hover:border-slate-600"
-        />
-      </label>
-      {matches.length > 0 ? (
-        <ChipRow chips={matches} select="single" ariaLabel="지역 선택" onPick={onPick} />
-      ) : (
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          검색 결과가 없어요. 시군구 이름의 일부만 넣어 보세요.
-        </p>
-      )}
-      {sigungu.length > REGION_LIMIT && q.trim() === '' && (
-        <p className="text-xs text-slate-600 dark:text-slate-400">
-          전체 {sigungu.length}개 지역 중 일부만 보여드려요. 검색해서 찾아 주세요.
-        </p>
-      )}
-    </div>
-  )
-}
-
 // ── 질문 버블 + 인라인 칩(FR-12 AC1 v1.6) ────────────────────────────────
 // 칩은 컴포저가 아니라 **질문 버블 바로 아래**에 붙는다(표준 퀵리플라이 문법).
 //   · 버블 타이핑이 끝난 뒤에야 칩이 나타난다(AC10 v1.6) — 질문보다 답이 먼저 뜨지 않는다.
@@ -284,17 +257,13 @@ function ChipQuestion({
           : done && (
               // msg-in = 버블 타이핑 완료 뒤의 fade+상승 등장(reduced-motion 에서는 비활성).
               <div data-testid="inline-chips" className="msg-in mt-2">
-                {msg.searchable ? (
-                  <RegionSearch sigungu={h.sigungu} onPick={(c) => h.onChip(c, msg.id)} />
-                ) : (
-                  <ChipRow
-                    chips={msg.chips}
-                    select={msg.select}
-                    ariaLabel={msg.text}
-                    answeredLabel={msg.answeredLabel}
-                    onPick={(c) => h.onChip(c, msg.id)}
-                  />
-                )}
+                <ChipRow
+                  chips={msg.chips}
+                  select={msg.select}
+                  ariaLabel={msg.text}
+                  answeredLabel={msg.answeredLabel}
+                  onPick={(c) => h.onChip(c, msg.id)}
+                />
               </div>
             )}
       </div>
@@ -302,122 +271,274 @@ function ChipQuestion({
   )
 }
 
-// ── 시설 요약 카드(스트림 단독 완결, FR-12 AC3 / A11Y-1) ────────────────────
-// 패널을 열지 않아도 대표 시설을 스트림에서 그대로 볼 수 있다.
-function FacilitySummaryCard({
-  msg,
-  onOpenPanel,
-}: {
-  msg: FacilitySummaryMsg
-  onOpenPanel: (tab: 'map' | 'list') => void
-}) {
+// ── 판정 결과(FR-12 AC9 v1.7) ────────────────────────────────────────────
+// 스트림 하나로 정보가 완결된다(AC3) — 패널을 열지 않아도 여기서 다 볼 수 있다.
+//   모바일(<lg): 판정 카드 → 대체경로 → 공급공백·커버리지 → 시설 을 단일 가로 덱의 슬라이드로
+//   데스크톱(lg+): 예전처럼 세로 블록(그리드 + 배너 + 시설 요약 카드)
+// 시설 미리보기 개수는 두 형태가 같다.
+const VOUCHER_PREVIEW = 3
+const ALT_PREVIEW = 2
+
+const ELIGIBILITY_NOTE = (
+  <>
+    ※ 여기 표시된 것은 <b>예상 자격</b>입니다. 최종 자격은 각 공식 신청처에서 확인됩니다.
+  </>
+)
+
+// 시설 요약의 머리(구 단위 카운트 배지)와 발(나머지 안내 + 패널 열기 버튼)은
+// 덱 슬라이드와 데스크톱 카드가 같은 것을 쓴다.
+function FacilityCounts({ req, data }: { req: AssessRequest; data: AssessResponse }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {/* 이용권은 구 단위 카운트(반경 문구 금지, FR-04 AC2) */}
+      <Badge tone="brand">
+        {req.sigungu_nm} 이용권 가맹 {data.nearby.voucher_facilities.length}곳
+      </Badge>
+      <Badge tone="ok">공공·대안 {data.nearby.alternatives.length}곳</Badge>
+    </div>
+  )
+}
+
+function FacilityRest({ data }: { data: AssessResponse }) {
+  const restV = Math.max(0, data.nearby.voucher_facilities.length - VOUCHER_PREVIEW)
+  const restA = Math.max(0, data.nearby.alternatives.length - ALT_PREVIEW)
+  if (restV === 0 && restA === 0) return null
+  return (
+    <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+      나머지 {restV > 0 ? `이용권 가맹 ${restV}곳` : ''}
+      {restV > 0 && restA > 0 ? ' · ' : ''}
+      {restA > 0 ? `공공·대안 ${restA}곳` : ''}은 시설 목록에서 볼 수 있어요.
+    </p>
+  )
+}
+
+function FacilityActions({ onOpenPanel }: { onOpenPanel: (tab: 'map' | 'list') => void }) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      <button
+        type="button"
+        data-testid="open-map-panel"
+        onClick={() => onOpenPanel('map')}
+        className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        지도에서 보기
+      </button>
+      <button
+        type="button"
+        data-testid="open-list-panel"
+        onClick={() => onOpenPanel('list')}
+        className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
+      >
+        시설 목록 전체 보기
+      </button>
+    </div>
+  )
+}
+
+function EmptyFacilities() {
+  return (
+    <p className="mt-3 rounded-xl bg-slate-100 p-4 text-sm text-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+      이 조건으로 보여드릴 근처 시설이 없습니다. 빈자리를 임의로 채우지 않고 있는 그대로 알려드려요.
+    </p>
+  )
+}
+
+// dvoucher 가맹 시설의 접근성 보조 정보(FR-10). 두 형태가 같은 훅을 쓴다.
+function usePreviewAccessibility(data: AssessResponse) {
+  const vouchers = useMemo(
+    () => data.nearby.voucher_facilities.slice(0, VOUCHER_PREVIEW),
+    [data.nearby.voucher_facilities],
+  )
+  const alternatives = useMemo(
+    () => data.nearby.alternatives.slice(0, ALT_PREVIEW),
+    [data.nearby.alternatives],
+  )
   const dvoucherIds = useMemo(
-    () => msg.vouchers.filter((v) => v.source === 'dvoucher').map((v) => v.id),
-    [msg.vouchers],
+    () => vouchers.filter((v) => v.source === 'dvoucher').map((v) => v.id),
+    [vouchers],
   )
   const { access, error } = useFacilityAccessibility(dvoucherIds)
-  const restV = msg.totalVouchers - msg.vouchers.length
-  const restA = msg.totalAlternatives - msg.alternatives.length
-  const cards = msg.vouchers.length + msg.alternatives.length
+  return { vouchers, alternatives, access, error }
+}
+
+// ── 모바일 결과 덱 ───────────────────────────────────────────────────────
+function ResultDeck({
+  req,
+  data,
+  onOpenPanel,
+}: {
+  req: AssessRequest
+  data: AssessResponse
+  onOpenPanel: (tab: 'map' | 'list') => void
+}) {
+  const { vouchers, alternatives, access, error } = usePreviewAccessibility(data)
+  const primaryId = primaryProgramId(req)
+  const primary = data.eligibility.find((p) => p.program_id === primaryId)
+  // 덱은 한 번에 한 장만 보이므로 "내 상황의 제도"가 첫 장이어야 한다
+  // (비장애=스포츠강좌이용권 / 장애=장애인스포츠강좌이용권). 데스크톱은 전부 한눈에 보여 순서 유지.
+  const cards = useMemo(
+    () => [...data.eligibility].sort((a, b) => Number(b.program_id === primaryId) - Number(a.program_id === primaryId)),
+    [data.eligibility, primaryId],
+  )
+  const altEdges = data.alt_edges ?? []
+  const altItems = primary ? altRouteItems(primary, altEdges).items : []
+  const showAlt = primary != null && altItems.length > 0
+
+  const slides =
+    data.eligibility.length + (showAlt ? 1 : 0) + 1 + 1 + vouchers.length + alternatives.length
 
   return (
-    <section
-      data-testid="facility-summary"
-      aria-label="근처 자원 요약"
-      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">근처 자원</h3>
-        <div className="flex flex-wrap gap-1.5">
-          {/* 이용권은 구 단위 카운트(반경 문구 금지, FR-04 AC2) */}
-          <Badge tone="brand">
-            {msg.sigunguNm} 이용권 가맹 {msg.totalVouchers}곳
-          </Badge>
-          <Badge tone="ok">공공·대안 {msg.totalAlternatives}곳</Badge>
-        </div>
-      </div>
+    <section data-testid="assess-cards" aria-label="예상 자격 결과" className="space-y-2">
+      <CardDeck
+        testId="result-deck"
+        ariaLabel={`판정 결과 카드 ${slides}장, 좌우로 이동`}
+        hint={T.deckSwipe}
+        count={slides}
+      >
+        {/* ① 제도별 판정 카드. 대체경로는 다음 슬라이드가 맡으므로 카드 안에는 넣지 않는다. */}
+        {cards.map((p) => (
+          <li key={p.program_id} className="min-w-0">
+            <EligibilityCard p={p} />
+          </li>
+        ))}
 
-      {/* 시설 카드는 가로 스와이프 카루셀(FR-12 AC9) — 이용권 가맹 → 공공·대안 순.
-          lg+ 에서는 카드 폭이 넉넉해 세로 목록으로 되돌린다. */}
-      {cards > 0 && (
-        <div className="mt-3">
-          <CardCarousel
-            testId="facility-carousel"
-            ariaLabel={`근처 자원 카드 ${cards}장, 좌우로 이동`}
-            count={cards}
-            layout="stack"
-            fade="card"
+        {/* ② '지금 바로 되는 것' / 대체경로 */}
+        {showAlt && primary && (
+          <li key="alt-routes" className="min-w-0">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
+              <AltRoutesBlock card={primary} altEdges={altEdges} />
+            </div>
+          </li>
+        )}
+
+        {/* ③ 공급공백 · 커버리지 */}
+        <li key="supply-gap" className="min-w-0">
+          <SupplyGapBanner gap={data.supply_gap} />
+        </li>
+
+        {/* ④ 근처 자원 머리 슬라이드(카운트 + 패널 열기) */}
+        <li key="facility-head" className="min-w-0">
+          <section
+            data-testid="facility-summary"
+            aria-label="근처 자원 요약"
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
           >
-            {msg.vouchers.map((v) => (
-              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-            ))}
-            {msg.alternatives.map((a) => (
-              <AltRow key={a.id} a={a} />
-            ))}
-          </CardCarousel>
-        </div>
-      )}
-      {cards === 0 && (
-        <p className="mt-3 rounded-xl bg-slate-100 p-4 text-sm text-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
-          이 조건으로 보여드릴 근처 시설이 없습니다. 빈자리를 임의로 채우지 않고 있는 그대로 알려드려요.
-        </p>
-      )}
+            <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+              근처 자원
+            </h3>
+            <div className="mt-2">
+              <FacilityCounts req={req} data={data} />
+            </div>
+            {vouchers.length + alternatives.length === 0 && <EmptyFacilities />}
+            <FacilityRest data={data} />
+            <FacilityActions onOpenPanel={onOpenPanel} />
+          </section>
+        </li>
 
-      {(restV > 0 || restA > 0) && (
-        <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-          나머지 {restV > 0 ? `이용권 가맹 ${restV}곳` : ''}
-          {restV > 0 && restA > 0 ? ' · ' : ''}
-          {restA > 0 ? `공공·대안 ${restA}곳` : ''}은 시설 목록에서 볼 수 있어요.
-        </p>
-      )}
+        {/* ⑤ 시설 카드들(이용권 가맹 → 공공·대안). VoucherRow/AltRow 가 이미 <li> 다. */}
+        {vouchers.map((v) => (
+          <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+        ))}
+        {alternatives.map((a) => (
+          <AltRow key={a.id} a={a} />
+        ))}
+      </CardDeck>
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          data-testid="open-map-panel"
-          onClick={() => onOpenPanel('map')}
-          className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          지도에서 보기
-        </button>
-        <button
-          type="button"
-          data-testid="open-list-panel"
-          onClick={() => onOpenPanel('list')}
-          className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
-        >
-          시설 목록 전체 보기
-        </button>
-      </div>
+      <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
     </section>
   )
 }
 
-function AssessCards({ req, data }: { req: AssessRequest; data: AssessResponse }) {
+// ── 데스크톱(lg+) 세로 블록 — v1.6 까지의 형태 그대로 ────────────────────
+function ResultBlocks({
+  req,
+  data,
+  onOpenPanel,
+}: {
+  req: AssessRequest
+  data: AssessResponse
+  onOpenPanel: (tab: 'map' | 'list') => void
+}) {
+  const { vouchers, alternatives, access, error } = usePreviewAccessibility(data)
   const primaryId = primaryProgramId(req)
+  const cards = vouchers.length + alternatives.length
+
   return (
-    <section data-testid="assess-cards" aria-label="제도별 예상 자격" className="space-y-3">
-      {/* 판정 카드는 가로 스와이프 카루셀(FR-12 AC9). lg+ 는 기존 그리드(xl 2열)로 복귀. */}
-      <CardCarousel
-        testId="assess-carousel"
-        ariaLabel={`예상 자격 카드 ${data.eligibility.length}장, 좌우로 이동`}
-        count={data.eligibility.length}
-        layout="grid"
-        fade="page"
+    <div className="space-y-4">
+      <section data-testid="assess-cards" aria-label="제도별 예상 자격" className="space-y-3">
+        <CardCarousel
+          testId="assess-carousel"
+          ariaLabel={`예상 자격 카드 ${data.eligibility.length}장, 좌우로 이동`}
+          count={data.eligibility.length}
+          layout="grid"
+          fade="page"
+        >
+          {data.eligibility.map((p) => (
+            <li key={p.program_id} className="min-w-0">
+              <EligibilityCard
+                p={p}
+                altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
+              />
+            </li>
+          ))}
+        </CardCarousel>
+        <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
+      </section>
+
+      <SupplyGapBanner gap={data.supply_gap} />
+
+      <section
+        data-testid="facility-summary"
+        aria-label="근처 자원 요약"
+        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
       >
-        {data.eligibility.map((p) => (
-          <li key={p.program_id} className="min-w-0">
-            <EligibilityCard
-              p={p}
-              altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
-            />
-          </li>
-        ))}
-      </CardCarousel>
-      <p className="text-xs text-slate-600 dark:text-slate-400">
-        ※ 여기 표시된 것은 <b>예상 자격</b>입니다. 최종 자격은 각 공식 신청처에서 확인됩니다.
-      </p>
-    </section>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+            근처 자원
+          </h3>
+          <FacilityCounts req={req} data={data} />
+        </div>
+
+        {cards > 0 ? (
+          <div className="mt-3">
+            <CardCarousel
+              testId="facility-carousel"
+              ariaLabel={`근처 자원 카드 ${cards}장, 좌우로 이동`}
+              count={cards}
+              layout="stack"
+              fade="card"
+            >
+              {vouchers.map((v) => (
+                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+              ))}
+              {alternatives.map((a) => (
+                <AltRow key={a.id} a={a} />
+              ))}
+            </CardCarousel>
+          </div>
+        ) : (
+          <EmptyFacilities />
+        )}
+
+        <FacilityRest data={data} />
+        <FacilityActions onOpenPanel={onOpenPanel} />
+      </section>
+    </div>
+  )
+}
+
+function AssessResult({
+  msg,
+  onOpenPanel,
+}: {
+  msg: AssessResultMsg
+  onOpenPanel: (tab: 'map' | 'list') => void
+}) {
+  const wide = useIsWide()
+  return wide ? (
+    <ResultBlocks req={msg.req} data={msg.data} onOpenPanel={onOpenPanel} />
+  ) : (
+    <ResultDeck req={msg.req} data={msg.data} onOpenPanel={onOpenPanel} />
   )
 }
 
@@ -493,8 +614,6 @@ export interface MessageHandlers {
   onRetry: () => void
   onOpenPanel: (tab: 'map' | 'list') => void
   onApplyFilter: (sports: string[]) => void
-  // 지역 질문의 인라인 검색이 쓰는 전국 시군구 목록(FR-12 AC6).
-  sigungu: Sigungu[]
   // 지금 열려 있는 질문. 이 id 가 아닌 단일 선택 질문의 칩은 잠긴다(FR-12 AC1 v1.6).
   activeQuestionId: string | null
   // 체력 레인 3턴의 상태·액션(useFitness + 스토어 진행도).
@@ -532,24 +651,10 @@ export function MessageView({
         </BotLane>
       )
 
-    case 'assess_cards':
+    case 'assess_result':
       return (
         <BotLane showSender={showSender}>
-          <AssessCards req={msg.req} data={msg.data} />
-        </BotLane>
-      )
-
-    case 'supply_gap':
-      return (
-        <BotLane showSender={showSender}>
-          <SupplyGapBanner gap={msg.gap} />
-        </BotLane>
-      )
-
-    case 'facility_summary':
-      return (
-        <BotLane showSender={showSender}>
-          <FacilitySummaryCard msg={msg} onOpenPanel={h.onOpenPanel} />
+          <AssessResult msg={msg} onOpenPanel={h.onOpenPanel} />
         </BotLane>
       )
 
@@ -605,7 +710,11 @@ export function MessageView({
               <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
               {msg.entry.q}
             </p>
-            <p className="mt-2 text-base leading-[1.6] text-slate-700 dark:text-slate-200">
+            {/* 답변 원문의 줄바꿈을 그대로 살린다(선정순위 5줄 리스트 등 — 서버 사전이 \n 을 담는다) */}
+            <p
+              data-testid="faq-answer-body"
+              className="mt-2 text-base leading-[1.6] whitespace-pre-line text-slate-700 dark:text-slate-200"
+            >
               {msg.entry.answer}
             </p>
             <p className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">

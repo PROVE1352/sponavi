@@ -2,7 +2,6 @@
 // ★ types.ts(assess 계약, 타 에이전트 소유 관례)를 건드리지 않도록 챗 타입은 이 파일에 격리한다.
 
 import type {
-  AlternativeFacility,
   AssessRequest,
   AssessResponse,
   DisabilityType,
@@ -13,8 +12,6 @@ import type {
   Nearby,
   PathEdge,
   Sex,
-  SupplyGap,
-  VoucherFacility,
 } from './types'
 import type { AppError } from './components/ErrorPanel'
 
@@ -27,6 +24,9 @@ export interface ChatSlots {
   // 구간 대표값 추정 금지(P-1). 오직 "어떤 세부 나이 칩을 보여줄지"만 정한다.
   age_band: string | null
   sex: Sex | null
+  // 지역 2단계 칩의 1단계 결과(FR-12 AC1 v1.7) = 시도 코드 2자리(시군구 코드의 앞 2자리).
+  // 판정에는 쓰이지 않는다 — "어떤 시군구 칩을 보여줄지"만 정한다(연령대와 같은 역할).
+  sido_cd: string | null
   sigungu_cd: string | null
   sigungu_nm: string | null
   income_class: IncomeClass | null
@@ -41,6 +41,7 @@ export const EMPTY_SLOTS: ChatSlots = {
   age: null,
   age_band: null,
   sex: null,
+  sido_cd: null,
   sigungu_cd: null,
   sigungu_nm: null,
   income_class: null,
@@ -121,6 +122,8 @@ export type QuestionId =
   | 'age_band'
   | 'age'
   | 'sex'
+  // region_sido = 시도(1단계) · region = 그 시도의 시군구(2단계, FR-12 AC1 v1.7)
+  | 'region_sido'
   | 'region'
   | 'income'
   | 'disability'
@@ -182,38 +185,23 @@ export interface ChipQuestionMsg extends MsgBase {
   chips: Chip[]
   // single = 단일 선택 그룹(radiogroup, 답하면 잠김) · action = 즉시 실행 버튼 그룹(계속 살아 있음)
   select: 'single' | 'action'
-  // 지역 질문은 검색 가능 선택(FR-12 AC6) — 칩 컨테이너 안에 소형 검색창이 함께 렌더된다.
-  searchable?: boolean
   answeredLabel?: string
 }
 
-export interface AssessCardsMsg extends MsgBase {
+// 판정 결과 한 덩어리(v1.7). 이전의 assess_cards + supply_gap + facility_summary 세 메시지를
+// 하나로 합친 것 — 모바일(<lg)에서는 가로 스와이프 결과 덱, 데스크톱(lg+)에서는 기존 세로 블록으로
+// 같은 내용을 그린다(FR-12 AC9 v1.7). 결과가 세로 버블 여러 개로 쌓이지 않게 하는 것이 요점이다.
+export interface AssessResultMsg extends MsgBase {
   role: 'bot'
-  kind: 'assess_cards'
+  kind: 'assess_result'
   req: AssessRequest
   data: AssessResponse
-}
-
-export interface SupplyGapMsg extends MsgBase {
-  role: 'bot'
-  kind: 'supply_gap'
-  gap: SupplyGap
 }
 
 export interface PathMsg extends MsgBase {
   role: 'bot'
   kind: 'path'
   path: PathEdge[]
-}
-
-export interface FacilitySummaryMsg extends MsgBase {
-  role: 'bot'
-  kind: 'facility_summary'
-  sigunguNm: string
-  vouchers: VoucherFacility[]
-  alternatives: AlternativeFacility[]
-  totalVouchers: number
-  totalAlternatives: number
 }
 
 // ── 체력 레인 3턴(FR-07~09를 챗 대화 턴으로 분해) ──────────────────────────
@@ -259,10 +247,8 @@ export type ChatMessage =
   | UserTextMsg
   | BotTextMsg
   | ChipQuestionMsg
-  | AssessCardsMsg
-  | SupplyGapMsg
+  | AssessResultMsg
   | PathMsg
-  | FacilitySummaryMsg
   | FitnessParqMsg
   | FitnessFormMsg
   | FitnessResultMsg
@@ -324,6 +310,10 @@ export interface ChatState {
   slots: ChatSlots
   phase: ChatPhase
   panel: { open: boolean; tab: PanelTab }
+  // "패널을 봐 달라"는 명시적 요청이 몇 번 있었는가(지도/목록 버튼·칩·처방 연동).
+  // 모바일에서 패널은 스트림 위쪽에 있어 이미 열려 있으면 눌러도 아무 일도 없어 보인다 —
+  // 이 카운터가 오를 때마다 셸이 패널로 부드럽게 스크롤한다(v1.7 실기기 피드백).
+  panelFocus: number
   // 체력 처방 → 근처 자원 종목 필터(구 ResultView 소유분 이주).
   filterSports?: string[]
   llmMode: LlmMode

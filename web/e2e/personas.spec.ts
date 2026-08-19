@@ -15,10 +15,11 @@ test('P1 · 10세 여아 기초수급 → 스포츠강좌이용권 예상 자격
   await expect(card).toBeVisible()
   await expect(card.getByText('예상 자격', { exact: true })).toBeVisible()
   // 신청 방법 + 근처 가맹시설·자부담(스트림 단독 완결, FR-12 AC3)
+  // v1.7: 시설 카드는 결과 덱의 슬라이드라 요약 헤더와 형제다 — 스트림 범위로 찾는다
   await expect(card.getByText('신청 방법')).toBeVisible()
-  const summary = page.getByTestId('facility-summary')
-  await expect(summary.getByText('성북스포츠클럽').first()).toBeVisible()
-  await expect(summary.getByText('내 부담').first()).toBeVisible()
+  await expect(page.getByTestId('facility-summary')).toBeVisible()
+  await expect(stream(page).getByText('성북스포츠클럽').first()).toBeVisible()
+  await expect(stream(page).getByText('내 부담').first()).toBeVisible()
   // 이용권 공급은 구 단위 카운트로 표기(FR-04 AC2)
   await expect(stream(page).getByTestId('voucher-supply-block')).toContainText('성북구 가맹 4곳')
 

@@ -45,6 +45,12 @@ export async function openDemo(page: Page): Promise<void> {
   await expect(page.getByTestId('chip-persona-P5')).toBeVisible()
 }
 
+// 지역 2단계 칩(FR-12 AC1 v1.7): 시도(코드 앞 2자리) → 시군구. 인라인 검색창은 없다.
+export async function pickRegion(page: Page, regionCd: string): Promise<void> {
+  await page.getByTestId(`chip-sido-${regionCd.slice(0, 2)}`).click()
+  await page.getByTestId(`chip-region-${regionCd}`).click()
+}
+
 // 메인에서 칩만으로 슬롯 5개를 채워 판정까지 간다(퀵스타트 없이 실사용 경로 완주).
 export async function fillMainSlots(
   page: Page,
@@ -52,8 +58,7 @@ export async function fillMainSlots(
 ): Promise<void> {
   await pickAge(page, opts.age ?? 27)
   await page.getByTestId(`chip-sex-${opts.sex ?? 'M'}`).click()
-  await page.getByTestId('region-search').fill('성북')
-  await page.getByTestId(`chip-region-${opts.regionCd ?? '11290'}`).click()
+  await pickRegion(page, opts.regionCd ?? '11290')
   await page.getByTestId(`chip-income-${opts.income ?? '기초생활수급'}`).click()
   await page.getByTestId(`chip-dis-${opts.disability ?? 'no'}`).click()
   await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
@@ -114,6 +119,23 @@ export async function settleTypewriter(page: Page): Promise<void> {
     },
     { timeout: 15_000 },
   )
+}
+
+// 결과 덱(FR-12 AC9 v1.7) — 모바일(<lg)에서 판정 결과 전체가 담기는 단일 스와이프 컨테이너.
+export function deck(page: Page): Locator {
+  return page.getByTestId('result-deck')
+}
+
+// 결과 영역의 "가로 스크롤 스냅 컨테이너" 개수. 덱은 단 하나여야 한다(중첩 카루셀 금지).
+export async function snapContainerCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const root = document.querySelector('[data-testid="chat-stream"]')
+    if (!root) return -1
+    return [...root.querySelectorAll('*')].filter((el) => {
+      const cs = getComputedStyle(el)
+      return cs.overflowX === 'auto' && cs.scrollSnapType.includes('x')
+    }).length
+  })
 }
 
 // 모바일 가로 스크롤 0(요건 4): 문서 스크롤폭이 뷰포트를 넘지 않는다(지도·표는 자체 스크롤).

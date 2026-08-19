@@ -1,11 +1,14 @@
 import { test, expect } from '@playwright/test'
 import {
   assertNoHorizontalScroll,
+  deck,
   fillMainSlots,
   openDemo,
   openMain,
   pickAge,
+  pickRegion,
   settleTypewriter,
+  snapContainerCount,
   startPersona,
   stream,
 } from './helpers'
@@ -18,17 +21,17 @@ import {
 // v1.6 확장(AC10) —
 //   ⑧ 연속 봇 메시지 순차 등장: 인사 타이핑 완료 → 타이핑 인디케이터 → 첫 질문 → 칩
 
-test('① 390px 카루셀 — 판정·시설 카드가 스냅 스크롤 컨테이너 + 넘김 힌트를 갖고, 페이지 가로 스크롤은 0', async ({
+test('① 390px 결과 덱 — 결과 전체가 단일 스냅 스크롤 컨테이너 + 넘김 힌트·진행 표시를 갖고, 페이지 가로 스크롤은 0', async ({
   page,
 }) => {
   await openDemo(page)
   await startPersona(page, 'P1')
 
-  // 판정 카드 카루셀
-  const cards = page.getByTestId('assess-carousel')
+  // v1.7: 판정 카드·공급공백·시설이 카루셀 여러 개가 아니라 덱 하나로 합쳐졌다(FR-12 AC9)
+  const cards = deck(page)
   await expect(cards).toBeVisible()
   await expect(cards).toHaveAttribute('tabindex', '0') // 키보드 스크롤 가능
-  await expect(cards).toHaveAttribute('aria-label', /예상 자격 카드 \d+장, 좌우로 이동/)
+  await expect(cards).toHaveAttribute('aria-label', /판정 결과 카드 \d+장, 좌우로 이동/)
 
   const style = await cards.evaluate((el) => {
     const cs = getComputedStyle(el)
@@ -37,29 +40,39 @@ test('① 390px 카루셀 — 판정·시설 카드가 스냅 스크롤 컨테�
   expect(style.overflowX).toBe('auto')
   expect(style.snapType).toContain('x')
 
-  // 실제로 옆으로 넘길 것이 있다(트랙이 컨테이너보다 넓다) + 카드가 스냅 정렬을 갖는다
-  const geom = await cards.evaluate((el) => ({
-    scrollWidth: el.scrollWidth,
-    clientWidth: el.clientWidth,
-    snapAlign: getComputedStyle(el.querySelector('li')!).scrollSnapAlign,
-  }))
+  // 실제로 옆으로 넘길 것이 있다(트랙이 컨테이너보다 넓다) + 슬라이드가 스냅 정렬·85% 피크를 갖는다
+  const geom = await cards.evaluate((el) => {
+    const first = el.querySelector('li')!
+    return {
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+      snapAlign: getComputedStyle(first).scrollSnapAlign,
+      ratio: first.getBoundingClientRect().width / el.clientWidth,
+      alignItems: getComputedStyle(el.querySelector('ul')!).alignItems,
+    }
+  })
   expect(geom.scrollWidth).toBeGreaterThan(geom.clientWidth)
   expect(geom.snapAlign).toBe('start')
+  expect(geom.ratio).toBeGreaterThan(0.8)
+  expect(geom.ratio).toBeLessThan(0.9) // 다음 카드가 살짝 보이는 피크
+  expect(geom.alignItems).toBe('flex-start') // 높이 차가 커도 컨테이너가 출렁이지 않는다
 
-  // 시설 요약 카드도 같은 문법
-  const facilities = page.getByTestId('facility-carousel')
-  await expect(facilities).toBeVisible()
-  await expect(facilities).toHaveAttribute('aria-label', /근처 자원 카드 \d+장, 좌우로 이동/)
+  // 스냅 컨테이너는 결과 영역 통틀어 하나뿐이다(덱 안에 카루셀을 또 넣지 않는다)
+  expect(await snapContainerCount(page)).toBe(1)
+  await expect(page.getByTestId('assess-carousel')).toHaveCount(0)
+  await expect(page.getByTestId('facility-carousel')).toHaveCount(0)
 
-  // 넘김 힌트(모바일 전용)
-  await expect(page.getByTestId('carousel-hint').first()).toBeVisible()
+  // 넘김 힌트(나비 톤) + 진행 표시(시각 점 + 텍스트)
+  await expect(page.getByTestId('carousel-hint').first()).toContainText('옆으로 넘기')
+  await expect(page.getByTestId('deck-progress')).toContainText('1 /')
 
-  // ★ 카루셀은 자체 컨테이너로 스크롤한다 — 페이지는 여전히 가로 스크롤 0(NFR-4)
+  // ★ 덱은 자체 컨테이너로 스크롤한다 — 페이지는 여전히 가로 스크롤 0(NFR-4)
   await assertNoHorizontalScroll(page)
 
-  // 실제 가로 스크롤이 동작한다(스와이프 대체 = 프로그램 스크롤)
-  await cards.evaluate((el) => el.scrollBy({ left: 400, behavior: 'instant' as ScrollBehavior }))
+  // 실제 가로 스크롤이 동작한다(스와이프 대체 = 프로그램 스크롤) + 진행 표시가 따라온다
+  await cards.evaluate((el) => el.scrollBy({ left: el.clientWidth, behavior: 'instant' as ScrollBehavior }))
   expect(await cards.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+  await expect(page.getByTestId('deck-progress')).toContainText('2 /')
   await assertNoHorizontalScroll(page)
 })
 
@@ -131,8 +144,7 @@ test('④ 연령 2단계 칩(연령대 → 세부 나이)만으로 판정 완주
   // 2단계: 정확 나이 선택 → 나머지 슬롯 → 판정 완주
   await page.getByTestId('chip-age-27').click()
   await page.getByTestId('chip-sex-M').click()
-  await page.getByTestId('region-search').fill('성북')
-  await page.getByTestId('chip-region-11290').click()
+  await pickRegion(page, '11290')
   await page.getByTestId('chip-income-기초생활수급').click()
   await page.getByTestId('chip-dis-no').click()
 
@@ -176,8 +188,8 @@ test('⑦ 메인 실사용 경로(연령 2단계 포함) 완주 후에도 카루
   await expect(page.getByTestId('composer-input')).toHaveAttribute('placeholder', '메시지를 입력하세요')
 
   await fillMainSlots(page)
-  await expect(page.getByTestId('assess-carousel')).toBeVisible()
-  await expect(page.getByTestId('facility-carousel')).toBeVisible()
+  await expect(deck(page)).toBeVisible()
+  expect(await snapContainerCount(page)).toBe(1)
   await assertNoHorizontalScroll(page)
 })
 

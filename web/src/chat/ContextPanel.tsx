@@ -3,6 +3,7 @@
 // 패널이 없어도 스트림만으로 정보가 완결되므로(FR-12 AC3), 여기는 "더 크게 보는 곳"이다.
 
 import { useId } from 'react'
+import type { RefObject } from 'react'
 import type { AssessRequest, AssessResponse } from '../types'
 import type { PanelTab } from '../types_chat'
 import { NearbyMap } from '../components/NearbyMap'
@@ -16,6 +17,7 @@ export function ContextPanel({
   open,
   tab,
   filterSports,
+  anchorRef,
   onToggle,
   onTab,
   onClearFilter,
@@ -25,6 +27,8 @@ export function ContextPanel({
   open: boolean
   tab: PanelTab
   filterSports?: string[]
+  // 셸이 "패널로 데려가기"를 할 때 위치를 재는 앵커(v1.7).
+  anchorRef?: RefObject<HTMLDivElement | null>
   onToggle: (open: boolean) => void
   onTab: (tab: PanelTab) => void
   onClearFilter: () => void
@@ -41,7 +45,10 @@ export function ContextPanel({
       aria-label="근처 자원 패널"
       className="order-1 w-full min-w-0 lg:order-2 lg:sticky lg:top-[4.5rem] lg:w-[38%] lg:shrink-0"
     >
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900">
+      <div
+        ref={anchorRef}
+        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900"
+      >
         {/* 요약 바 — 모바일에서는 접힘 상태의 존재감, 데스크톱에서는 헤더 */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">

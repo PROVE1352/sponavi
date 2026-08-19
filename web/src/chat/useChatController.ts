@@ -37,13 +37,18 @@ import {
   SLOT_ECHO_PROMPT,
   T,
   answerEcho,
-  facilitySummaryText,
   followUpChips,
+  matchSido,
+  matchSigungu,
   nextQuestion,
   personaEchoText,
   questionSpec,
   regionCandidateChips,
+  regionChips,
   restartConfirmChips,
+  sidoCdOf,
+  sidoLabel,
+  sigunguOfSido,
   slotEditChips,
   slotsFromRequest,
   toAssessRequest,
@@ -141,7 +146,6 @@ export function useChatController(demo = false) {
         text: spec.text,
         chips: spec.chips,
         select: spec.select,
-        searchable: spec.searchable,
       })
       dispatch({ type: 'setActiveQuestion', id })
     },
@@ -158,29 +162,19 @@ export function useChatController(demo = false) {
         const data = await assess(req)
         dispatch({ type: 'setAssess', req, data })
         dispatch({ type: 'setPhase', phase: 'assessed' })
-        const gap = data.supply_gap
         const followUp = followUpChips(state.faq.map((f) => ({ key: f.key, q: f.q })))
         // 경로 시각화(FR-03 v1.4): 데모 결과에만 항시 펼침으로 넣는다.
         // 메인 결과에는 아예 렌더하지 않는다 — 실사용 화면은 판정 카드 중심으로 경량화.
         const pathCard: ChatMessage[] = demo
           ? [{ id: nextId('p'), role: 'bot', kind: 'path', path: data.path }]
           : []
+        // ★ v1.7: 판정 카드·공급공백·시설 요약을 메시지 하나로 합친다(FR-12 AC9).
+        //   결과가 버블 여러 개로 세로로 쌓이면 모바일에서 화면이 위아래로 크게 흔들린다.
+        //   합친 뒤의 렌더 형태(모바일 덱 / 데스크톱 블록)는 메시지 렌더러가 정한다.
         push(
           botText(verdictText(req, data)),
           ...pathCard,
-          { id: nextId('e'), role: 'bot', kind: 'assess_cards', req, data },
-          { id: nextId('g'), role: 'bot', kind: 'supply_gap', gap },
-          botText(facilitySummaryText()),
-          {
-            id: nextId('f'),
-            role: 'bot',
-            kind: 'facility_summary',
-            sigunguNm: req.sigungu_nm,
-            vouchers: data.nearby.voucher_facilities.slice(0, 3),
-            alternatives: data.nearby.alternatives.slice(0, 2),
-            totalVouchers: data.nearby.voucher_facilities.length,
-            totalAlternatives: data.nearby.alternatives.length,
-          },
+          { id: nextId('e'), role: 'bot', kind: 'assess_result', req, data },
           {
             id: nextId('q'),
             role: 'bot',
@@ -270,13 +264,15 @@ export function useChatController(demo = false) {
   }, [dispatch, push])
 
   // ── 액션 헬퍼 ───────────────────────────────────────────────
+  // 지도·목록 열기. 모바일에서 패널은 스트림 위쪽에 있고 결과 도착과 함께 이미 펼쳐져 있어,
+  // 상태만 바꾸면 "눌러도 아무 일도 없는" 버튼이 된다 — focus 로 셸이 패널까지 스크롤한다.
   const openPanel = useCallback(
     (tab: PanelTab) => {
       if (!state.lastAssess) {
         push(botText(T.mapNeedsResult))
         return
       }
-      dispatch({ type: 'setPanel', open: true, tab })
+      dispatch({ type: 'setPanel', open: true, tab, focus: true })
       push(botText(T.mapOpened))
     },
     [dispatch, push, state.lastAssess],
@@ -359,7 +355,7 @@ export function useChatController(demo = false) {
   const applyFilter = useCallback(
     (sports: string[]) => {
       dispatch({ type: 'setFilterSports', sports })
-      dispatch({ type: 'setPanel', open: true, tab: 'list' })
+      dispatch({ type: 'setPanel', open: true, tab: 'list', focus: true })
       push(botText(T.fitnessFilterApplied))
     },
     [dispatch, push],
@@ -418,11 +414,24 @@ export function useChatController(demo = false) {
       const a = chip.action
       switch (a.kind) {
         case 'answer': {
-          const patch = a.slots
+          const patch = { ...a.slots }
+          let echo = answerEcho(a.question, chip)
+          let lockLabel = chip.label
+          // 시도에 시군구가 하나뿐이면(세종 등) 2단계를 묻지 않고 그 자리에서 확정한다.
+          // 잠금 마커·에코는 고른 시도가 아니라 확정된 시군구 이름으로 남긴다.
+          if (a.question === 'region_sido' && patch.sido_cd) {
+            const only = sigunguOfSido(sigungu, patch.sido_cd)
+            if (only.length === 1) {
+              patch.sigungu_cd = only[0].cd
+              patch.sigungu_nm = only[0].nm
+              echo = `지역: ${only[0].nm}`
+              lockLabel = only[0].nm
+            }
+          }
           const next: ChatSlots = { ...state.slots, ...patch }
           if (patch.disability_has === false) next.disability_type = null
-          push(userText(answerEcho(a.question, chip)))
-          dispatch({ type: 'answerQuestion', id: msgId, label: chip.label })
+          push(userText(echo))
+          dispatch({ type: 'answerQuestion', id: msgId, label: lockLabel })
           dispatch({ type: 'patchSlots', slots: patch })
           if (patch.income_unknown) {
             push(
@@ -462,6 +471,13 @@ export function useChatController(demo = false) {
             const cleared: ChatSlots = { ...state.slots, age: null, age_band: null }
             dispatch({ type: 'patchSlots', slots: { age: null, age_band: null } })
             askQuestion('age_band', sigungu, personas, cleared)
+            return
+          }
+          // 지역 정정도 2단계(시도 → 시군구) 전체를 다시 연다(FR-12 AC1 v1.7).
+          if (a.question === 'region' || a.question === 'region_sido') {
+            const blank = { sido_cd: null, sigungu_cd: null, sigungu_nm: null }
+            dispatch({ type: 'patchSlots', slots: blank })
+            askQuestion('region_sido', sigungu, personas, { ...state.slots, ...blank })
             return
           }
           askQuestion(a.question)
@@ -508,6 +524,67 @@ export function useChatController(demo = false) {
     ],
   )
 
+  // ── 지역 자유입력의 로컬 결정론 매칭(FR-12 AC1 v1.7) ────────────────
+  // 칩/강등 모드에는 NLU 가 없다. 그래도 컴포저에 "성북구"라고 쓰면 칩과 똑같이 확정되어야 한다.
+  // 판단 재료는 getSigungu() 목록뿐이고 추측은 없다 — 1건 확정 / 복수 후보 칩 / 0건 재질문.
+  const resolveRegionText = useCallback(
+    (text: string, questionId: string, stage: 'region_sido' | 'region') => {
+      const confirm = (s: Sigungu) => {
+        const patch: Partial<ChatSlots> = {
+          sido_cd: sidoCdOf(s.cd),
+          sigungu_cd: s.cd,
+          sigungu_nm: s.nm,
+        }
+        dispatch({ type: 'answerQuestion', id: questionId, label: s.nm })
+        dispatch({ type: 'patchSlots', slots: patch })
+        advance({ ...state.slots, ...patch })
+      }
+
+      // ① 입력이 시도 이름 하나면 그 시도로 좁힌다(그 안이 1곳뿐이면 즉시 확정).
+      const sido = matchSido(text)
+      if (sido) {
+        const inSido = sigunguOfSido(sigungu, sido)
+        if (inSido.length === 1) {
+          confirm(inSido[0])
+          return
+        }
+        if (inSido.length > 1) {
+          const patch: Partial<ChatSlots> = { sido_cd: sido }
+          dispatch({ type: 'answerQuestion', id: questionId, label: sidoLabel(sido) })
+          dispatch({ type: 'patchSlots', slots: patch })
+          askQuestion('region', sigungu, personas, { ...state.slots, ...patch })
+          return
+        }
+      }
+
+      // ② 시군구 이름 매칭
+      const hits = matchSigungu(sigungu, text)
+      if (hits.length === 1) {
+        confirm(hits[0])
+        return
+      }
+      if (hits.length > 1) {
+        const id = nextId('q')
+        push({
+          id,
+          role: 'bot',
+          kind: 'chip_question',
+          question: 'region',
+          text: REGION_AMBIGUOUS_PROMPT,
+          // 동명 시군구(서구 등)는 시도 통칭을 붙여야 구분된다.
+          chips: regionChips(hits, { withSido: true }),
+          select: 'single',
+        })
+        dispatch({ type: 'setActiveQuestion', id })
+        return
+      }
+
+      push(botText(T.regionNotFound))
+      askQuestion(stage, sigungu, personas, state.slots)
+    },
+    [advance, askQuestion, dispatch, personas, push, sigungu, state.slots],
+  )
+
   // ── 자유 텍스트 ─────────────────────────────────────────────
   const onSend = useCallback(
     async (raw: string) => {
@@ -516,6 +593,16 @@ export function useChatController(demo = false) {
       push(userText(text))
 
       if (state.llmMode === 'chips') {
+        // 지역 질문이 열려 있으면 강등 안내 대신 로컬 매칭으로 답한다(칩과 동일 동작).
+        const open = state.messages.find((m) => m.id === state.activeQuestionId)
+        if (
+          open &&
+          open.kind === 'chip_question' &&
+          (open.question === 'region' || open.question === 'region_sido')
+        ) {
+          resolveRegionText(text, open.id, open.question)
+          return
+        }
         degrade()
         return
       }
@@ -549,6 +636,7 @@ export function useChatController(demo = false) {
           const hit = sigungu.find((s) => s.cd === u.sigungu_cd)
           patch.sigungu_cd = u.sigungu_cd
           patch.sigungu_nm = (typeof u.sigungu_nm === 'string' && u.sigungu_nm) || hit?.nm || ''
+          patch.sido_cd = sidoCdOf(u.sigungu_cd)
           changed.push('region')
         }
         if (typeof u.income_class === 'string' && INCOME_VALUES.includes(u.income_class as IncomeClass)) {
@@ -641,9 +729,12 @@ export function useChatController(demo = false) {
       dispatch,
       openPanel,
       push,
+      resolveRegionText,
       sigungu,
       startFitness,
+      state.activeQuestionId,
       state.llmMode,
+      state.messages,
       state.pending,
       state.phase,
       state.slots,
@@ -682,6 +773,9 @@ export function useChatController(demo = false) {
     onChip,
     onSend,
     onRetry,
+    // 스트림 카드의 "지도에서 보기" 버튼도 칩과 같은 경로를 타야 한다 —
+    // 패널 열기 + 한 줄 안내 + 패널로 데려가기(focus)가 한 벌이다.
+    openPanel,
     setPanel,
     setFilterSports,
     applyFilter,

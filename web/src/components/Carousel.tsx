@@ -7,9 +7,88 @@
 // ★ 스크롤은 이 컨테이너가 자체적으로 갖는다 — 페이지(document) 가로 스크롤은 0(NFR-4).
 // 폭·스냅은 index.css 의 .snap-track 이 직계 아이템(li)에 부여한다.
 
+import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 export const SWIPE_HINT = '← 옆으로 넘겨보세요 →'
+
+// ── 결과 덱(FR-12 AC9 v1.7) ─────────────────────────────────────────────
+// 모바일(<lg)에서 판정 결과 블록 전체를 슬라이드 하나씩으로 넘겨 보는 단일 컨테이너.
+// CardCarousel 과 문법(스냅·엣지 페이드·넘김 힌트·키보드 스크롤)은 같고, 두 가지가 다르다:
+//   ① 슬라이드 높이가 제각각이라 상단 정렬(items-start)한다 — 컨테이너가 출렁이지 않는다.
+//   ② 스크롤 위치를 읽어 "3 / 9" 진행 표시를 준다(시각 + 텍스트).
+// ★ 결과 영역의 가로 스크롤 컨테이너는 이것 하나뿐이다 — 안에 카루셀을 또 넣지 않는다.
+export function CardDeck({
+  ariaLabel,
+  hint,
+  count,
+  testId,
+  children,
+}: {
+  ariaLabel: string
+  // 나비 톤의 넘김 안내 한 줄(정책 템플릿에서 내려온다).
+  hint: string
+  count: number
+  testId: string
+  children: ReactNode
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const [index, setIndex] = useState(0)
+
+  const onScroll = useCallback(() => {
+    const el = trackRef.current
+    if (!el) return
+    const slide = el.querySelector<HTMLElement>('.deck-track > *')
+    const step = slide ? slide.getBoundingClientRect().width + 12 : el.clientWidth
+    if (step <= 0) return
+    const i = Math.round(el.scrollLeft / step)
+    setIndex(Math.max(0, Math.min(count - 1, i)))
+  }, [count])
+
+  return (
+    <div className="relative">
+      <div
+        ref={trackRef}
+        onScroll={onScroll}
+        tabIndex={0}
+        role="group"
+        aria-label={ariaLabel}
+        data-testid={testId}
+        className="snap-x snap-mandatory overflow-x-auto pb-2"
+      >
+        <ul className="deck-track">{children}</ul>
+      </div>
+
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-slate-50 to-transparent dark:from-[#0b1220]"
+      />
+
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <p data-testid="carousel-hint" className="text-xs text-slate-600 dark:text-slate-400">
+          {hint}
+        </p>
+        <p
+          data-testid="deck-progress"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
+        >
+          <span aria-hidden="true" className="inline-flex gap-1">
+            {Array.from({ length: count }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  'h-1.5 w-1.5 rounded-full ' +
+                  (i === index ? 'bg-brand-600 dark:bg-brand-100' : 'bg-slate-300 dark:bg-slate-600')
+                }
+              />
+            ))}
+          </span>
+          {index + 1} / {count}
+        </p>
+      </div>
+    </div>
+  )
+}
 
 export function CardCarousel({
   ariaLabel,

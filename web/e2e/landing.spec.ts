@@ -134,17 +134,16 @@ test('⑤ prefers-reduced-motion — 패널은 애니메이션 없이 즉시 표
   expect(name).toBe('none')
 })
 
-test('⑥ 퀵리플라이 칩은 컴포저가 아니라 질문 버블 아래 인라인이다 (지역 검색 포함, FR-12 AC1 v1.6)', async ({
+test('⑥ 퀵리플라이 칩은 컴포저가 아니라 질문 버블 아래 인라인이다 (지역 2단계 칩 포함, FR-12 AC1 v1.7)', async ({
   page,
 }) => {
   await openMain(page)
   const composer = page.getByTestId('composer')
 
-  // 컴포저에는 어떤 칩도, 어떤 선택 그룹도, 지역 검색도 없다 — 텍스트 입력과 보내기뿐이다
+  // 컴포저에는 어떤 칩도, 어떤 선택 그룹도 없다 — 텍스트 입력과 보내기뿐이다
   await expect(composer.locator('[data-testid^="chip-"]')).toHaveCount(0)
   await expect(composer.getByRole('radiogroup')).toHaveCount(0)
   await expect(composer.getByRole('group')).toHaveCount(0)
-  await expect(composer.getByTestId('region-search')).toHaveCount(0)
   await expect(composer.getByTestId('composer-input')).toBeVisible()
   await expect(composer.getByTestId('composer-send')).toBeVisible()
 
@@ -156,15 +155,21 @@ test('⑥ 퀵리플라이 칩은 컴포저가 아니라 질문 버블 아래 인
   await expect(ageQ.getByRole('radiogroup')).toHaveAttribute('aria-label', /먼저 나이를 알려주세요/)
   await expect(ageQ.getByRole('radio', { name: /20대/ })).toBeVisible()
 
-  // 지역 질문은 검색 필드까지 같은 버블 아래 인라인 — 검색 결과 칩도 거기서 나온다
+  // ★ v1.7: 지역 질문의 인라인 검색창은 사라졌다 — 연령과 같은 2단계 칩(시도 → 시군구)이다
   await pickAge(page, 27)
   await page.getByTestId('chip-sex-M').click()
+  const sidoQ = stream(page).getByTestId('question-region_sido')
+  await expect(sidoQ).toContainText('먼저 시·도를 골라 주세요')
+  await expect(page.getByTestId('region-search')).toHaveCount(0)
+  await expect(sidoQ.getByTestId('chip-sido-11')).toHaveText(/서울/)
+  await expect(sidoQ.getByRole('radiogroup')).toBeVisible()
+  // 시군구 칩은 시도를 고르기 전에는 없다
+  await expect(page.getByTestId('chip-region-11290')).toHaveCount(0)
+
+  await sidoQ.getByTestId('chip-sido-11').click()
   const regionQ = stream(page).getByTestId('question-region')
-  const search = regionQ.getByTestId('region-search')
-  await expect(search).toBeVisible()
-  await expect(composer.getByTestId('region-search')).toHaveCount(0)
-  await search.fill('성북')
-  await expect(regionQ.getByTestId('chip-region-11290')).toBeVisible()
+  await expect(regionQ.getByTestId('chip-region-11290')).toHaveText('성북구')
+  await expect(page.getByTestId('region-search')).toHaveCount(0)
 })
 
 test('⑦ 답한 질문의 칩은 잠긴다 — 칩은 걷히고 선택 표시만 남는다 (FR-12 AC1 v1.6)', async ({
@@ -189,13 +194,17 @@ test('⑦ 답한 질문의 칩은 잠긴다 — 칩은 걷히고 선택 표시�
   await expect(ageQ.getByTestId('chip-answered')).toContainText('27세 선택함')
   await expect(page.getByTestId('chip-age-27')).toHaveCount(0)
 
-  // 지역도 동일 — 답하면 검색 필드까지 함께 걷힌다
+  // 지역도 동일 — 2단계 각각이 답한 뒤 잠긴다(잠금 마커는 고른 이름 그대로)
   await page.getByTestId('chip-sex-M').click()
-  await page.getByTestId('region-search').fill('성북')
+  await page.getByTestId('chip-sido-11').click()
+  const sidoQ = stream(page).getByTestId('question-region_sido')
+  await expect(sidoQ.getByTestId('chip-answered')).toContainText('서울 선택함')
+  await expect(page.getByTestId('chip-sido-11')).toHaveCount(0)
+
   await page.getByTestId('chip-region-11290').click()
   const regionQ = stream(page).getByTestId('question-region')
   await expect(regionQ.getByTestId('chip-answered')).toContainText('성북구 선택함')
-  await expect(page.getByTestId('region-search')).toHaveCount(0)
+  await expect(page.getByTestId('chip-region-11290')).toHaveCount(0)
 
   // 판정까지 완주 — 잠금이 대화를 막지 않는다
   await page.getByTestId('chip-income-기초생활수급').click()

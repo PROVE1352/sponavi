@@ -189,46 +189,66 @@ function DynamicForm({
   onValue: (code: string, v: string) => void
   onAlt: (altGroup: string, code: string) => void
 }) {
-  const inputCls =
-    'mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white'
+  // ★ text-base(16px) 고정: 모바일 사파리는 16px 미만 입력에 포커스하면 페이지를 확대해 버린다
+  //   — 확대되면 폼이 화면 밖으로 밀려 사용자가 손으로 되돌려야 한다(v1.7 실기기 피드백).
+  //   min-h-11(44px) 터치 타겟과 함께 폼 전 항목에 같은 클래스를 쓴다.
+  const fieldCls =
+    'mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 transition-colors duration-200 hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-slate-600'
+  const labelCls = 'text-sm font-medium break-keep text-slate-700 dark:text-slate-200'
+  const hintCls = 'mt-1 block text-xs leading-snug break-keep text-slate-600 dark:text-slate-400'
+
   return (
-    <div data-testid="fitness-form" className="space-y-4">
+    <div data-testid="fitness-form" className="space-y-5">
       {grouped.map(([factor, frows]) => (
         <div key={factor}>
-          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+          <h4 className="mb-2 text-xs font-bold tracking-wide text-slate-600 dark:text-slate-400">
             {factor}
           </h4>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* 390px 에서는 1열(입력 한 칸이 화면 폭을 온전히 쓴다) — 좁은 2열은 숫자가 잘린다 */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {frows.map((row) => {
               if (row.kind === 'single') {
                 const it = row.item
                 return (
-                  <label key={it.code} className="block text-sm">
-                    <span className="text-slate-700 dark:text-slate-200">{it.name}</span>
-                    {it.unit && <span className="ml-1 text-xs text-slate-600 dark:text-slate-400">({it.unit})</span>}
+                  <label key={it.code} className="block min-w-0">
+                    <span className={labelCls}>
+                      {it.name}
+                      {it.unit && (
+                        <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                          ({it.unit})
+                        </span>
+                      )}
+                    </span>
                     <input
                       type="number"
                       inputMode="decimal"
+                      autoComplete="off"
                       data-testid={`fit-input-${it.code}`}
                       value={values[it.code] ?? ''}
                       onChange={(e) => onValue(it.code, e.target.value)}
-                      className={inputCls}
+                      className={fieldCls}
                     />
-                    <span className="mt-0.5 block text-[11px] text-slate-600 dark:text-slate-400">{it.hint}</span>
+                    {it.hint && <span className={hintCls}>{it.hint}</span>}
                   </label>
                 )
               }
               const code = altChoice[row.altGroup] ?? row.options[0].code
               const active = row.options.find((o) => o.code === code) ?? row.options[0]
+              const selectId = `fit-alt-${row.altGroup}-select`
+              const valueId = `fit-alt-${row.altGroup}-value`
               return (
-                <div key={row.altGroup} className="text-sm">
-                  <span className="text-slate-700 dark:text-slate-200">{row.factor} (택1)</span>
+                <div key={row.altGroup} className="min-w-0">
+                  {/* 택1 슬롯: 종목 셀렉트 + 값 입력이 각각 한 줄을 온전히 쓴다(390px 에서 서로 밀리지 않게) */}
+                  <label htmlFor={selectId} className={labelCls}>
+                    {row.factor} (택1)
+                  </label>
                   <select
+                    id={selectId}
                     data-testid={`fit-alt-${row.altGroup}`}
                     aria-label={`${row.factor} 측정 종목 선택`}
                     value={code}
                     onChange={(e) => onAlt(row.altGroup, e.target.value)}
-                    className={inputCls}
+                    className={fieldCls}
                   >
                     {row.options.map((o) => (
                       <option key={o.code} value={o.code}>
@@ -237,16 +257,25 @@ function DynamicForm({
                       </option>
                     ))}
                   </select>
+                  <label htmlFor={valueId} className={`${labelCls} mt-2 block`}>
+                    {active.name}
+                    {active.unit && (
+                      <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                        ({active.unit})
+                      </span>
+                    )}
+                  </label>
                   <input
+                    id={valueId}
                     type="number"
                     inputMode="decimal"
+                    autoComplete="off"
                     data-testid={`fit-input-${active.code}`}
-                    aria-label={`${active.name} 값 입력${active.unit ? ` (단위 ${active.unit})` : ''}`}
                     value={values[active.code] ?? ''}
                     onChange={(e) => onValue(active.code, e.target.value)}
-                    className={inputCls}
-                    placeholder={active.hint}
+                    className={fieldCls}
                   />
+                  {active.hint && <span className={hintCls}>{active.hint}</span>}
                 </div>
               )
             })}

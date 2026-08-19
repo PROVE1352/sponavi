@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test'
-import { openDemo, shot, startFitnessThroughParq, startPersona, stream } from './helpers'
+import {
+  assertNoHorizontalScroll,
+  openDemo,
+  shot,
+  startFitnessThroughParq,
+  startPersona,
+  stream,
+} from './helpers'
 
 // 체력 레인 3턴(목 모드, VITE_MOCK=1):
 //   판정 결과 → "체력 처방 시작" 칩 → PAR-Q 게이트(통과 전 폼 미노출) → 연령군 동적 폼 →
@@ -78,6 +85,55 @@ test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + �
   await expect(tab).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('context-panel').getByText(/운동 필터:/)).toBeVisible()
   await expect(stream(page).getByText(/고르신 종목만 남겨서/)).toBeVisible()
+})
+
+test('390px 측정 폼 — 입력 폭·글자 크기·터치 타겟이 모바일에서 깨지지 않는다 (v1.7)', async ({
+  page,
+}) => {
+  await startPersona(page, 'P2')
+  await startFitnessThroughParq(page)
+  const form = page.getByTestId('fitness-form')
+  await expect(form).toBeVisible()
+
+  // 폼 전 항목 실측: 입력/셀렉트 한 칸이 카드 폭을 온전히 쓰고, 글자·터치 타겟이 규격 이상
+  const fields = await form.evaluate((root) =>
+    [...root.querySelectorAll('input, select')].map((el) => {
+      const cs = getComputedStyle(el)
+      const box = el.getBoundingClientRect()
+      const parent = (el.parentElement as HTMLElement).getBoundingClientRect()
+      return {
+        tag: el.tagName,
+        testId: el.getAttribute('data-testid'),
+        fontPx: Number.parseFloat(cs.fontSize),
+        height: box.height,
+        width: box.width,
+        parentWidth: parent.width,
+        labelled:
+          el.hasAttribute('aria-label') ||
+          (el.id !== '' && document.querySelector(`label[for="${el.id}"]`) != null) ||
+          el.closest('label') != null,
+      }
+    }),
+  )
+  expect(fields.length).toBeGreaterThan(0)
+  for (const f of fields) {
+    // ① 16px 미만이면 모바일 사파리가 포커스 시 페이지를 확대해 폼이 화면 밖으로 밀린다
+    expect(f.fontPx, `${f.tag} ${f.testId} 글자 ${f.fontPx}px`).toBeGreaterThanOrEqual(16)
+    // ② 터치 타겟 44px
+    expect(f.height, `${f.tag} ${f.testId} 높이 ${f.height}px`).toBeGreaterThanOrEqual(44)
+    // ③ 한 칸이 부모 폭을 그대로 쓴다(택1 슬롯의 셀렉트+입력이 서로 밀리지 않는다)
+    expect(f.width, `${f.tag} ${f.testId} 폭 ${f.width} / 부모 ${f.parentWidth}`).toBeGreaterThan(
+      f.parentWidth - 2,
+    )
+    // ④ 이름표가 붙어 있다(스크린리더·터치 라벨)
+    expect(f.labelled, `${f.tag} ${f.testId} 라벨 없음`).toBe(true)
+  }
+
+  // 제출 버튼도 같은 규격 + 폼 때문에 페이지가 옆으로 넘치지 않는다
+  const submit = await page.getByTestId('fitness-submit').boundingBox()
+  expect(submit!.height).toBeGreaterThanOrEqual(44)
+  expect(submit!.width).toBeGreaterThan(280)
+  await assertNoHorizontalScroll(page)
 })
 
 test('P1 만10세 → 측정 폼에 만7~10 공백 고지 배너 (FR-07 AC6)', async ({ page }) => {

@@ -71,6 +71,11 @@ test('게이트9 · 후속 칩(FAQ → 지도 → 처음부터)으로 대화가 
   await expect(faq).toBeVisible()
   await expect(faq).toContainText('소득과 관계없이')
   await expect(faq).toContainText('확인일 2026-07-20')
+  // 답변 본문은 원문 줄바꿈을 그대로 살린다(서버 사전의 여러 줄 답변이 한 줄로 뭉치지 않게)
+  const ws = await page
+    .getByTestId('faq-answer-body')
+    .evaluate((el) => getComputedStyle(el).whiteSpace)
+  expect(ws).toBe('pre-line')
 
   // 지도 칩 → 컨텍스트 패널 열림
   await page.getByTestId('chip-act-map').click()

@@ -317,6 +317,20 @@ body {
   }
 }
 
+/* 결과 덱 트랙(FR-12 AC9 v1.7) — 모바일(<lg)에서만 렌더되는 단일 스와이프 덱.
+   .snap-track 과 달리 lg 해제 규칙이 없다(덱 자체가 모바일에서만 마운트된다).
+   align-items:flex-start = 슬라이드 높이가 제각각이어도 컨테이너가 출렁이지 않는다. */
+.deck-track {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.deck-track > * {
+  flex: 0 0 85%;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
 /* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
 .leaflet-container {
   font-family: var(--font-sans);

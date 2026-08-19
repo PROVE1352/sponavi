@@ -4,7 +4,7 @@
 //   푸터(데이터 기준일·출처·면책)는 **데모 페이지 전용**(v1.4) — 실사용 랜딩은 대화만 남긴다.
 //   OSM 저작자 표시는 지도 안의 Leaflet attribution 컨트롤이 소유한다(제거 금지).
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { DATA_BUILT_FALLBACK, IS_MOCK, getHealth, type HealthResponse } from '../api/client'
 import { Badge, WarnIcon } from '../components/ui'
 import { ChatProvider } from './store'
@@ -86,8 +86,18 @@ function Footer({ health }: { health: HealthResponse | null }) {
 }
 
 function ChatShell({ demo }: { demo: boolean }) {
-  const { state, sigungu, onChip, onSend, onRetry, setPanel, setFilterSports, applyFilter, fitness } =
-    useChatController(demo)
+  const {
+    state,
+    onChip,
+    onSend,
+    onRetry,
+    openPanel,
+    setPanel,
+    setFilterSports,
+    applyFilter,
+    fitness,
+  } = useChatController(demo)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -99,6 +109,22 @@ function ChatShell({ demo }: { demo: boolean }) {
     if (!demo) return
     getHealth().then(setHealth).catch(() => setHealth(null))
   }, [demo])
+
+  // "지도에서 보기"·"시설 목록 보기"를 눌렀을 때(panelFocus 증가) 패널까지 데려간다.
+  // 모바일에서 패널은 스트림 위쪽이라, 결과까지 내려온 사용자에게는 상태만 바꿔서는
+  // 아무 일도 일어나지 않은 것처럼 보인다(v1.7 실기기 피드백).
+  useEffect(() => {
+    if (state.panelFocus === 0) return
+    const el = panelRef.current
+    if (!el) return
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // 레이아웃(탭 전환·시트 펼침)이 반영된 다음 프레임에 위치를 잰다.
+    const raf = requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - 60
+      window.scrollTo({ top: Math.max(0, top), behavior: reduce ? 'auto' : 'smooth' })
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [state.panelFocus, state.panel.tab])
 
   useEffect(() => {
     const goOnline = () => setOnline(true)
@@ -120,12 +146,12 @@ function ChatShell({ demo }: { demo: boolean }) {
   const handlers: MessageHandlers = {
     onChip,
     onRetry,
-    onOpenPanel: (tab) => setPanel(true, tab),
+    // ★ 칩과 동일 경로(openPanel): 상태만 바꾸면 모바일에서 "눌러도 아무 일 없는" 버튼이 된다.
+    onOpenPanel: openPanel,
     // 종목 필터 + 목록 탭 전환 + 나비 한 줄 안내(부수효과는 컨트롤러가 소유).
     onApplyFilter: applyFilter,
-    // 칩·지역 검색은 질문 버블 아래 인라인으로 렌더된다(FR-12 AC1 v1.6) —
-    // 그래서 시군구 목록과 "열려 있는 질문"이 메시지 렌더러로 내려간다.
-    sigungu,
+    // 칩은 질문 버블 아래 인라인으로 렌더된다(FR-12 AC1 v1.6) —
+    // 그래서 "열려 있는 질문"이 메시지 렌더러로 내려간다.
     activeQuestionId: state.activeQuestionId,
     fitness,
   }
@@ -148,6 +174,7 @@ function ChatShell({ demo }: { demo: boolean }) {
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 lg:flex-row lg:items-start lg:gap-6">
         {state.lastAssess && (
           <ContextPanel
+            anchorRef={panelRef}
             req={state.lastAssess.req}
             data={state.lastAssess.data}
             open={state.panel.open}
@@ -161,7 +188,12 @@ function ChatShell({ demo }: { demo: boolean }) {
 
         <main className="order-2 flex min-w-0 flex-1 flex-col lg:order-1">
           <h1 className="sr-only">스포내비 — {BOT_NAME}와 함께 스포츠 복지 확인하기</h1>
-          <ChatStream messages={state.messages} pending={state.pending} handlers={handlers} />
+          <ChatStream
+            messages={state.messages}
+            pending={state.pending}
+            panelFocus={state.panelFocus}
+            handlers={handlers}
+          />
           <Composer
             llmMode={state.llmMode}
             pending={state.pending}

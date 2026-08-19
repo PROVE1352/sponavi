@@ -14,6 +14,8 @@ import { BOT_NAME, T } from './policy'
 import { prefersReducedMotion, typingDurationMs } from './Typewriter'
 
 const STICK_THRESHOLD_PX = 160
+// 결과 덱이 도착했을 때 화면 위쪽에 남겨 둘 여백(sticky 헤더가 덱 머리를 덮지 않도록).
+const DECK_TOP_OFFSET_PX = 72
 // 타이핑 인디케이터 노출 시간(계약 범위 300~600ms 의 짧은 쪽 — 대화가 굼떠지지 않게).
 const INDICATOR_MS = 320
 // 앞 버블의 마지막 글자가 실제로 화면에 박히는 시점은 타이프라이터의 rAF 프레임 경계다.
@@ -137,10 +139,14 @@ function TypingIndicator() {
 export function ChatStream({
   messages,
   pending,
+  panelFocus,
   handlers,
 }: {
   messages: ChatMessage[]
   pending: boolean
+  // "패널을 봐 달라"는 요청 횟수. 셸이 패널로 스크롤하는 동안 스트림은 바닥 추종을 멈춘다 —
+  // 안 그러면 같은 프레임에 두 스크롤이 다투다 패널이 다시 화면 밖으로 밀린다.
+  panelFocus: number
   handlers: MessageHandlers
 }) {
   const { visible, indicator, settled } = useRevealQueue(messages)
@@ -170,6 +176,34 @@ export function ChatStream({
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
+
+  // ★ 결과 덱 도착(FR-12 AC9 v1.7): 바닥 추종을 멈추고 "덱 시작점"으로 딱 한 번 이동한다.
+  //   결과는 이제 메시지 하나라, 바닥을 따라가면 사용자는 덱의 아랫동아리만 보게 된다.
+  //   이후 후속 칩이 붙어도 강제로 끌어내리지 않는다 — 사용자가 직접 바닥까지 내려오면
+  //   스크롤 리스너가 stick 을 다시 켜고 평소의 대화 추종으로 돌아간다.
+  //   ※ 이 훅은 아래 바닥 추종 훅보다 먼저 선언돼야 한다(같은 커밋에서 stick 을 먼저 끈다).
+  const deckShown = useRef<string | null>(null)
+  useEffect(() => {
+    const deck = [...visible].reverse().find((m) => m.kind === 'assess_result')
+    if (!deck || deckShown.current === deck.id) return
+    deckShown.current = deck.id
+    stick.current = false
+    autoUntil.current = Date.now() + 1400
+    const el = boxRef.current?.querySelector<HTMLElement>(`[data-result-anchor="${deck.id}"]`)
+    if (!el) return
+    const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX
+    window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [visible])
+
+  // 패널 열기 요청 → 이번 턴의 바닥 추종은 포기한다(셸이 패널로 데려간다).
+  // ※ 아래 바닥 추종 훅보다 먼저 선언돼야 같은 커밋에서 stick 이 먼저 꺼진다.
+  const panelFocusSeen = useRef(panelFocus)
+  useEffect(() => {
+    if (panelFocus === panelFocusSeen.current) return
+    panelFocusSeen.current = panelFocus
+    stick.current = false
+    autoUntil.current = Date.now() + 1400
+  }, [panelFocus])
 
   // 새 메시지가 열리면 바닥으로. 부드럽게 따라간다(AC11) —
   // 모션 최소화 선호면 즉시 이동(CSS 로는 못 막는 JS 스크롤이다).
@@ -212,7 +246,12 @@ export function ChatStream({
       {visible.map((m, i) => (
         // msg-in = 등장 모션(fade + 8px 상승, 200ms ease-out · FR-12 AC11).
         // 마운트 시 한 번만 재생되고 reduced-motion 에서는 비활성.
-        <div key={m.id} className="msg-in min-w-0">
+        <div
+          key={m.id}
+          className="msg-in min-w-0"
+          // 결과 덱의 시작점 — 도착 시 여기로 한 번만 스크롤한다.
+          data-result-anchor={m.kind === 'assess_result' ? m.id : undefined}
+        >
           <MessageView
             msg={m}
             h={handlers}

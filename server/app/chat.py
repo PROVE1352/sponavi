@@ -1,9 +1,14 @@
 """챗 NLU 레이어 (v2 UX). 계약: docs/API.md `/api/chat/*` · docs/ARCHITECTURE.md §11 · PRD FR-13.
 
-원칙(§11.1): **대화 정책은 클라 결정론, LLM 은 NLU 3역할, 후처리는 서버 결정론.**
+원칙(§11.1): **대화 정책은 클라 결정론, LLM 은 NLU 4역할, 후처리는 서버 결정론.**
   ① 슬롯 추출 — 지역은 "원문 문자열"까지만. 시군구 코드 확정은 서버가 sigungu 대조로 수행.
   ② 연결 멘트(reply) — 후필터 통과분만. 숫자·금액·제도명·자격 단정이 섞이면 폐기(None).
   ③ FAQ 라우팅 — faq_key 만. 답변 본문은 rules.json verified 필드로 조립한 고정 사전.
+  ④ 접지 답변(answer, v1.9 FR-13 AC9) — 질문형 발화에 LLM 이 자연어로 답하되 **재료는 서버가
+     주입한 검증 텍스트([참고 자료] = FAQ 사전 전문)뿐**. fact-lock 후필터(filter_answer)가
+     숫자·제도명을 재료 원문과 대조하고, 2인칭 자격 단정은 상시 차단. 실패 시 answer=null →
+     클라는 기존 faq_key 카드 폴백("무응답이 오답보다 낫다"). 바뀌는 것은 사실의 원천이
+     아니라 표현 주체뿐이다(P-2 · §0-5 불변).
 
 프로바이더: env SPONAVI_CHAT_LLM = openai | off(기본). off/실패/타임아웃/쿼터 → RulesFallback
 (빈 slot_updates + provider="rules" → 클라가 칩 모드로 강등, 정직 라벨). `ai.py` 패턴 미러:
@@ -18,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from functools import lru_cache
 from typing import Any, Optional, Protocol
 
 from pydantic import BaseModel, Field, ValidationError
@@ -100,6 +106,7 @@ class NluEnvelope(BaseModel):
 
     intent: str
     reply: Optional[str] = None
+    answer: Optional[str] = None  # v1.9 접지 답변 레인(AC9) — fact-lock 후필터가 통과분만 채택
     faq_key: Optional[str] = None
     region_text: Optional[str] = None
     age: Any = None
@@ -325,18 +332,22 @@ def resolve_region(text: Any, entries: list[dict]) -> tuple[Optional[dict], list
 # reply 후필터 (PRD FR-13 AC5) — 사실 문장은 전부 클라 템플릿+엔진 출력
 # ---------------------------------------------------------------------------
 _DIGIT = re.compile(r"\d")
+# 제도명 상수(reply 블록리스트와 answer fact-lock ②가 공유 — rules.json 프로그램명으로 보강)
+PROGRAM_WORDS = (
+    "스포츠강좌이용권", "장애인스포츠강좌이용권", "이용권", "튼튼머니", "문화비",
+)
 # 상수 블록리스트(제도명은 아래에서 rules.json 프로그램명으로 보강)
 REPLY_BLOCK = (
     "원", "%", "만원",
-    "스포츠강좌이용권", "장애인스포츠강좌이용권", "이용권", "튼튼머니", "문화비",
+    *PROGRAM_WORDS,
     "자격이 있", "자격이 없", "대상입니다", "대상이 아닙", "선정", "순위", "지원금",
 )
 _REPLY_MAX_LEN = 120  # "짧은 공감·전환 문장" — 장문은 사실 진술 위험이 커 폐기
 
 
-def _blocklist(store: Optional[Store]) -> tuple[str, ...]:
-    """상수 + rules.json 프로그램명(동적 수집). 데이터가 늘어도 후필터가 따라온다."""
-    words = list(REPLY_BLOCK)
+def _program_terms(store: Optional[Store]) -> tuple[str, ...]:
+    """제도명 어휘 — 상수 + rules.json 프로그램명(동적 수집). 데이터가 늘어도 따라온다."""
+    words = list(PROGRAM_WORDS)
     if store is not None:
         for program in getattr(store, "programs", {}).values():
             name = str(program.get("name") or "").strip()
@@ -347,6 +358,11 @@ def _blocklist(store: Optional[Store]) -> tuple[str, ...]:
                 if head:
                     words.append(head)
     return tuple(dict.fromkeys(w for w in words if w))
+
+
+def _blocklist(store: Optional[Store]) -> tuple[str, ...]:
+    """reply 차단어 — 상수(숫자·자격 단정 표현) + 제도명."""
+    return tuple(dict.fromkeys(w for w in (*REPLY_BLOCK, *_program_terms(store)) if w))
 
 
 def filter_reply(reply: Any, store: Optional[Store] = None) -> Optional[str]:
@@ -360,6 +376,82 @@ def filter_reply(reply: Any, store: Optional[Store] = None) -> Optional[str]:
         return None
     for word in _blocklist(store):
         if word in text:
+            return None
+    return text
+
+
+# ---------------------------------------------------------------------------
+# answer fact-lock 후필터 (PRD FR-13 AC9) — 표현만 LLM, 사실은 재료(grounding) 원문
+#   ① 숫자 토큰 대조(콤마 제거 정규화) ② 제도명 대조 ③ 2인칭 자격 단정 차단
+#   ④ 길이 상한 ⑤ 하나라도 걸리면 None → 클라는 faq_key 카드 폴백.
+#   보수성 우선: 애매하면 폐기한다("무응답이 오답보다 낫다").
+# ---------------------------------------------------------------------------
+_ANSWER_MAX_LEN = 400
+# 숫자 정규화: '105,000원' → '105000' (자릿수 콤마만 제거, 문장 콤마는 보존)
+_NUM_COMMA = re.compile(r"(?<=\d),(?=\d)")
+_NUM = re.compile(r"\d+")
+# 재료 밖 제도명 탐지 — 고유명 어휘가 아니어도 '…이용권/바우처/수당/연금/…' 형태면 검사 대상
+_PROGRAM_LIKE = re.compile(
+    r"[가-힣A-Za-z]{2,}"
+    r"(?:이용권|상품권|바우처|수당|연금|장학금|지원금|보조금|포인트|머니|공제|급여|카드|사업|권)"
+)
+# UI 명사 합성어는 제도명이 아니다 — '판정카드' 류가 재료 밖 제도명으로 오폐기되는 것 방지
+_UI_TERMS = ("판정카드", "결과카드", "안내카드", "시설카드", "정보카드")
+# 2인칭 자격 단정(FR-12 AC2 불변 — 판정 문장은 엔진 카드만)
+_SECOND_PERSON = ("당신", "고객님", "회원님", "님은", "님께서는", "귀하")
+_VERDICT_WORDS = ("자격", "대상", "선정", "받을 수 있")
+_VERDICT_NEAR = 40  # 근접 판정 창(문자)
+
+
+def _numbers(text: str) -> list[str]:
+    """숫자 토큰 목록 — 자릿수 콤마 제거 후 연속 숫자열."""
+    return _NUM.findall(_NUM_COMMA.sub("", text))
+
+
+def _asserts_eligibility(text: str) -> bool:
+    """'고객님은 자격이 되세요' 류 2인칭 자격 단정(근접 패턴)인가."""
+    for pron in _SECOND_PERSON:
+        start = 0
+        while True:
+            idx = text.find(pron, start)
+            if idx < 0:
+                break
+            lo = max(0, idx - _VERDICT_NEAR)
+            window = text[lo:idx + len(pron) + _VERDICT_NEAR]
+            if any(word in window for word in _VERDICT_WORDS):
+                return True
+            start = idx + 1
+    return False
+
+
+def filter_answer(
+    answer: Any, grounding: str, store: Optional[Store] = None
+) -> Optional[str]:
+    """접지 답변 후필터. 재료(grounding) 안의 사실로만 쓰였을 때만 통과, 아니면 None."""
+    if not isinstance(answer, str):
+        return None
+    text = _WS.sub(" ", answer).strip()
+    ground = _WS.sub(" ", str(grounding or "")).strip()
+    if not text or not ground:
+        return None  # 재료가 없으면 접지 자체가 불가 → 폐기
+    if len(text) > _ANSWER_MAX_LEN:
+        return None
+    low = text.lower()
+    if "http" in low or "www." in low:
+        return None  # 출처는 카드가 붙인다 — URL 날조 차단
+    if _asserts_eligibility(text):
+        return None
+    # ① 숫자: 재료에 없는 수치는 전부 폐기
+    ground_numbers = set(_numbers(ground))
+    if any(num not in ground_numbers for num in _numbers(text)):
+        return None
+    # ② 제도명: 어휘 목록 + 형태 탐지 결과 중 본문에 등장한 것은 재료에도 있어야 한다
+    flat_text = _WS.sub("", text)
+    flat_ground = _WS.sub("", ground)
+    terms = {*_program_terms(store), *_PROGRAM_LIKE.findall(text)} - set(_UI_TERMS)
+    for term in terms:
+        flat = _WS.sub("", term)
+        if flat and flat in flat_text and flat not in flat_ground:
             return None
     return text
 
@@ -616,13 +708,24 @@ def faq_keys(store: Store) -> set[str]:
     return {item["key"] for item in faq_list(store)}
 
 
+@lru_cache(maxsize=4)
+def build_grounding(store: Store) -> str:
+    """[참고 자료] 본문 — FAQ 사전 전문(q + answer). answer 레인의 **유일한 사실 원천**이자
+    fact-lock 대조 원문(같은 문자열을 프롬프트와 후필터가 공유한다).
+
+    출처 URL 은 싣지 않는다 — URL 속 숫자가 대조 집합을 넓히고, 출처는 카드가 붙인다(AC9).
+    스토어 단위로 변하지 않으므로 인스턴스 캐시(데이터 갱신 시 스토어가 새로 만들어진다)."""
+    blocks = [f"Q. {item['q']}\nA. {item['answer']}" for item in faq_list(store)]
+    return "\n\n".join(blocks)
+
+
 # ---------------------------------------------------------------------------
 # 프로바이더 (ARCHITECTURE §11.2 — ai.py 패턴 미러)
 # ---------------------------------------------------------------------------
 class ChatProvider(Protocol):
     name: str
 
-    def nlu(self, text: str, slots: dict, phase: str) -> dict: ...
+    def nlu(self, text: str, slots: dict, phase: str, grounding: str = "") -> dict: ...
 
 
 SYSTEM_PROMPT = (
@@ -642,6 +745,19 @@ SYSTEM_PROMPT = (
     "- 너는 스포내비의 안내자 '나비'다.\n"
     "- 담백하고 따뜻한 존댓말(~예요/~해 주세요), 1~2문장, 이모지 금지, 과장 금지.\n"
     "- 공감·전환·질문만 하고 자격·금액·시설·순위에 대한 사실 진술은 절대 하지 않는다.\n"
+    # 접지 답변 레인 — FR-13 AC9. 재료는 아래 [참고 자료] 블록(서버 주입)뿐이고,
+    # 서버 fact-lock 후필터가 숫자·제도명을 재료와 대조해 이중 강제한다.
+    "answer 작성 지시:\n"
+    "- 질문형 발화(제도·서비스에 대한 물음)에는 answer 에 2~4문장으로 직접 답한다.\n"
+    "- answer 는 [참고 자료] 에 있는 내용만으로 작성한다."
+    " 자료에 없는 수치·제도·조건은 절대 쓰지 않는다.\n"
+    "- 자료로 답할 수 없는 질문이면 answer=null. 추측·일반 상식·창작 금지.\n"
+    "- 질문이 아닌 발화(슬롯 제공·인사·요청)면 answer=null.\n"
+    "- 사용자의 자격 여부를 단정하지 않는다(판정은 카드가 한다)."
+    " '당신은/고객님은 대상입니다' 류 문장 금지.\n"
+    "- URL·출처 표기는 쓰지 않는다(출처는 카드가 붙인다).\n"
+    "- answer 를 쓸 때도 faq_key 라우팅은 평소대로 고른다(출처 카드 동반).\n"
+    "- 말투는 위 나비 가이드와 동일하다.\n"
 )
 
 
@@ -666,17 +782,23 @@ def _schema() -> dict:
             "intent": {"type": "string", "enum": list(INTENTS)},
             "faq_key": {"type": ["string", "null"], "enum": [*FAQ_KEYS, None]},
             "reply": {"type": ["string", "null"]},
+            "answer": {"type": ["string", "null"]},
         },
         "required": [
             "age", "sex", "region_text", "income_class", "disability_has",
-            "disability_type", "intent", "faq_key", "reply",
+            "disability_type", "intent", "faq_key", "reply", "answer",
         ],
     }
 
 
-def build_request_payload(text: str, slots: dict, phase: str, model: str) -> dict:
+def build_request_payload(
+    text: str, slots: dict, phase: str, model: str, grounding: str = ""
+) -> dict:
     """OpenAI chat.completions 요청 바디. 사용자 발화는 user 메시지로만 전달한다
-    (시스템 프롬프트 삽입 금지 — 프롬프트 인젝션 완화). 슬롯은 범주값만 실린다."""
+    (시스템 프롬프트 삽입 금지 — 프롬프트 인젝션 완화). 슬롯은 범주값만 실린다.
+
+    grounding(서버 조립 검증 텍스트)은 시스템 롤의 [참고 자료] 블록으로만 들어간다 —
+    answer 레인의 유일한 사실 원천(FR-13 AC9)."""
     ph = phase if phase in PHASES else "collect"
     system = (
         f"{SYSTEM_PROMPT}\n"
@@ -684,6 +806,13 @@ def build_request_payload(text: str, slots: dict, phase: str, model: str) -> dic
         f"현재까지 수집된 슬롯(범주값): "
         f"{json.dumps(_safe_slots(slots), ensure_ascii=False, sort_keys=True)}\n"
     )
+    ground = str(grounding or "").strip()
+    if ground:
+        system += (
+            "\n[참고 자료] — answer 의 유일한 사실 원천이다."
+            " 여기 없는 수치·제도·조건을 쓰면 서버가 answer 를 폐기한다.\n"
+            f"{ground}\n"
+        )
     return {
         "model": model,
         "messages": [
@@ -699,7 +828,8 @@ def build_request_payload(text: str, slots: dict, phase: str, model: str) -> dic
             },
         },
         # 신형 모델(gpt-5.x)은 max_tokens 대신 max_completion_tokens 를 받는다.
-        "max_completion_tokens": 400,
+        # v1.9: answer(2~4문장)가 함께 나오므로 상한 상향(400 → 700).
+        "max_completion_tokens": 700,
     }
 
 
@@ -712,13 +842,13 @@ class OpenAIProvider:
     def model(self) -> str:
         return os.environ.get("SPONAVI_OPENAI_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
 
-    def nlu(self, text: str, slots: dict, phase: str) -> dict:
+    def nlu(self, text: str, slots: dict, phase: str, grounding: str = "") -> dict:
         import httpx  # 지연 import — 미설정 서버의 임포트 비용 0
 
         key = os.environ.get("OPENAI_API_KEY", "").strip()
         if not key:
             raise RuntimeError("OPENAI_API_KEY 미설정")
-        payload = build_request_payload(text, slots, phase, self.model())
+        payload = build_request_payload(text, slots, phase, self.model(), grounding)
         resp = httpx.post(
             OPENAI_URL,
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -736,8 +866,8 @@ class RulesFallback:
 
     name = "rules"
 
-    def nlu(self, text: str, slots: dict, phase: str) -> dict:
-        return {"intent": "unknown", "reply": None}
+    def nlu(self, text: str, slots: dict, phase: str, grounding: str = "") -> dict:
+        return {"intent": "unknown", "reply": None, "answer": None}
 
 
 def get_provider() -> ChatProvider:
@@ -754,7 +884,7 @@ def provider_label() -> str:
 
 
 def _run_provider(
-    provider: ChatProvider, text: str, slots: dict, phase: str
+    provider: ChatProvider, text: str, slots: dict, phase: str, grounding: str = ""
 ) -> tuple[Optional[dict], str, Optional[str]]:
     """(검증 통과 출력|None, 사용 프로바이더, 폴백 사유). 스키마 검증 실패 시에만
     1회 재시도하고, 예외(타임아웃·429·키 없음)는 즉시 폴백한다 — ai._run_provider 문법."""
@@ -762,7 +892,7 @@ def _run_provider(
         return None, "rules", "off"
     for _attempt in range(2):  # 최초 + 재시도 1회
         try:
-            raw = provider.nlu(text, slots, phase)
+            raw = provider.nlu(text, slots, phase, grounding)
         except Exception as exc:  # noqa: BLE001
             # 사유는 예외 '클래스명'만 — 메시지에 발화·URL 이 섞이지 않게(P-3)
             return None, "rules", type(exc).__name__
@@ -782,6 +912,7 @@ def _empty_response() -> dict:
         "faq_key": None,
         "region_candidates": [],
         "reply": None,
+        "answer": None,
         "provider": "rules",
     }
 
@@ -793,9 +924,12 @@ def run_nlu(store: Store, payload: dict) -> tuple[dict, dict]:
     phase = payload.get("phase") or "collect"
 
     provider = get_provider()
+    # 접지 재료는 스토어 소유 검증 텍스트 — 프롬프트 주입과 fact-lock 대조가 같은 문자열을 쓴다.
+    grounding = build_grounding(store)
     # 프로바이더에 닿는 슬롯은 화이트리스트 통과분(범주값)만 — 발화로 주입된
     # 임의 필드가 프롬프트에 실리지 않는다(§11.3 · FR-13 AC7).
-    valid, provider_used, reason = _run_provider(provider, text, _safe_slots(slots), phase)
+    valid, provider_used, reason = _run_provider(
+        provider, text, _safe_slots(slots), phase, grounding)
     if valid is None:
         # provider="rules" 면 slot_updates 는 항상 빈 객체(API.md) — 칩 모드 강등
         return _empty_response(), {"ok": False, "fallback_reason": reason}
@@ -816,6 +950,8 @@ def run_nlu(store: Store, payload: dict) -> tuple[dict, dict]:
         "faq_key": faq_key,
         "region_candidates": [{"cd": e["cd"], "nm": e["label"]} for e in candidates],
         "reply": filter_reply(valid.get("reply"), store),
+        # fact-lock 통과분만 — 실패 시 null 이고 클라는 faq_key 카드로 폴백(AC9)
+        "answer": filter_answer(valid.get("answer"), grounding, store),
         "provider": provider_used,
     }
     return resp, {"ok": True, "fallback_reason": None}

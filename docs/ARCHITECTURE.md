@@ -197,7 +197,8 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 ```python
 class ChatProvider(Protocol):
     name: str
-    def nlu(self, text: str, slots: dict, phase: str) -> dict: ...
+    def nlu(self, text: str, slots: dict, phase: str, grounding: str = "") -> dict: ...
+    # grounding(v1.9 AC9): 서버가 주입하는 [참고 자료](FAQ 사전 전문) — 접지 답변 레인의 유일한 사실 원천
 
 OpenAIProvider   # httpx → chat.completions + structured output.
                  # env SPONAVI_OPENAI_MODEL(기본 gpt-5.4-mini), 타임아웃 12s

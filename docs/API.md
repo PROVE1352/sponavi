@@ -96,12 +96,16 @@ SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼
   "faq_key": null,
   "region_candidates": [],
   "reply": "성북구에 사시는군요!",
+  "answer": null,
   "provider": "openai"
 }
 ```
 - `intent`: `provide_info | ask_faq | start_fitness | show_map | restart | unknown`
 - `region_candidates`: 시군구 모호 시 `[{cd, nm}]` — 클라가 칩으로 재질문 (예: "서구" → 인천/광주/대구 서구)
 - `reply`: 후필터 통과분만. 폐기·폴백 시 `null` — 클라는 템플릿 발화 사용.
+- `answer`: 질문형 발화에 대한 자연어 답변(2~4문장) — fact-lock 통과분만. 비질문·재료 밖 질문·
+  폐기·폴백 시 `null`. `reply`(공감·전환 한 줄)와 역할이 다르다 — `answer`가 있으면 클라가 본문으로 쓰고,
+  `null`이면 기존 `faq_key` 카드로 폴백한다.
 - `provider`: `openai | rules`
 
 규칙:
@@ -110,6 +114,13 @@ SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼
 - `slot_updates`는 AssessRequest 필드 검증(pydantic) 통과분만 반영. enum 밖 값은 버린다.
 - `reply` 후필터: 숫자·금액·%·프로그램명·자격 단정 표현 감지 시 폐기(null). 사실 문장은 전부
   클라 템플릿+엔진 출력(P-2).
+- `answer` 접지 레인(v1.9 · FR-13 AC9): 재료는 서버가 시스템 프롬프트에 주입한 **검증 텍스트
+  (`GET /api/chat/faq` 사전 전문)뿐** — LLM은 그 안의 사실만 표현한다(원천 불변, 표현 주체만 LLM).
+- `answer` fact-lock 후필터: ①숫자 토큰(자릿수 콤마 제거 정규화)이 재료 원문에 전부 실재 ②제도명
+  (rules.json 프로그램명 + `…이용권/바우처/수당/연금/포인트/카드/권` 형태)이 재료에 실재 ③2인칭
+  자격 단정("당신·고객님·회원님 … 자격/대상/선정/받을 수 있") 상시 차단 ④400자 상한·URL 표기 금지.
+  하나라도 걸리면 `answer=null`(무응답이 오답보다 낫다).
+- `answer` 채택 시에도 출처는 동반한다 — `faq_key` 라우팅은 그대로 나가므로 클라가 해당 카드를 붙인다.
 - `provider:"rules"`(off/실패/쿼터 소진)면 `slot_updates`는 항상 빈 객체 — 클라는 칩 모드 강등 +
   정직 라벨("규칙 기반 모드").
 - 발화 원문·슬롯은 서버 로그에 기록하지 않는다(P-3). 관측 로그는 `{provider, ms, ok, fallback_reason}`만.
@@ -122,5 +133,5 @@ SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼
     "answer": "…", "source_url": "…", "checked": "2026-07-20" } ]
 ```
 - 답변 본문은 rules.json의 `verified` 필드에서만 조립(SPEC §0-5 날조 금지) — LLM은 자유 질문을
-  `faq_key`로 라우팅만 하고 답을 쓰지 않는다.
+  `faq_key`로 라우팅하고, 이 사전 전문을 재료로 받아 `answer`만 표현한다(v1.9 접지 레인, 위 참조).
 - 칩 모드(FAQ 목록 버튼)와 NLU 라우팅(`intent:ask_faq`) 양쪽이 같은 사전을 소비한다. 정적·캐시 가능.

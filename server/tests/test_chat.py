@@ -9,6 +9,8 @@
   ⑥ 프롬프트 인젝션 — 발화·LLM 출력이 무엇이든 비검증 슬롯·자격 텍스트는 응답에 없음
   ⑦ FAQ 형태 + 전 항목 source_url·checked
   ⑧ /api/health chat_llm 라벨 · chat 레이트리밋 버킷 · 요청 모델 상한
+  ⑨ 접지 답변 레인(v1.9 AC9) — grounding 주입 프롬프트 + fact-lock 후필터(재료 밖 숫자·
+     제도명·2인칭 자격 단정 폐기, 재료 내 사실은 통과)
 프로바이더는 test_ai.py 와 같은 방식으로 스왑한다(monkeypatch.setattr(chat, "get_provider", ...)).
 OPENAI_API_KEY 없이 전부 통과한다(실호출 없음).
 """
@@ -38,8 +40,8 @@ class FakeProvider:
         self.payload = payload
         self.calls = calls if calls is not None else []
 
-    def nlu(self, text, slots, phase):
-        self.calls.append((text, slots, phase))
+    def nlu(self, text, slots, phase, grounding=""):
+        self.calls.append((text, slots, phase, grounding))
         return dict(self.payload)
 
 
@@ -47,10 +49,15 @@ def _out(intent="provide_info", **kw) -> dict:
     base = {
         "age": None, "sex": None, "region_text": None, "income_class": None,
         "disability_has": None, "disability_type": None,
-        "intent": intent, "faq_key": None, "reply": None,
+        "intent": intent, "faq_key": None, "reply": None, "answer": None,
     }
     base.update(kw)
     return base
+
+
+RESPONSE_KEYS = {
+    "slot_updates", "intent", "faq_key", "region_candidates", "reply", "answer", "provider",
+}
 
 
 def _use(monkeypatch, payload):
@@ -266,7 +273,7 @@ def test_provider_exception_falls_back(monkeypatch):
     class Boom:
         name = "openai"
 
-        def nlu(self, text, slots, phase):
+        def nlu(self, text, slots, phase, grounding=""):
             raise TimeoutError("네트워크")
 
     monkeypatch.setattr(chat, "get_provider", lambda: Boom())
@@ -274,6 +281,7 @@ def test_provider_exception_falls_back(monkeypatch):
     assert resp["provider"] == "rules"
     assert resp["slot_updates"] == {}
     assert resp["reply"] is None and resp["intent"] == "unknown"
+    assert resp["answer"] is None
     assert meta["ok"] is False and meta["fallback_reason"] == "TimeoutError"
 
 
@@ -284,7 +292,7 @@ def test_schema_failure_retries_once_then_falls_back(monkeypatch):
     class Bad:
         name = "openai"
 
-        def nlu(self, text, slots, phase):
+        def nlu(self, text, slots, phase, grounding=""):
             calls["n"] += 1
             return {"intent": "make_me_eligible", "reply": "…"}  # enum 밖 intent
 
@@ -308,7 +316,7 @@ def test_off_mode_is_rules(monkeypatch):
     resp, meta = chat.run_nlu(st, {"text": "성북구 살아요", "slots": {}})
     assert resp == {
         "slot_updates": {}, "intent": "unknown", "faq_key": None,
-        "region_candidates": [], "reply": None, "provider": "rules",
+        "region_candidates": [], "reply": None, "answer": None, "provider": "rules",
     }
     assert meta["fallback_reason"] == "off"
 
@@ -344,9 +352,7 @@ def test_injection_cannot_forge_slots_or_eligibility(monkeypatch):
         "phase": "collect",
     })
     # 계약 밖 필드는 응답에 존재하지 않는다
-    assert set(resp) == {
-        "slot_updates", "intent", "faq_key", "region_candidates", "reply", "provider",
-    }
+    assert set(resp) == RESPONSE_KEYS
     assert set(resp["slot_updates"]) <= {
         "age", "sex", "income_class", "disability", "sigungu_cd", "sigungu_nm",
     }
@@ -356,7 +362,7 @@ def test_injection_cannot_forge_slots_or_eligibility(monkeypatch):
     assert resp["faq_key"] is None, "사전에 없는 faq_key 는 드롭"
 
     # 프로바이더에 실린 슬롯도 화이트리스트 통과분만 (조작 필드 미전송)
-    _text, sent_slots, _phase = provider.calls[0]
+    _text, sent_slots, _phase, _grounding = provider.calls[0]
     assert "eligible" not in sent_slots and "rank" not in sent_slots
     assert "income_class" not in sent_slots, "enum 밖 값은 프롬프트에도 실리지 않는다"
 
@@ -460,10 +466,9 @@ def test_nlu_endpoint_rules_default(client, monkeypatch):
     })
     assert r.status_code == 200, r.text
     d = r.json()
-    assert set(d) == {
-        "slot_updates", "intent", "faq_key", "region_candidates", "reply", "provider",
-    }
+    assert set(d) == RESPONSE_KEYS
     assert d["provider"] == "rules" and d["slot_updates"] == {}
+    assert d["answer"] is None, "rules 폴백은 answer 도 null(AC9)"
 
 
 def test_nlu_request_validation(client):
@@ -522,3 +527,118 @@ def test_faq_how_it_works_service_facts_only():
     assert not re.search(r"\d+\s*(원|만원|세|순위)", item["answer"]), "자격 수치는 제도 FAQ 소관"
     assert item["source_url"].startswith("http") and item["checked"]
     assert "how_it_works" in chat.FAQ_KEYS  # NLU 라우팅 enum에 포함(스키마 자동 반영)
+
+
+# --------------------------------------------------------------------------
+# ⑨ 접지 답변 레인 (v1.9 · FR-13 AC9) — 재료 주입 + fact-lock 후필터
+# --------------------------------------------------------------------------
+def _grounding():
+    return chat.build_grounding(_fresh_store())
+
+
+def test_grounding_is_faq_corpus_without_urls():
+    """재료 = FAQ 사전 전문(q+answer). 출처 URL 은 싣지 않는다(대조 집합 오염 방지)."""
+    st = _fresh_store()
+    ground = chat.build_grounding(st)
+    for item in chat.faq_list(st):
+        assert item["q"] in ground and item["answer"] in ground
+    assert "http" not in ground
+    assert "장애인스포츠강좌이용권" in ground and "105,000원" in ground
+
+
+def test_prompt_carries_grounding_block_and_answer_rules():
+    """build_request_payload 단위 — [참고 자료] 블록 + answer=null 지시가 시스템 롤에만."""
+    ground = _grounding()
+    header = "[참고 자료] — answer"  # 재료 블록 머리(정적 지시문의 언급과 구분)
+    payload = chat.build_request_payload("월 얼마 지원돼요?", {}, "qa", "gpt-5.4-mini", ground)
+    system = payload["messages"][0]["content"]
+    assert header in system
+    assert ground in system, "재료 전문이 그대로 실린다"
+    assert "answer=null" in system, "재료 밖 질문이면 답하지 않는다는 지시"
+    assert "answer 작성 지시" in system
+    assert payload["messages"][1]["content"] == "월 얼마 지원돼요?"
+    assert "[참고 자료]" not in payload["messages"][1]["content"]
+    # 스키마에도 answer 필드가 required 로 존재
+    props = payload["response_format"]["json_schema"]["schema"]["properties"]
+    assert props["answer"] == {"type": ["string", "null"]}
+    assert "answer" in payload["response_format"]["json_schema"]["schema"]["required"]
+    # 재료가 없으면 블록 자체를 넣지 않는다
+    bare = chat.build_request_payload("…", {}, "qa", "gpt-5.4-mini")
+    assert header not in bare["messages"][0]["content"]
+
+
+def test_answer_grounded_passes_and_provider_gets_grounding(monkeypatch):
+    """재료 안 사실로만 쓴 답변은 통과하고, 프로바이더에 재료가 전달된다."""
+    st = _fresh_store()
+    good = (
+        "스포츠강좌이용권은 월 최대 105,000원까지 스포츠강좌 수강료를 지원해요."
+        " 장애인스포츠강좌이용권은 월 최대 110,000원이에요."
+        " 자세한 조건은 아래 안내에서 확인해 주세요."
+    )
+    provider = _use(monkeypatch, _out(
+        intent="ask_faq", faq_key="benefit_amount", answer=good))
+    resp = chat.nlu(st, {"text": "지원 금액이 얼마예요?", "slots": {}, "phase": "qa"})
+    assert resp["answer"] == good
+    assert resp["faq_key"] == "benefit_amount", "answer 채택 시에도 출처 카드는 동반(AC9)"
+    _text, _slots, _phase, sent_grounding = provider.calls[0]
+    assert "105,000원" in sent_grounding
+
+
+def test_answer_ungrounded_number_dropped_but_faq_card_survives(monkeypatch):
+    """재료에 없는 수치 → answer 폐기, faq_key 카드 폴백 경로는 유지."""
+    st = _fresh_store()
+    _use(monkeypatch, _out(
+        intent="ask_faq", faq_key="benefit_amount", answer="월 99만원 드려요."))
+    resp = chat.nlu(st, {"text": "얼마 줘요?", "slots": {}, "phase": "qa"})
+    assert resp["answer"] is None
+    assert resp["faq_key"] == "benefit_amount"
+
+
+def test_answer_unknown_program_name_dropped(monkeypatch):
+    """재료에 없는 제도명 → 숫자가 없어도 폐기."""
+    st = _fresh_store()
+    _use(monkeypatch, _out(
+        intent="ask_faq", faq_key="no_voucher_alternative",
+        answer="국민연금 스포츠권으로도 지원을 받으실 수 있어요."))
+    assert chat.nlu(st, {"text": "다른 지원 없나요?", "slots": {}})["answer"] is None
+
+    ground = chat.build_grounding(st)
+    for fake in ("문화누리카드도 함께 쓸 수 있어요.",
+                 "청년스포츠수당을 신청해 보세요.",
+                 "어르신 스포츠 상품권도 지금 받을 수 있어요."):  # 미검증 제도 = 재료 밖
+        assert chat.filter_answer(fake, ground, st) is None, fake
+    # 반대로 UI 명사('판정 카드')는 제도명이 아니므로 오폐기하지 않는다
+    assert chat.filter_answer("판정카드에 출처와 확인일이 함께 붙어요.", ground, st)
+
+
+@pytest.mark.parametrize("bad", [
+    "고객님은 자격이 되세요.",
+    "당신은 1순위 선정 대상입니다.",
+    "회원님께서는 이용권을 받을 수 있어요.",
+])
+def test_answer_second_person_verdict_always_blocked(bad):
+    """2인칭 자격 단정은 상시 차단 — 판정 문장은 엔진 카드만(FR-12 AC2)."""
+    st = _fresh_store()
+    assert chat.filter_answer(bad, chat.build_grounding(st), st) is None
+
+
+def test_answer_number_normalization_variants():
+    """콤마 표기 변형은 정규화 대조 — 재료의 '105,000원'을 두 표기 모두로 인용 가능."""
+    st = _fresh_store()
+    ground = chat.build_grounding(st)
+    assert chat.filter_answer("월 최대 105,000원 안에서 지원돼요.", ground, st)
+    assert chat.filter_answer("월 최대 105000원 안에서 지원돼요.", ground, st)
+    # 자릿수만 바꾼 인접 수치는 재료에 없으므로 폐기(느슨한 부분일치 금지)
+    assert chat.filter_answer("월 최대 106,000원 안에서 지원돼요.", ground, st) is None
+
+
+def test_answer_filter_guards():
+    """길이 상한·재료 없음·URL 날조·비문자열은 전부 폐기(보수성 우선)."""
+    st = _fresh_store()
+    ground = chat.build_grounding(st)
+    assert chat.filter_answer(None, ground, st) is None
+    assert chat.filter_answer("", ground, st) is None
+    assert chat.filter_answer("소득 요건 없이 신청할 수 있어요.", "", st) is None, "재료 없으면 폐기"
+    assert chat.filter_answer("소득 요건은 없어요. " * 40, ground, st) is None, "400자 상한"
+    assert chat.filter_answer(
+        "자세한 내용은 https://example.or.kr 에서 보세요.", ground, st) is None

@@ -28,22 +28,26 @@ def _round_km(v: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 좌표 정직성 (FR-04/FR-05): 실좌표(api)만 거리(km) 노출, 시군구 중심 폴백(centroid)은
-# 거리 미표기. 내부 정렬·최근접 판단엔 폴백 거리도 쓰되(방향성), 사용자 노출 수치엔 금지.
+# 좌표 정직성 (FR-04/FR-05): 실좌표(api·geocoded)만 거리(km) 노출, 시군구 중심 폴백
+# (centroid)은 거리 미표기. 내부 정렬·최근접 판단엔 폴백 거리도 쓰되(방향성), 사용자
+# 노출 수치엔 금지. geocoded는 카카오 지오코딩 실좌표(scripts/geocode_demo.py, M2).
 # ---------------------------------------------------------------------------
-def _is_api(fac: dict) -> bool:
-    return fac.get("coord_source") == "api"
+_REAL_COORD_SOURCES = frozenset({"api", "geocoded"})
+
+
+def _is_real_coord(fac: dict) -> bool:
+    return fac.get("coord_source") in _REAL_COORD_SOURCES
 
 
 def _expose_dist(fac: dict) -> Optional[float]:
     """사용자 노출용 거리. 실좌표면 km, 근사좌표(구 중심)면 None(미표기)."""
-    return fac["dist_km"] if _is_api(fac) else None
+    return fac["dist_km"] if _is_real_coord(fac) else None
 
 
 def _facility_hop_label(fac: dict) -> str:
     """경로 다이어그램 시설 홉 라벨. 근사좌표엔 'Nonekm'를 찍지 않는다."""
     d = fac.get("dist_km")
-    if _is_api(fac) and d is not None:
+    if _is_real_coord(fac) and d is not None:
         return f"{fac['name']} · {d}km"
     return fac["name"]
 

@@ -39,9 +39,11 @@ SG_KEYS = {"radius_km", "voucher_count", "alt_count", "nearest", "message", "cov
 
 
 def _assert_coord_honesty(f):
-    """FR-04: 실좌표(api)만 dist_km(수치), 근사좌표(centroid)는 dist_km=None."""
+    """FR-04: 실좌표(api·geocoded)만 dist_km(수치), 근사좌표(centroid)는 dist_km=None.
+
+    geocoded = 카카오 지오코딩 실좌표(M2, 2026-08-19 데모 구 배치)."""
     assert f["coord_source"] in ("api", "centroid", "geocoded")
-    if f["coord_source"] == "api":
+    if f["coord_source"] in ("api", "geocoded"):
         assert isinstance(f["dist_km"], (int, float))
     else:
         assert f["dist_km"] is None

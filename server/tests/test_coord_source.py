@@ -57,3 +57,17 @@ def test_centroid_facility_path_label_has_no_distance(store):
     res = assess(store, _body(10, "기초생활수급"))
     for hop in res["path"]:
         assert "Nonekm" not in hop["label"]
+
+
+def test_geocoded_facility_exposes_distance():
+    """M2 지오코딩(coord_source='geocoded')은 실좌표 — 거리 노출 대상(FR-04).
+
+    2026-08-19 실배치에서 발견: _is_api가 'api'만 인정해 geocoded 시설의
+    dist_km가 None으로 나갔다. 실좌표 집합은 {'api','geocoded'}."""
+    from app import engine
+
+    fac = {"coord_source": "geocoded", "dist_km": 1.2, "name": "지오코딩 시설"}
+    assert engine._expose_dist(fac) == 1.2
+    assert "1.2km" in engine._facility_hop_label(fac)
+    approx = {"coord_source": "centroid", "dist_km": 1.2, "name": "근사 시설"}
+    assert engine._expose_dist(approx) is None

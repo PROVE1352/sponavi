@@ -13,8 +13,10 @@ import {
 // v1.5 UX 계약 (PRD FR-12 AC6·AC9·AC10·AC11) —
 //   ① 카드 가로 스와이프 카루셀: 판정 카드·시설 카드가 자체 스냅 컨테이너를 갖는다(페이지 가로 스크롤은 0)
 //   ② 봇 발화 타이프라이터: 모션 ON 이면 순차 표시 → 완성, 최종 상태는 항상 완전한 문장
-//   ③ prefers-reduced-motion: 타이프라이터·등장 모션 즉시/비활성
+//   ③ prefers-reduced-motion: 타이프라이터·순차 등장·등장 모션 즉시/비활성
 //   ④ 연령 2단계 칩(연령대 → 세부 나이)만으로 판정 완주 + 정확 나이로만 판정
+// v1.6 확장(AC10) —
+//   ⑧ 연속 봇 메시지 순차 등장: 인사 타이핑 완료 → 타이핑 인디케이터 → 첫 질문 → 칩
 
 test('① 390px 카루셀 — 판정·시설 카드가 스냅 스크롤 컨테이너 + 넘김 힌트를 갖고, 페이지 가로 스크롤은 0', async ({
   page,
@@ -101,6 +103,12 @@ test('③ prefers-reduced-motion — 타이프라이터는 즉시 전체 표시,
     .first()
     .evaluate((el) => getComputedStyle(el).animationName)
   expect(anim).toBe('none')
+
+  // v1.6: 순차 등장 연출도 통째로 생략 — 인사와 첫 질문·칩이 인디케이터 없이 한 번에 있다
+  await expect(page.getByTestId('typing-indicator')).toHaveCount(0)
+  await expect(stream(page).getByTestId('question-age_band')).toBeVisible()
+  await expect(page.getByTestId('chip-ageband-20s')).toBeVisible()
+  await expect(stream(page)).toHaveAttribute('data-sequencing', 'false')
 })
 
 test('④ 연령 2단계 칩(연령대 → 세부 나이)만으로 판정 완주 — 정확 나이로만 판정한다', async ({
@@ -171,4 +179,59 @@ test('⑦ 메인 실사용 경로(연령 2단계 포함) 완주 후에도 카루
   await expect(page.getByTestId('assess-carousel')).toBeVisible()
   await expect(page.getByTestId('facility-carousel')).toBeVisible()
   await assertNoHorizontalScroll(page)
+})
+
+test('⑧ 부팅 순차 등장 — 인사 타이핑 완료 → 타이핑 인디케이터 → 첫 질문 → 칩 (FR-12 AC10 v1.6)', async ({
+  page,
+}) => {
+  // 등장 순서·간격을 프레임 단위로 기록한다(고정 sleep 없이 "먼저 뜨지 않았음"을 증명).
+  await page.addInitScript(() => {
+    const marks: Record<string, number> = {}
+    ;(window as unknown as { __marks: Record<string, number> }).__marks = marks
+    const seen = (key: string, el: Element | null) => {
+      if (el && marks[key] == null) marks[key] = performance.now()
+    }
+    const tick = () => {
+      const greet = document.querySelector('[data-testid="typewriter"]')
+      seen('greet', greet)
+      if (greet?.getAttribute('data-typing') === 'false') seen('greetDone', greet)
+      seen('indicator', document.querySelector('[data-testid="typing-indicator"]'))
+      seen('question', document.querySelector('[data-testid="question-age_band"]'))
+      seen('chips', document.querySelector('[data-testid="inline-chips"]'))
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+
+  await page.goto('/')
+
+  // 인사 버블이 타이핑되는 동안 첫 질문 버블은 아직 없다("미리 떠 있음" 금지)
+  await expect(stream(page).getByText('안녕하세요, 스포내비 안내자 나비예요.')).toBeVisible()
+  await expect(stream(page).getByTestId('question-age_band')).toHaveCount(0)
+
+  // 인디케이터는 낭독 대상이 아니다(완성 문장만 1회 낭독 — AC8)
+  const dots = page.getByTestId('typing-indicator')
+  await expect(dots).toBeVisible()
+  await expect(dots).toHaveAttribute('aria-hidden', 'true')
+  await expect(dots.locator('.typing-dot')).toHaveCount(3)
+
+  // 시퀀스가 끝나면 질문 버블과 그 아래 칩까지 도착해 있다
+  await settleTypewriter(page)
+  await expect(stream(page).getByTestId('question-age_band')).toBeVisible()
+  await expect(page.getByTestId('chip-ageband-20s')).toBeVisible()
+  await expect(page.getByTestId('typing-indicator')).toHaveCount(0)
+
+  const marks = await page.evaluate(
+    () => (window as unknown as { __marks: Record<string, number> }).__marks,
+  )
+  // 순서: 인사 → (인사 타이핑 완료) → 인디케이터 → 질문 → 칩
+  expect(marks.greet).toBeLessThan(marks.greetDone)
+  expect(marks.greetDone).toBeLessThanOrEqual(marks.indicator)
+  expect(marks.indicator).toBeLessThan(marks.question)
+  expect(marks.question).toBeLessThan(marks.chips)
+  // 인사는 실제로 한 글자씩 찍혔고(즉시 완성 아님), 인디케이터는 300~600ms 머문다
+  expect(marks.greetDone - marks.greet).toBeGreaterThan(400)
+  expect(marks.question - marks.indicator).toBeGreaterThanOrEqual(280)
+  // 질문의 칩은 그 버블 타이핑이 끝난 뒤에 나타난다
+  expect(marks.chips - marks.question).toBeGreaterThan(280)
 })

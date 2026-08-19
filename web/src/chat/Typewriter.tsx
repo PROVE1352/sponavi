@@ -23,6 +23,14 @@ export function prefersReducedMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_QUERY).matches
 }
 
+// 이 문장을 다 치는 데 걸리는 시간. 순차 등장 큐(ChatStream)가 "앞 버블이 언제 끝나는지"를
+// 알아야 하므로 재생 속도 계산을 여기 한 곳에 두고 양쪽이 같은 값을 쓴다(FR-12 AC10 v1.6).
+export function typingDurationMs(text: string): number {
+  const len = text.length
+  if (len === 0) return 0
+  return Math.max(1, Math.min(MS_PER_CHAR, MAX_TOTAL_MS / len)) * len
+}
+
 export function Typewriter({
   text,
   animate,

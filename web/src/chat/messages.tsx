@@ -4,11 +4,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import type { AssessRequest, AssessResponse } from '../types'
+import type { AssessRequest, AssessResponse, Sigungu } from '../types'
 import type {
   Chip,
   ChatMessage,
   BotTextMsg,
+  ChipQuestionMsg,
   FacilitySummaryMsg,
   FitnessTurnApi,
 } from '../types_chat'
@@ -22,7 +23,7 @@ import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
 import { CardCarousel } from '../components/Carousel'
-import { BOT_NAME, primaryProgramId } from './policy'
+import { BOT_NAME, primaryProgramId, regionChips } from './policy'
 import { Typewriter } from './Typewriter'
 
 // 나비 아바타 — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
@@ -138,14 +139,12 @@ export function ChipRow({
   ariaLabel,
   answeredLabel,
   onPick,
-  disabled,
 }: {
   chips: Chip[]
   select: 'single' | 'action'
   ariaLabel: string
   answeredLabel?: string
   onPick: (chip: Chip) => void
-  disabled?: boolean
 }) {
   if (chips.length === 0) return null
   const single = select === 'single'
@@ -164,7 +163,6 @@ export function ChipRow({
             data-testid={`chip-${c.id}`}
             role={single ? 'radio' : undefined}
             aria-checked={single ? chosen : undefined}
-            disabled={disabled}
             onClick={() => onPick(c)}
             className={
               'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-full border-[1.5px] px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out disabled:opacity-60 ' +
@@ -191,6 +189,116 @@ export function ChipRow({
         )
       })}
     </div>
+  )
+}
+
+// ── 지역 검색(FR-12 AC6) ────────────────────────────────────────────────
+// 질문 버블 아래 칩 컨테이너 안에 들어가는 소형 검색창 + 결과 칩.
+// 입력한 글자는 전부 로컬 필터링이라 외부로 전송되지 않는다(P-3).
+const REGION_LIMIT = 12
+
+function RegionSearch({ sigungu, onPick }: { sigungu: Sigungu[]; onPick: (chip: Chip) => void }) {
+  const [q, setQ] = useState('')
+  const matches = useMemo(() => {
+    const needle = q.trim()
+    const list = needle === '' ? sigungu : sigungu.filter((s) => s.nm.includes(needle))
+    return regionChips(list, REGION_LIMIT)
+  }, [q, sigungu])
+
+  return (
+    <div className="space-y-2">
+      <label className="block max-w-sm">
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+          지역 검색 (입력한 글자는 전송되지 않아요)
+        </span>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          data-testid="region-search"
+          placeholder="예: 성북, 인천 서구"
+          autoComplete="off"
+          className="mt-1 min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 transition-colors duration-200 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:hover:border-slate-600"
+        />
+      </label>
+      {matches.length > 0 ? (
+        <ChipRow chips={matches} select="single" ariaLabel="지역 선택" onPick={onPick} />
+      ) : (
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          검색 결과가 없어요. 시군구 이름의 일부만 넣어 보세요.
+        </p>
+      )}
+      {sigungu.length > REGION_LIMIT && q.trim() === '' && (
+        <p className="text-xs text-slate-600 dark:text-slate-400">
+          전체 {sigungu.length}개 지역 중 일부만 보여드려요. 검색해서 찾아 주세요.
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ── 질문 버블 + 인라인 칩(FR-12 AC1 v1.6) ────────────────────────────────
+// 칩은 컴포저가 아니라 **질문 버블 바로 아래**에 붙는다(표준 퀵리플라이 문법).
+//   · 버블 타이핑이 끝난 뒤에야 칩이 나타난다(AC10 v1.6) — 질문보다 답이 먼저 뜨지 않는다.
+//   · 단일 선택 질문은 "지금 열려 있는 질문"일 때만 살아 있다. 지나간 질문은 칩을 걷고
+//     선택 표시만 남긴다 — 과거 칩을 눌러 상태가 꼬이는 경로 자체를 없앤다.
+//   · 즉시 실행 묶음(select='action': 후속 액션·FAQ·퀵스타트)은 계속 눌러 쓰는 버튼이라 잠기지 않는다.
+function ChipQuestion({
+  msg,
+  h,
+  showSender,
+  typing,
+}: {
+  msg: ChipQuestionMsg
+  h: MessageHandlers
+  showSender: boolean
+  typing: boolean
+}) {
+  const [done, setDone] = useState(!typing)
+  const onDone = useCallback(() => setDone(true), [])
+  useEffect(() => {
+    if (!typing) setDone(true)
+  }, [typing])
+
+  const locked = msg.select === 'single' && msg.id !== h.activeQuestionId
+
+  return (
+    <BotLane showSender={showSender}>
+      <div data-testid={`question-${msg.question}`}>
+        <BotBubble>
+          <p className="break-words whitespace-pre-line">
+            <Typewriter text={msg.text} animate={typing} onDone={onDone} />
+          </p>
+        </BotBubble>
+
+        {locked
+          ? msg.answeredLabel && (
+              <p
+                data-testid="chip-answered"
+                className="mt-1.5 inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400"
+              >
+                <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                {msg.answeredLabel} 선택함
+              </p>
+            )
+          : done && (
+              // msg-in = 버블 타이핑 완료 뒤의 fade+상승 등장(reduced-motion 에서는 비활성).
+              <div data-testid="inline-chips" className="msg-in mt-2">
+                {msg.searchable ? (
+                  <RegionSearch sigungu={h.sigungu} onPick={(c) => h.onChip(c, msg.id)} />
+                ) : (
+                  <ChipRow
+                    chips={msg.chips}
+                    select={msg.select}
+                    ariaLabel={msg.text}
+                    answeredLabel={msg.answeredLabel}
+                    onPick={(c) => h.onChip(c, msg.id)}
+                  />
+                )}
+              </div>
+            )}
+      </div>
+    </BotLane>
   )
 }
 
@@ -385,6 +493,10 @@ export interface MessageHandlers {
   onRetry: () => void
   onOpenPanel: (tab: 'map' | 'list') => void
   onApplyFilter: (sports: string[]) => void
+  // 지역 질문의 인라인 검색이 쓰는 전국 시군구 목록(FR-12 AC6).
+  sigungu: Sigungu[]
+  // 지금 열려 있는 질문. 이 id 가 아닌 단일 선택 질문의 칩은 잠긴다(FR-12 AC1 v1.6).
+  activeQuestionId: string | null
   // 체력 레인 3턴의 상태·액션(useFitness + 스토어 진행도).
   fitness: FitnessTurnApi
 }
@@ -410,30 +522,8 @@ export function MessageView({
       return <BotTextBubble msg={msg} showSender={showSender} typing={typing} />
 
     case 'chip_question':
-      return (
-        <BotLane showSender={showSender}>
-          <BotBubble>
-            <p className="break-words whitespace-pre-line">{msg.text}</p>
-          </BotBubble>
-          {msg.inline && (
-            <div className="mt-2">
-              <ChipRow
-                chips={msg.chips}
-                select={msg.select}
-                ariaLabel={msg.text}
-                answeredLabel={msg.answeredLabel}
-                onPick={(c) => h.onChip(c, msg.id)}
-              />
-            </div>
-          )}
-          {!msg.inline && msg.answeredLabel && (
-            <p className="mt-1.5 inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400">
-              <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              {msg.answeredLabel} 선택함
-            </p>
-          )}
-        </BotLane>
-      )
+      return <ChipQuestion msg={msg} h={h} showSender={showSender} typing={typing} />
+
 
     case 'path':
       return (

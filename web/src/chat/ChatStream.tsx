@@ -1,13 +1,138 @@
 // 채팅 스트림. role="log" + aria-live="polite" 로 새 봇 메시지를 낭독한다(FR-12 AC8).
 // 자동 스크롤은 "바닥에 붙어 있을 때만" — 사용자가 위로 스크롤 중이면 강제로 끌어내리지 않는다.
+//
+// ★ v1.6 순차 등장(FR-12 AC10): 연속된 나비 발화는 동시에 마운트되지 않는다.
+//     앞 버블 타이핑 완료 → 타이핑 인디케이터(점 3개) → 다음 버블 등장·타이핑
+//   부팅(인사 → 첫 질문)도 같은 규칙을 탄다 — 질문이 인사보다 먼저 떠 있지 않는다.
+//   사용자 입력(칩·전송)이 들어오면 남은 시퀀스를 그 자리에서 전부 완료한다(대기 강제 금지).
+//   prefers-reduced-motion 이면 인디케이터·지연·타이프라이터 전부 생략하고 즉시 표시.
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage } from '../types_chat'
 import { MessageView, NabiAvatar, type MessageHandlers } from './messages'
 import { BOT_NAME, T } from './policy'
-import { prefersReducedMotion } from './Typewriter'
+import { prefersReducedMotion, typingDurationMs } from './Typewriter'
 
 const STICK_THRESHOLD_PX = 160
+// 타이핑 인디케이터 노출 시간(계약 범위 300~600ms 의 짧은 쪽 — 대화가 굼떠지지 않게).
+const INDICATOR_MS = 320
+// 앞 버블의 마지막 글자가 실제로 화면에 박히는 시점은 타이프라이터의 rAF 프레임 경계다.
+// 계산상 종료 시각에 프레임 두어 개를 얹어야 "완료 → 다음" 순서가 눈으로도 어긋나지 않는다.
+const TYPING_TAIL_MS = 60
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+
+// 타이프라이터가 붙는 메시지 = 나비가 "말하는" 버블(발화·질문).
+// 카드·고지 블록·사용자 버블은 여기 해당하지 않는다 — 순서만 지켜 등장한다.
+function spokenTextOf(m: ChatMessage): string | null {
+  if (m.role !== 'bot') return null
+  if (m.kind === 'bot_text') return m.text
+  if (m.kind === 'chip_question') return m.text
+  return null
+}
+
+function scrollToBottom(behavior: ScrollBehavior) {
+  // 컴포저가 sticky 라 "요소를 뷰포트 바닥에 맞추기"로는 마지막 칩이 컴포저에 가린다.
+  // 문서 맨 아래로 내려가면 컴포저가 제자리(본문 끝)로 돌아와 칩이 온전히 보인다.
+  window.scrollTo({ top: document.documentElement.scrollHeight, behavior })
+}
+
+// 스트림에 붙은 메시지를 하나씩 여는 큐. 스토어는 메시지를 즉시 다 밀어넣고,
+// "언제 보일지"는 여기서만 정한다(대화 상태와 연출을 분리 — 판정 로직은 대기하지 않는다).
+function useRevealQueue(messages: ChatMessage[]) {
+  const [revealed, setRevealed] = useState(0)
+  const [indicator, setIndicator] = useState(false)
+  const [reduced, setReduced] = useState(prefersReducedMotion)
+  const revealedAt = useRef(0)
+
+  useEffect(() => {
+    const mq = window.matchMedia(REDUCED_MOTION_QUERY)
+    const onChange = () => setReduced(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  // 직전 공개 시각. 앞 버블의 타이핑이 언제 끝나는지 계산하는 기준점이다.
+  useEffect(() => {
+    revealedAt.current = performance.now()
+  }, [revealed])
+
+  useEffect(() => {
+    // 대화 초기화(처음부터 다시)로 스트림이 짧아졌다 → 시퀀스를 처음부터 다시 태운다.
+    if (revealed > messages.length) {
+      setIndicator(false)
+      setRevealed(0)
+      return
+    }
+    if (revealed >= messages.length) {
+      setIndicator(false)
+      return
+    }
+    if (reduced) {
+      setIndicator(false)
+      setRevealed(messages.length)
+      return
+    }
+
+    // 사용자 발화가 큐에 들어왔다 = 사용자가 답을 했다 → 앞선 연출을 기다리게 하지 않는다.
+    const userAhead = messages.findIndex((m, i) => i >= revealed && m.role === 'user')
+    if (userAhead >= 0) {
+      setIndicator(false)
+      setRevealed(userAhead + 1)
+      return
+    }
+
+    const prev = revealed > 0 ? messages[revealed - 1] : null
+    const prevSpoken = prev ? spokenTextOf(prev) : null
+    const prevEnd = prevSpoken ? typingDurationMs(prevSpoken) + TYPING_TAIL_MS : 0
+    const rest = prevSpoken ? revealedAt.current + prevEnd - performance.now() : 0
+    const wait = Math.max(0, rest)
+    // 인디케이터는 "연속된 나비 발화" 사이에만 — 카드나 사용자 답변 뒤 첫 마디는 바로 나온다.
+    const withIndicator = prev?.role === 'bot' && spokenTextOf(messages[revealed]) != null
+
+    if (!withIndicator) {
+      const t = setTimeout(() => setRevealed((n) => n + 1), wait)
+      return () => clearTimeout(t)
+    }
+    const t1 = setTimeout(() => setIndicator(true), wait)
+    const t2 = setTimeout(() => {
+      setIndicator(false)
+      setRevealed((n) => n + 1)
+    }, wait + INDICATOR_MS)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [messages, reduced, revealed])
+
+  const visible = useMemo(
+    () => (revealed >= messages.length ? messages : messages.slice(0, revealed)),
+    [messages, revealed],
+  )
+  return { visible, indicator, settled: revealed >= messages.length && !indicator }
+}
+
+// 나비가 다음 말을 준비하는 동안의 점 3개. 낭독 대상이 아니다(aria-hidden) —
+// 스크린리더에는 완성된 문장만 1회 전달된다(FR-12 AC8·AC10).
+function TypingIndicator() {
+  return (
+    <div
+      className="msg-in flex items-start gap-2"
+      data-testid="typing-indicator"
+      aria-hidden="true"
+    >
+      <NabiAvatar />
+      <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-700 dark:bg-slate-900">
+        {[0, 150, 300].map((delay) => (
+          <span
+            key={delay}
+            className="typing-dot h-1.5 w-1.5 rounded-full bg-slate-400"
+            style={{ animationDelay: `${delay}ms` }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function ChatStream({
   messages,
@@ -18,20 +143,19 @@ export function ChatStream({
   pending: boolean
   handlers: MessageHandlers
 }) {
-  // 타이프라이터는 "가장 마지막 나비 발화" 하나만 재생한다(FR-12 AC10).
-  //   · 뒤에 새 나비 발화가 붙으면 → 앞의 것은 그 즉시 완성(스캔이 최신 것만 잡는다)
-  //   · 뒤에 사용자 발화가 붙으면(= 칩을 눌렀다) → 재생 중이던 것도 즉시 완성(null)
+  const { visible, indicator, settled } = useRevealQueue(messages)
+
+  // 타이프라이터는 "방금 열린 마지막 버블" 하나만 재생한다(FR-12 AC10).
+  // 큐가 한 번에 하나씩만 열기 때문에 재생 대상은 항상 마지막 메시지다.
+  //   · 다음 메시지가 열리면 → 앞의 것은 그 즉시 완성
+  //   · 사용자 발화가 붙으면(= 칩을 눌렀다) → 재생 중이던 것도 즉시 완성(null)
   // 어느 쪽이든 최종 상태는 항상 완전한 문장이다 — 끊긴 채 남는 버블이 없다.
   const typingId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const m = messages[i]
-      if (m.role === 'user') return null
-      if (m.kind === 'bot_text') return m.id
-    }
-    return null
-  }, [messages])
+    const last = visible[visible.length - 1]
+    return last && spokenTextOf(last) ? last.id : null
+  }, [visible])
 
-  const endRef = useRef<HTMLDivElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
   // 바닥에 붙어 있는가. 사용자가 위로 스크롤하면 false → 강제 스크롤하지 않는다.
   const stick = useRef(true)
   // 우리가 일으킨 스크롤이 끝날 때까지는 스크롤 이벤트로 stick 을 뒤집지 않는다.
@@ -47,49 +171,58 @@ export function ChatStream({
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // 새 메시지가 붙으면 바닥으로. 카드·지도가 뒤늦게 커지므로 몇 번 더 확인해 따라간다.
+  // 새 메시지가 열리면 바닥으로. 부드럽게 따라간다(AC11) —
+  // 모션 최소화 선호면 즉시 이동(CSS 로는 못 막는 JS 스크롤이다).
   useEffect(() => {
     if (!stick.current) return
-    const el = endRef.current
-    if (!el) return
     autoUntil.current = Date.now() + 1400
-    // 부드럽게 따라간다(AC11). 모션 최소화 선호면 즉시 이동 — CSS 로는 못 막는 JS 스크롤이다.
-    el.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'end' })
-    const timers = [250, 700, 1200].map((ms) =>
-      setTimeout(() => {
-        const doc = document.documentElement
-        const atBottom =
-          window.innerHeight + window.scrollY >= doc.scrollHeight - STICK_THRESHOLD_PX
-        if (!atBottom) {
-          autoUntil.current = Date.now() + 400
-          el.scrollIntoView({ behavior: 'instant', block: 'end' })
-        }
-      }, ms),
-    )
-    return () => timers.forEach(clearTimeout)
-  }, [messages.length, pending])
+    scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
+  }, [visible.length, indicator, pending])
+
+  // 높이가 뒤늦게 자라는 것들(칩 fade-in · 카드 · 지도 타일)도 따라간다.
+  // 스크롤 자체는 높이를 바꾸지 않으므로 되먹임 루프가 생기지 않는다.
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    let last = el.getBoundingClientRect().height
+    const ro = new ResizeObserver(() => {
+      const h = el.getBoundingClientRect().height
+      const grew = h > last + 1
+      last = h
+      if (!grew || !stick.current) return
+      autoUntil.current = Date.now() + 600
+      scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   return (
     <div
+      ref={boxRef}
       role="log"
       aria-live="polite"
       aria-relevant="additions"
       aria-busy={pending}
       data-testid="chat-stream"
+      // 순차 등장이 아직 진행 중인가(e2e 앵커 — 고정 sleep 없이 "연출 끝"을 기다린다).
+      data-sequencing={settled ? 'false' : 'true'}
       className="flex min-w-0 flex-col gap-4 py-4"
     >
-      {messages.map((m, i) => (
+      {visible.map((m, i) => (
         // msg-in = 등장 모션(fade + 8px 상승, 200ms ease-out · FR-12 AC11).
         // 마운트 시 한 번만 재생되고 reduced-motion 에서는 비활성.
         <div key={m.id} className="msg-in min-w-0">
           <MessageView
             msg={m}
             h={handlers}
-            showSender={m.role === 'bot' && (i === 0 || messages[i - 1].role !== 'bot')}
+            showSender={m.role === 'bot' && (i === 0 || visible[i - 1].role !== 'bot')}
             typing={m.id === typingId}
           />
         </div>
       ))}
+
+      {indicator && <TypingIndicator />}
 
       {pending && (
         <div className="msg-in flex items-start gap-2" data-testid="chat-pending">
@@ -107,8 +240,6 @@ export function ChatStream({
           </div>
         </div>
       )}
-
-      <div ref={endRef} aria-hidden="true" />
     </div>
   )
 }

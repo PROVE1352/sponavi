@@ -180,11 +180,9 @@ export interface ChipQuestionMsg extends MsgBase {
   question: QuestionId
   text: string
   chips: Chip[]
-  // single = 단일 선택 그룹(radiogroup) · action = 즉시 실행 버튼 그룹
+  // single = 단일 선택 그룹(radiogroup, 답하면 잠김) · action = 즉시 실행 버튼 그룹(계속 살아 있음)
   select: 'single' | 'action'
-  // inline = 메시지 안에서 렌더(정정 칩·후보 재질문) · false = 컴포저 칩 영역에서 렌더
-  inline: boolean
-  // 지역 질문은 검색 가능 선택(FR-12 AC6) — 컴포저가 검색창을 함께 렌더한다.
+  // 지역 질문은 검색 가능 선택(FR-12 AC6) — 칩 컨테이너 안에 소형 검색창이 함께 렌더된다.
   searchable?: boolean
   answeredLabel?: string
 }
@@ -330,7 +328,8 @@ export interface ChatState {
   filterSports?: string[]
   llmMode: LlmMode
   lastAssess: { req: AssessRequest; data: AssessResponse } | null
-  // 컴포저가 칩을 그릴 현재 질문(메시지 id). 없으면 자유 입력만.
+  // 지금 열려 있는 질문(메시지 id). 이 질문의 칩만 살아 있고, 지나간 질문의 칩은
+  // 선택 표시만 남기고 사라진다(FR-12 AC1 v1.6 — 과거 칩 클릭으로 상태가 꼬이는 경로 차단).
   activeQuestionId: string | null
   pending: boolean
   activePersonaId: string | null

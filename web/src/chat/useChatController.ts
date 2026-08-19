@@ -142,7 +142,6 @@ export function useChatController(demo = false) {
         chips: spec.chips,
         select: spec.select,
         searchable: spec.searchable,
-        inline: false,
       })
       dispatch({ type: 'setActiveQuestion', id })
     },
@@ -190,7 +189,6 @@ export function useChatController(demo = false) {
             text: T.followUpPrompt,
             chips: followUp,
             select: 'action',
-            inline: true,
           },
         )
       } catch (e) {
@@ -256,7 +254,6 @@ export function useChatController(demo = false) {
         text: ps.length > 0 ? `${T.demoIntro}\n${T.demoQuickStart}` : spec.text,
         chips: spec.chips,
         select: 'action',
-        inline: true,
       })
     })()
 
@@ -351,7 +348,6 @@ export function useChatController(demo = false) {
               { fitness: false, suffix: 'fit' },
             ),
             select: 'action',
-            inline: true,
           })
         }
       })()
@@ -391,7 +387,6 @@ export function useChatController(demo = false) {
       text: T.restartConfirm,
       chips: restartConfirmChips(),
       select: 'action',
-      inline: true,
     })
   }, [push])
 
@@ -414,7 +409,6 @@ export function useChatController(demo = false) {
       text: T.demoQuickStart,
       chips: spec.chips,
       select: 'action',
-      inline: true,
     })
   }, [askQuestion, demo, dispatch, personas, push, sigungu, state.faq, state.llmMode])
 
@@ -593,7 +587,6 @@ export function useChatController(demo = false) {
             text: SLOT_ECHO_PROMPT,
             chips: slotEditChips(changed, next),
             select: 'action',
-            inline: true,
           })
         }
 
@@ -608,8 +601,9 @@ export function useChatController(demo = false) {
             text: REGION_AMBIGUOUS_PROMPT,
             chips: regionCandidateChips(res.region_candidates),
             select: 'single',
-            inline: true,
           })
+          // 이 재질문이 지금 열려 있는 질문이 된다 — 그래야 후보 칩이 살아 있다(FR-12 AC1 v1.6).
+          dispatch({ type: 'setActiveQuestion', id })
           return
         }
 

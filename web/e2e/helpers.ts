@@ -103,11 +103,17 @@ export async function shot(page: Page, path: string): Promise<void> {
   await page.screenshot({ path, fullPage: true, animations: 'disabled' })
 }
 
-// 진행 중인 봇 발화 타이프라이터가 전부 완성될 때까지(최대 2.5s 설계 상한).
+// 봇 발화 연출이 완전히 끝날 때까지 — 순차 등장 큐가 남은 버블을 다 열고(FR-12 AC10 v1.6),
+// 진행 중인 타이프라이터도 전부 완성된 상태. 고정 sleep 대신 이 두 앵커만 본다.
 export async function settleTypewriter(page: Page): Promise<void> {
-  await page.waitForFunction(() => document.querySelectorAll('[data-typing="true"]').length === 0, {
-    timeout: 5_000,
-  })
+  await page.waitForFunction(
+    () => {
+      const s = document.querySelector('[data-testid="chat-stream"]')
+      if (!s || s.getAttribute('data-sequencing') === 'true') return false
+      return document.querySelectorAll('[data-typing="true"]').length === 0
+    },
+    { timeout: 15_000 },
+  )
 }
 
 // 모바일 가로 스크롤 0(요건 4): 문서 스크롤폭이 뷰포트를 넘지 않는다(지도·표는 자체 스크롤).

@@ -4,9 +4,8 @@
 //   푸터(데이터 기준일·출처·면책)는 **데모 페이지 전용**(v1.4) — 실사용 랜딩은 대화만 남긴다.
 //   OSM 저작자 표시는 지도 안의 Leaflet attribution 컨트롤이 소유한다(제거 금지).
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { DATA_BUILT_FALLBACK, IS_MOCK, getHealth, type HealthResponse } from '../api/client'
-import type { ChipQuestionMsg } from '../types_chat'
 import { Badge, WarnIcon } from '../components/ui'
 import { ChatProvider } from './store'
 import { useChatController } from './useChatController'
@@ -118,19 +117,16 @@ function ChatShell({ demo }: { demo: boolean }) {
     document.documentElement.classList.toggle('dark', next)
   }
 
-  // 컴포저가 그릴 현재 질문(스트림의 chip_question 중 활성 1개).
-  const activeQuestion = useMemo<ChipQuestionMsg | null>(() => {
-    if (!state.activeQuestionId) return null
-    const m = state.messages.find((x) => x.id === state.activeQuestionId)
-    return m && m.kind === 'chip_question' ? m : null
-  }, [state.activeQuestionId, state.messages])
-
   const handlers: MessageHandlers = {
     onChip,
     onRetry,
     onOpenPanel: (tab) => setPanel(true, tab),
     // 종목 필터 + 목록 탭 전환 + 나비 한 줄 안내(부수효과는 컨트롤러가 소유).
     onApplyFilter: applyFilter,
+    // 칩·지역 검색은 질문 버블 아래 인라인으로 렌더된다(FR-12 AC1 v1.6) —
+    // 그래서 시군구 목록과 "열려 있는 질문"이 메시지 렌더러로 내려간다.
+    sigungu,
+    activeQuestionId: state.activeQuestionId,
     fitness,
   }
 
@@ -167,11 +163,8 @@ function ChatShell({ demo }: { demo: boolean }) {
           <h1 className="sr-only">스포내비 — {BOT_NAME}와 함께 스포츠 복지 확인하기</h1>
           <ChatStream messages={state.messages} pending={state.pending} handlers={handlers} />
           <Composer
-            question={activeQuestion}
-            sigungu={sigungu}
             llmMode={state.llmMode}
             pending={state.pending}
-            onChip={onChip}
             onSend={(t) => void onSend(t)}
           />
         </main>

@@ -232,6 +232,30 @@ body {
   }
 }
 
+/* 타이핑 인디케이터(FR-12 AC10 v1.6) — 나비가 다음 말을 준비하는 300~600ms 동안의 점 3개.
+   세 점이 조금씩 어긋나 물결치듯 뛴다(각 점의 animation-delay 는 컴포넌트가 준다).
+   reduced-motion 에서는 인디케이터 자체가 렌더되지 않지만 규칙으로도 이중 방어한다. */
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.4;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+.typing-dot {
+  animation: typing-dot 1.1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .typing-dot {
+    animation: none;
+  }
+}
+
 /* 칩·버튼 누름 피드백: 미세한 scale(0.98). hover 색 전이는 각 컴포넌트의
    transition-colors 가 이미 담당하고, 여기서는 transform 만 얹는다. */
 /* ★ 이 파일의 규칙은 레이어 밖이라 Tailwind 의 transition-colors 유틸을 덮는다 —

@@ -11,6 +11,7 @@ import type {
   BotTextMsg,
   ChipQuestionMsg,
   AssessResultMsg,
+  FaqAnswerMsg,
   FitnessTurnApi,
 } from '../types_chat'
 import { AltRoutesBlock, EligibilityCard, altRouteItems } from '../components/EligibilityCard'
@@ -609,6 +610,72 @@ function BotTextBubble({
   )
 }
 
+// ── FAQ 카드(확인된 답변) ────────────────────────────────────────────────
+// 기본형: 질문 + 답변 원문 + 출처·확인일 (칩 FAQ · answer 없는 라우팅의 폴백).
+// 컴팩트형(v1.9 · FR-13 AC9): 접지 답변 버블 바로 아래 붙는 "출처 카드".
+//   본문은 위 버블의 answer 가 이미 말했으므로 접어 두고(원문 확인은 언제든 가능),
+//   펼쳐 두는 것은 질문 제목과 출처·확인일뿐이다 — 같은 내용이 두 번 읽히지 않게.
+function FaqAnswerCard({ msg }: { msg: FaqAnswerMsg }) {
+  const compact = msg.compact === true
+  const body = (
+    // 답변 원문의 줄바꿈을 그대로 살린다(선정순위 5줄 리스트 등 — 서버 사전이 \n 을 담는다)
+    <p
+      data-testid="faq-answer-body"
+      className={
+        'whitespace-pre-line break-words leading-[1.6] text-slate-700 dark:text-slate-200 ' +
+        (compact ? 'mt-2 text-sm' : 'mt-2 text-base')
+      }
+    >
+      {msg.entry.answer}
+    </p>
+  )
+
+  return (
+    <section
+      data-testid="faq-answer"
+      data-compact={compact ? 'true' : 'false'}
+      className={
+        'rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 ' +
+        (compact ? 'p-3' : 'p-4')
+      }
+    >
+      <p className="flex items-start gap-1.5 text-sm font-bold text-slate-900 dark:text-white">
+        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
+        {msg.entry.q}
+      </p>
+
+      {compact ? (
+        <details data-testid="faq-answer-fold" className="mt-1">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold text-brand-800 underline decoration-dotted underline-offset-2 dark:text-brand-100">
+            확인된 답변 원문 보기
+          </summary>
+          {body}
+        </details>
+      ) : (
+        body
+      )}
+
+      <p
+        className={
+          'border-t border-slate-100 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400 ' +
+          (compact ? 'mt-2 pt-2' : 'mt-3 pt-2')
+        }
+      >
+        출처{' '}
+        <a
+          href={msg.entry.source_url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="underline decoration-dotted underline-offset-2"
+        >
+          {msg.entry.source_url}
+        </a>{' '}
+        · 확인일 {msg.entry.checked}
+      </p>
+    </section>
+  )
+}
+
 export interface MessageHandlers {
   onChip: (chip: Chip, msgId: string) => void
   onRetry: () => void
@@ -702,34 +769,7 @@ export function MessageView({
     case 'faq_answer':
       return (
         <BotLane showSender={showSender}>
-          <section
-            data-testid="faq-answer"
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
-          >
-            <p className="flex items-start gap-1.5 text-sm font-bold text-slate-900 dark:text-white">
-              <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
-              {msg.entry.q}
-            </p>
-            {/* 답변 원문의 줄바꿈을 그대로 살린다(선정순위 5줄 리스트 등 — 서버 사전이 \n 을 담는다) */}
-            <p
-              data-testid="faq-answer-body"
-              className="mt-2 text-base leading-[1.6] whitespace-pre-line text-slate-700 dark:text-slate-200"
-            >
-              {msg.entry.answer}
-            </p>
-            <p className="mt-3 border-t border-slate-100 pt-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
-              출처{' '}
-              <a
-                href={msg.entry.source_url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="underline decoration-dotted underline-offset-2"
-              >
-                {msg.entry.source_url}
-              </a>{' '}
-              · 확인일 {msg.entry.checked}
-            </p>
-          </section>
+          <FaqAnswerCard msg={msg} />
         </BotLane>
       )
 

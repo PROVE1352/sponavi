@@ -101,6 +101,10 @@ export interface ChatNluResponse {
   region_candidates: RegionCandidate[]
   // 후필터 통과분만. 폐기·폴백 시 null → 클라는 템플릿 발화를 쓴다.
   reply: string | null
+  // 접지 답변(v1.9 · FR-13 AC9). 재료는 서버가 주입한 검증 텍스트(FAQ 사전 전문)뿐이고
+  // fact-lock 후필터를 통과한 것만 온다 — 폐기·비질문·폴백 시 null(기존 faq_key 카드로 폴백).
+  // reply(공감·전환 한 줄)와 역할이 다르다: answer 가 있으면 그것이 본문이고 reply 는 쓰지 않는다.
+  answer: string | null
   provider: 'openai' | 'rules' | string
 }
 
@@ -241,6 +245,9 @@ export interface FaqAnswerMsg extends MsgBase {
   role: 'bot'
   kind: 'faq_answer'
   entry: FaqEntry
+  // 컴팩트 출처 카드(v1.9 · FR-13 AC9): 접지 답변(answer) 버블 아래에 붙는 형태.
+  // 본문은 answer 가 이미 말했으므로 질문 제목 + 출처·확인일만 펴 두고 원문은 접어 둔다.
+  compact?: boolean
 }
 
 export type ChatMessage =

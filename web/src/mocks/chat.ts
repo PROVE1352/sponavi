@@ -38,5 +38,7 @@ export const MOCK_NLU_RULES: ChatNluResponse = {
   faq_key: null,
   region_candidates: [],
   reply: null,
+  // 접지 답변도 LLM 레인 산물이라 rules 폴백에서는 항상 null(v1.9 · FR-13 AC9).
+  answer: null,
   provider: 'rules',
 }

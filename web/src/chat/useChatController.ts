@@ -361,6 +361,8 @@ export function useChatController(demo = false) {
     [dispatch, push],
   )
 
+  // 카드 전체 렌더(칩 FAQ · answer 없는 라우팅). 접지 답변이 있는 턴은 컴팩트 출처 카드를
+  // 직접 붙이므로 이 경로를 타지 않는다(FR-13 AC9).
   const answerFaq = useCallback(
     (key: string | null) => {
       const entry = key ? state.faq.find((f) => f.key === key) : undefined
@@ -662,8 +664,23 @@ export function useChatController(demo = false) {
         const next: ChatSlots = { ...state.slots, ...patch }
         if (changed.length > 0) dispatch({ type: 'patchSlots', slots: patch })
 
-        // 연결 멘트는 후필터 통과분만. null 이면 템플릿(다음 질문)이 이어진다.
-        if (res.reply) push(botText(res.reply))
+        // ── 접지 답변 레인(v1.9 · FR-13 AC9) ─────────────────────────────
+        // answer 는 fact-lock 을 통과한 것만 온다. 있으면 그것이 이 턴의 본문이고,
+        // 출처는 같은 faq_key 의 카드를 컴팩트 형태로 바로 아래 붙여 동반한다.
+        // 카드를 찾지 못하면(사전 로드 실패 등) 답변만 남기고 보조 줄 문구를 바꾼다.
+        const answer = typeof res.answer === 'string' && res.answer.trim() !== '' ? res.answer.trim() : null
+        const answerEntry = res.faq_key ? state.faq.find((f) => f.key === res.faq_key) : undefined
+
+        if (answer) {
+          // reply 와 둘 다 오면 answer 만 쓴다 — 버블 두 개가 잇달아 나오면 수다스럽다.
+          push(botText(answer, { sub: answerEntry ? T.answerSubWithCard : T.answerSubNoCard }))
+          if (answerEntry) {
+            push({ id: nextId('faq'), role: 'bot', kind: 'faq_answer', entry: answerEntry, compact: true })
+          }
+        } else if (res.reply) {
+          // 연결 멘트는 후필터 통과분만. null 이면 템플릿(다음 질문)이 이어진다.
+          push(botText(res.reply))
+        }
 
         // 갱신 슬롯 에코 = 정정 가능한 칩(탭하면 해당 질문 재개).
         if (changed.length > 0) {
@@ -697,7 +714,8 @@ export function useChatController(demo = false) {
 
         switch (res.intent) {
           case 'ask_faq':
-            answerFaq(res.faq_key)
+            // answer 를 이미 냈으면 카드는 위에서 컴팩트로 붙었다 — 전체 카드를 겹쳐 내지 않는다.
+            if (!answer) answerFaq(res.faq_key)
             return
           case 'start_fitness':
             startFitness()
@@ -711,7 +729,7 @@ export function useChatController(demo = false) {
           case 'provide_info':
           case 'unknown':
           default:
-            if (changed.length === 0 && !res.reply) push(botText(T.unknownInLlm))
+            if (changed.length === 0 && !res.reply && !answer) push(botText(T.unknownInLlm))
             if (state.phase === 'greet' || state.phase === 'collect') advance(next)
             return
         }
@@ -733,6 +751,7 @@ export function useChatController(demo = false) {
       sigungu,
       startFitness,
       state.activeQuestionId,
+      state.faq,
       state.llmMode,
       state.messages,
       state.pending,

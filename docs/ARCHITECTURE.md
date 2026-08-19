@@ -20,7 +20,7 @@
  ┌─────────────────────┐   /api (JSON)   ┌──────────────────────────────────────────┐
  │ React 19 + Vite     │ ◀─────────────▶ │ main.py   엔드포인트·CORS·에러봉투           │
  │  위저드 → 결과 3블록  │                 │ engine.py 자격판정·대체경로·거리·공급공백 (결정론) │
- │  경로시각화·Leaflet  │                 │ store.py  SQLite 쿼리 (없으면 fixtures 폴백)  │
+ │  경로시각화·MapLibre │                 │ store.py  SQLite 쿼리 (없으면 fixtures 폴백)  │
  │  목모드(VITE_MOCK)   │                 │ fitness.py 룰 기반 약점판정 (AI 폴백겸용)      │
  └─────────────────────┘                 │ ai.py[M1] LLM 처방 (프로바이더 추상화)        │
                                          └───────────────┬──────────────────────────┘
@@ -38,7 +38,7 @@
 
 ## 2. 컴포넌트 상세
 
-### 2.1 web/ (React 19 · Vite 7 · TS · Tailwind v4 · Leaflet+OSM)
+### 2.1 web/ (React 19 · Vite 7 · TS · Tailwind v4 · MapLibre GL+OpenFreeMap — v1.8, 구 Leaflet+OSM)
 - **[v2 2026-08-18] UX 전면 전환**: 위저드 → 챗 단일 UI + 컨텍스트 패널(계약 §11). 아래 결과 블록 컴포넌트들은 챗 스트림·패널에 그대로 재사용.
 - 화면(v1, §11 전환 전 기록): 위저드(입력) → 결과[자격카드 | 경로 스텝다이어그램 | 지도+리스트] + 공급공백 배너 + 체력처방 스텝 + 페르소나 4버튼.
 - `VITE_MOCK=1` 목모드: 서버 없이 계약-형태 목으로 완전 동작(개발·시연 이중화).
@@ -224,5 +224,5 @@ RulesFallback    # 빈 slot_updates + provider="rules" — 클라가 칩 모드 
 - `chat/store.tsx`: useReducer+Context(신규 의존성 없음) — messages·slots·phase·panel·filterSports(구 ResultView 소유분 이주)·llmMode.
 - `chat/policy.ts`: 결정론 대화 정책 — 질문 순서(나이→성별→지역→소득→장애→판정), 칩 정의, 발화 템플릿(§6 정직성 사전 준수), P1~P5 퀵스타트 칩.
 - 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할.
-- Leaflet은 **패널 상주 1인스턴스**(메시지별 재마운트 금지 — fitBounds·타일 재요청 방지).
+- 지도(MapLibre GL, v1.8에서 Leaflet 대체)는 **패널 상주 1인스턴스**(메시지별 재마운트 금지 — fitBounds·타일 재요청 방지). 스타일: 라이트 positron·다크 dark(OpenFreeMap, 키 불필요), CSP connect-src/worker-src 계약은 main.py.
 - 목모드: 칩 경로가 기존 mocks/engine·personas를 그대로 소비 — nlu 목 불필요, e2e는 서버·LLM 없이 완주.

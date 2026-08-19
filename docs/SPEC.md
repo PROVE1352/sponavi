@@ -101,7 +101,7 @@ fixtures에는 성북구 인근 장애인 지원 시설을 0~1개만 넣어 **�
 
 - `server/` — **Python 3.11+ FastAPI + SQLite**(fixtures→build_db) + pytest. 외부 의존 최소
   (fastapi, uvicorn, pydantic, pytest, httpx). LLM 사용 없음(전부 규칙·데이터).
-- `web/` — **React 19 + Vite + TypeScript + Tailwind v4**. 지도는 **Leaflet + OSM 타일**(키 불필요).
+- `web/` — **React 19 + Vite + TypeScript + Tailwind v4**. 지도는 **MapLibre GL + OpenFreeMap 벡터 타일**(키 불필요 — v1.8 2026-08-19 전환, 구 Leaflet+OSM 래스터).
   API 베이스 `/api` (vite dev proxy → :8000). 모바일 우선(심사위원 폰).
 - `scripts/` — fetch_data.py(키 주입형), geocode.py, build_db.py.
 - 배포(빌드 후 단계): Docker + 기존 오라클 서버 Caddy. MVP 단계에선 미포함.

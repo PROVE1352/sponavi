@@ -420,10 +420,25 @@ def _faq_dvoucher_income(store: Store) -> Optional[dict]:
     url, checked = (src.get("url"), src.get("checked"))
     if not url:
         url, checked = _source(p)
+    # 사실은 전부 rules.json 필드(eligibility·selection_priority·income_note 근거),
+    # 문장 구성만 나비 톤 — 한 줄 데이터 덤프가 읽기 어렵다는 실사용 피드백(2026-08-19).
+    elig = p.get("eligibility") or {}
+    ranks = sp.get("ranks") or []
+    lines = [
+        f"소득 요건 없음 — {_age_range(elig)} 등록 장애인이면 소득과 관계없이 신청할 수 있어요.",
+    ]
+    tail = "다만 '선정'은 우선순위제(예산 범위)예요."
+    if ranks:
+        last = ranks[-1]
+        tail += (
+            f" 공식 선정순위 {len(ranks)}단계에서 '{last.get('who')}'은 {last.get('rank')}순위라,"
+            " 지자체 예산·경쟁 상황에 따라 대기하거나 선정되지 않을 수 있어요."
+        )
+    lines.append(tail)
     return {
         "key": "dvoucher_income",
         "q": f"{p['name']}도 소득 기준이 있나요?",
-        "answer": _drop_internal(p.get("income_note", "")),
+        "answer": "\n".join(lines),
         "source_url": url,
         "checked": checked,
     }
@@ -437,13 +452,16 @@ def _faq_dvoucher_priority(store: Store) -> Optional[dict]:
     ranks = sp.get("ranks") or []
     if not ranks:
         return None
-    body = " / ".join(f"{r.get('rank')}순위 {r.get('who')}" for r in ranks)
-    parts = [sp.get("basis"), body, sp.get("tiebreak")]
+    # 순위는 한 줄씩 — 슬래시 연결 덤프는 모바일에서 읽기 불가(2026-08-19 피드백)
+    parts = ["선정은 시군구별로 아래 공식 순위에 따라 이뤄져요."]
+    parts += [f"{r.get('rank')}순위 — {r.get('who')}" for r in ranks]
+    if sp.get("tiebreak"):
+        parts.append(str(sp["tiebreak"]))
     src = sp.get("source") or {}
     return {
         "key": "dvoucher_priority",
         "q": f"{p['name']} 선정순위는 어떻게 되나요?",
-        "answer": " · ".join(str(x) for x in parts if x),
+        "answer": "\n".join(parts),
         "source_url": src.get("url"),
         "checked": src.get("checked"),
     }
@@ -471,7 +489,8 @@ def _faq_svoucher_eligibility(store: Store) -> Optional[dict]:
 
 def _faq_apply_how(store: Store) -> Optional[dict]:
     sv, dv = _program(store, "svoucher"), _program(store, "dvoucher")
-    lines = []
+    lines: list[str] = []
+    periods: list[tuple[str, str]] = []
     for p in (sv, dv):
         if not p:
             continue
@@ -479,16 +498,23 @@ def _faq_apply_how(store: Store) -> Optional[dict]:
         how = apply.get("how")
         if not how:
             continue
-        period = apply.get("period")
-        lines.append(f"{p['name']}: {how}" + (f" (신청기간: {period})" if period else ""))
+        lines.append(f"{p['name']} — {how}")
+        if apply.get("period"):
+            periods.append((p["name"], str(apply["period"])))
     if not lines:
         return None
+    # 두 제도의 신청기간이 같으면 한 줄로 합침(중복 괄호 덤프 방지)
+    uniq_periods = list(dict.fromkeys(per for _, per in periods))
+    if len(uniq_periods) == 1:
+        lines.append(f"신청기간 — {uniq_periods[0]}")
+    else:
+        lines += [f"신청기간({name}) — {per}" for name, per in periods]
     base = sv or dv
     url, checked = _source(base, ((base.get("apply") or {}).get("url")))
     return {
         "key": "apply_how",
         "q": "이용권은 어떻게 신청하나요?",
-        "answer": " / ".join(lines),
+        "answer": "\n".join(lines),
         "source_url": url,
         "checked": checked,
     }
@@ -500,7 +526,7 @@ def _faq_benefit_amount(store: Store) -> Optional[dict]:
     for pid in ("svoucher", "dvoucher"):
         p = _program(store, pid)
         if p and p.get("benefit"):
-            parts.append(f"{p['name']}: {p['benefit']}")
+            parts.append(f"{p['name']} — {p['benefit']}")
             base = base or p
     if not parts or base is None:
         return None
@@ -508,7 +534,7 @@ def _faq_benefit_amount(store: Store) -> Optional[dict]:
     return {
         "key": "benefit_amount",
         "q": "지원 금액은 얼마인가요?",
-        "answer": " / ".join(parts),
+        "answer": "\n".join(parts),
         "source_url": url,
         "checked": checked,
     }
@@ -519,10 +545,10 @@ def _faq_alternative(store: Store) -> Optional[dict]:
     if not p or not p.get("benefit"):
         return None
     url, checked = _source(p)
-    answer = f"{p['name']}: {p['benefit']}."
+    answer = f"{p['name']} — {p['benefit']}"
     note = _drop_internal(p.get("income_note", ""))
     if note:
-        answer = f"{answer} {note}"
+        answer = f"{answer}\n{note}"
     return {
         "key": "no_voucher_alternative",
         "q": "이용권 대상이 아니어도 받을 수 있는 지원이 있나요?",

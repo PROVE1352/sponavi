@@ -410,19 +410,34 @@ def test_faq_shape_and_sources(client):
 
 
 def test_faq_answers_come_from_rules_json():
-    """답변 본문은 rules.json 필드 값 — 내부 UI 지시문은 제외(§0-5 날조 금지)."""
+    """답변의 사실(수치·순위·문구)은 rules.json 필드에서만 — 문장 구성은 템플릿(§0-5).
+
+    v1.7에서 가독성 재조립(줄바꿈·나비 톤) — 원문 통짜 부분문자열 검증 대신
+    핵심 사실의 존재와 rules.json 원문 유래를 필드 단위로 검증한다."""
     st = _fresh_store()
     items = {i["key"]: i for i in chat.faq_list(st)}
     dvoucher = st.programs["dvoucher"]
+    sp = dvoucher["selection_priority"]
+
     income = items["dvoucher_income"]
     assert "소득 요건 없음" in income["answer"]
     assert "우선순위제" in income["answer"], "신청(소득 무관)과 선정(우선순위) 구분"
-    assert income["answer"] in dvoucher["income_note"] or income["answer"].replace(
-        " ", "") in dvoucher["income_note"].replace(" ", "")
+    # 마지막 순위 사실은 ranks 원문에서만 — who 문구와 순위 번호가 그대로 실린다
+    last = sp["ranks"][-1]
+    assert last["who"] in income["answer"] and f"{last['rank']}순위" in income["answer"]
     assert "UI는" not in income["answer"]
-    # 금액은 rules.json benefit 원문에서만
+
+    priority = items["dvoucher_priority"]
+    for r in sp["ranks"]:  # 전 순위가 한 줄씩(줄바꿈 구조), who 원문 그대로
+        assert f"{r['rank']}순위 — {r['who']}" in priority["answer"]
+    assert priority["answer"].count("\n") >= len(sp["ranks"])
+    assert sp["tiebreak"] in priority["answer"]
+
+    # 금액·신청방법은 rules.json 원문 그대로 포함
     assert dvoucher["benefit"] in items["benefit_amount"]["answer"]
     assert st.programs["svoucher"]["apply"]["how"] in items["apply_how"]["answer"]
+    # 두 제도 신청기간이 같으면 한 줄로 병합 (기간 원문 자체에도 '신청기간'이 있어 줄 프리픽스로 센다)
+    assert items["apply_how"]["answer"].count("\n신청기간 — ") == 1
 
 
 # --------------------------------------------------------------------------

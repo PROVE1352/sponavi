@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import type { Result } from 'axe-core'
-import { openDemo, openMain, openPanel, startFitnessThroughParq, startPersona } from './helpers'
+import { expectMapMounted, openDemo, openMain, openPanel, startFitnessThroughParq, startPersona } from './helpers'
 
 // 릴리스 게이트 3·9 — 접근성: axe-core "critical" 위반 0 (채팅 스트림 포함).
 // (serious 이하 위반은 게이트 대상이 아니며 참고용으로 함께 출력한다.)
@@ -42,8 +42,9 @@ test('판정 스트림 + 컨텍스트 패널(P5: 자격·선정순위·지도·�
   await openDemo(page)
   await startPersona(page, 'P5')
   await openPanel(page, 'map')
-  // 지도(단일 Leaflet 인스턴스)가 실제로 붙은 뒤 검사한다
-  await expect(page.locator('.leaflet-container')).toBeVisible()
+  // 지도(단일 MapLibre 인스턴스)가 실제로 붙은 뒤 검사한다.
+  // 캔버스 자체는 axe 대상이 아니다 — 검사 대상은 그 주변(마커 aria·저작자표시·범례).
+  await expectMapMounted(page)
   await expect(page.getByTestId('selection-block')).toBeVisible()
 
   await expectNoCritical(page)

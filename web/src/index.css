@@ -331,25 +331,74 @@ body {
   scroll-snap-align: start;
 }
 
-/* Leaflet 다크 타일 가독성 살짝 보정 + 지도 컨테이너 라운드 */
-.leaflet-container {
+/* ── 지도(MapLibre GL + OpenFreeMap 벡터 타일, v1.8) ────────────────────
+   다크는 스타일 자체를 교체하므로(positron ↔ dark) 타일에 필터를 씌우지 않는다.
+   여기서는 폰트·빈 캔버스 배경·팝업/저작자표시의 다크 대비만 맞춘다. */
+.maplibregl-map {
   font-family: var(--font-sans);
-  background: #e0f2fe;
+  background: #f1f5f9; /* 타일이 도착하기 전(또는 실패해도) 빈 회색 카드 */
 }
-.dark .leaflet-container {
+.dark .maplibregl-map {
   background: #1e293b;
 }
-.dark .leaflet-tile {
-  filter: brightness(0.85) contrast(1.05);
-}
-/* 지도 팝업 다크 대비 */
-.dark .leaflet-popup-content-wrapper,
-.dark .leaflet-popup-tip {
+
+/* 팝업 다크 대비 — 본문·꼬리(삼각형)·닫기 버튼 */
+.dark .maplibregl-popup-content {
   background: #1e293b;
   color: #e2e8f0;
 }
+.dark .maplibregl-popup-close-button {
+  color: #e2e8f0;
+}
+.dark .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.dark .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.dark .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+  border-bottom-color: #1e293b;
+}
+.dark .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.dark .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.dark .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+  border-top-color: #1e293b;
+}
+.dark .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+  border-right-color: #1e293b;
+}
+.dark .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+  border-left-color: #1e293b;
+}
+.map-popup-approx {
+  color: #b45309;
+}
+.dark .map-popup-approx {
+  color: #fbbf24;
+}
 
-/* 커스텀 divIcon 마커(색상 원 + 링) */
+/* 저작자표시(© OpenStreetMap 기여자 — 제거 금지) 다크 대비 */
+.dark .maplibregl-ctrl-attrib.maplibregl-compact,
+.dark .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  background-color: rgb(15 23 42 / 0.8);
+  color: #e2e8f0;
+}
+.dark .maplibregl-ctrl-attrib a {
+  color: #bae6fd;
+}
+.dark .maplibregl-ctrl-attrib-button {
+  background-color: rgb(15 23 42 / 0.8);
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* 확대·축소 버튼 다크 대비 */
+.dark .maplibregl-ctrl-group {
+  background: #0f172a;
+}
+.dark .maplibregl-ctrl-group button + button {
+  border-top-color: #334155;
+}
+.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* 커스텀 마커(색상 원 + 링) */
 .marker-pin {
   width: 20px;
   height: 20px;

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { assertNoHorizontalScroll, openDemo, openMain, shot, startPersona } from './helpers'
+import { assertNoHorizontalScroll, openDemo, openMain, shot, startPersona, waitForMapIdle } from './helpers'
 
 // 심사용 스크린샷 갱신(챗 UI) — 두 뷰포트(모바일 390px · 데스크톱 1280px) × 3장면.
 //   랜딩 챗(= 실사용 메인) / P1 판정 스트림+패널 / P5 선정순위 카드
@@ -26,8 +26,7 @@ for (const vp of VIEWPORTS) {
       await startPersona(page, 'P1')
       // 패널은 결과 도착과 함께 자동으로 펼쳐진다(v1.4) — 별도 펼치기 조작 없음
       await expect(page.getByTestId('panel-tab-map')).toBeVisible()
-      await expect(page.locator('.leaflet-container')).toBeVisible()
-      await page.waitForTimeout(1200) // 지도 타일·마커 렌더 여유(유일한 고정 대기)
+      await waitForMapIdle(page) // 벡터 타일 렌더 완료('idle')까지 — 고정 대기 없음
       if (vp.tag === '390') await assertNoHorizontalScroll(page)
       await shot(page, `e2e-shots/P1-eligible-${vp.tag}.png`)
     })
@@ -37,8 +36,7 @@ for (const vp of VIEWPORTS) {
       await startPersona(page, 'P5')
       await expect(page.getByTestId('now-available-block')).toBeVisible()
       await expect(page.getByTestId('panel-tab-map')).toBeVisible()
-      await expect(page.locator('.leaflet-container')).toBeVisible()
-      await page.waitForTimeout(1200)
+      await waitForMapIdle(page)
       if (vp.tag === '390') await assertNoHorizontalScroll(page)
       await shot(page, `e2e-shots/P5-priority-${vp.tag}.png`)
     })

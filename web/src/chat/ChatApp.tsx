@@ -2,7 +2,7 @@
 //   헤더(로고·데모 배지·다크 토글) + 오프라인 배너
 //   본문 = 채팅 스트림 + 하단 고정 컴포저 + 컨텍스트 패널
 //   푸터(데이터 기준일·출처·면책)는 **데모 페이지 전용**(v1.4) — 실사용 랜딩은 대화만 남긴다.
-//   OSM 저작자 표시는 지도 안의 Leaflet attribution 컨트롤이 소유한다(제거 금지).
+//   OSM 저작자 표시는 지도 안의 MapLibre AttributionControl 이 소유한다(제거 금지).
 
 import { useEffect, useRef, useState } from 'react'
 import { DATA_BUILT_FALLBACK, IS_MOCK, getHealth, type HealthResponse } from '../api/client'

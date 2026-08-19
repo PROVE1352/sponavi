@@ -121,6 +121,39 @@ export async function settleTypewriter(page: Page): Promise<void> {
   )
 }
 
+// ── 지도(MapLibre GL + OpenFreeMap 벡터 타일, v1.8) ──────────────────────
+// 캔버스 하나 + DOM 마커. Leaflet 시절의 .leaflet-container 앵커를 대체한다.
+export function mapBox(page: Page): Locator {
+  return page.getByTestId('nearby-map')
+}
+
+export function mapCanvas(page: Page): Locator {
+  return mapBox(page).locator('canvas.maplibregl-canvas')
+}
+
+export function mapMarkers(page: Page): Locator {
+  return mapBox(page).locator('[data-testid="map-marker"]')
+}
+
+// 지도가 화면에 붙었는지(캔버스 + 마커). 타일 도착 여부와는 무관하다.
+export async function expectMapMounted(page: Page): Promise<void> {
+  await expect(mapCanvas(page)).toBeVisible()
+  await expect(mapMarkers(page).first()).toBeVisible()
+}
+
+// 벡터 타일 렌더 완료(map 'idle' → data-map-ready)를 기다린다. 고정 sleep 대신 쓴다.
+// 타일이 못 오는 환경(오프라인·차단)에서는 조용히 넘어간다 — 지도는 보조 표면이라
+// 타일 실패가 스펙을 깨뜨리면 안 된다(오프라인 내성 원칙).
+export async function waitForMapIdle(page: Page, timeout = 8_000): Promise<boolean> {
+  await expectMapMounted(page)
+  try {
+    await mapBox(page).and(page.locator('[data-map-ready="true"]')).waitFor({ timeout })
+    return true
+  } catch {
+    return false
+  }
+}
+
 // 결과 덱(FR-12 AC9 v1.7) — 모바일(<lg)에서 판정 결과 전체가 담기는 단일 스와이프 컨테이너.
 export function deck(page: Page): Locator {
   return page.getByTestId('result-deck')

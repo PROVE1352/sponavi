@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import {
   assertNoHorizontalScroll,
   deck,
+  expectMapMounted,
   fillMainSlots,
   openDemo,
   openMain,
@@ -150,7 +151,7 @@ test('⑤ 390px — "지도에서 보기"·"시설 목록 보기"가 패널을 �
       { message: '지도 패널이 화면 안으로 들어오지 않았다' },
     )
     .toBe(true)
-  await expect(page.locator('.leaflet-container')).toBeVisible()
+  await expectMapMounted(page)
 
   // 스트림 후속 칩("시설 목록 보기")도 같은 동작 — 목록 탭으로 전환되고 다시 데려온다
   await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight }))

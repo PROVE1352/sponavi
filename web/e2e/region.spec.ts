@@ -118,6 +118,21 @@ test('④ 컴포저에 "서구" — 동명 지역은 후보 칩으로 되묻고,
   await expect(stream(page).getByText('지역: 인천 서구')).toBeVisible()
 })
 
+test('④-b 개편 전 시도명("광주 북구")도 현행 코드(12300)로 확정된다', async ({ page }) => {
+  // 2026-07-01 광주(29)+전남(46) → 전남광주통합특별시(12). 사용자는 여전히 "광주"라고 쓴다.
+  // 구 코드로 새면 그 코드엔 장애인 가맹이 0건이라 거짓 공급공백 배너가 뜬다(WP1 회귀 원점).
+  await openRegionQuestion(page)
+  await send(page, '광주 북구')
+
+  await expect(
+    stream(page).getByTestId('question-region_sido').getByTestId('chip-answered'),
+  ).toContainText('북구 선택함')
+  await page.getByTestId('chip-income-기초생활수급').click()
+  await page.getByTestId('chip-dis-no').click()
+  await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
+  await expect(stream(page).getByText(/북구/).first()).toBeVisible()
+})
+
 test('⑤ 목록에 없는 지역명은 지어내지 않고 다시 묻는다', async ({ page }) => {
   await openRegionQuestion(page)
   await send(page, '없는동네시')

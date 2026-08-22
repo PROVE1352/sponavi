@@ -61,18 +61,26 @@ test('P3 · 14세 지체장애 → 장애인스포츠강좌이용권 예상 자�
   await shot(page, 'e2e-shots/P3-dvoucher-eligible.png')
 })
 
-test('P4 · 72세 청각장애 → 공급공백 배너 + 커버리지 수급률', async ({ page }) => {
+test('P4 · 72세 청각장애(인천 서구) → 공급공백 배너 + 최근접 안내', async ({ page }) => {
   await startPersona(page, 'P4')
 
   const alert = stream(page).getByRole('alert').filter({ hasText: '가맹시설이 없습니다' })
   await expect(alert).toBeVisible()
+  await expect(alert).toContainText('서구')
   await expect(stream(page).getByText(/가장 가까운 곳은/)).toBeVisible()
-  // 정직-신호: 커버리지 수급률 한 줄
-  await expect(stream(page).getByText(/수급률은/)).toBeVisible()
+  // 커버리지(수급률)는 서울 15구 실측분뿐 — 인천은 데이터가 없으므로 그 줄을 만들지 않는다(P-1).
+  await expect(stream(page).getByText(/수급률은/)).toHaveCount(0)
   // 연령 초과 → 어르신 특화 대체경로 3개
   await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
 
   await shot(page, 'e2e-shots/P4-supply-gap.png')
+})
+
+test('P3 · 성북구 → 공급공백 배너에 커버리지 수급률 한 줄 (정직 신호, 데이터 있는 구)', async ({
+  page,
+}) => {
+  await startPersona(page, 'P3')
+  await expect(stream(page).getByText(/수급률은/)).toBeVisible()
 })
 
 test('좌표 정직성: "위치 근사(구 중심)" 배지 + 이용권 블록 "반경" 미표기 (FR-04)', async ({ page }) => {

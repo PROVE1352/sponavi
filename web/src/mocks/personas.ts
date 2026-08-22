@@ -168,11 +168,13 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     summary: '장애인 이용권 ✗(연령 초과) → 공급공백 배너 + 장애 특화 대체경로',
     age: 72,
     sex: 'M',
-    sigungu_cd: '11290',
-    sigungu_nm: '성북구',
+    // PRD ★FR-P4: 데모 지역 = 인천 서구(28260). 실 DB 기준 이 구의 dvoucher 가맹은 0건이고
+    // 커버리지(수급률)는 서울 15구만 실측이라 coverage=null 이다 — 목도 그 형태를 따른다.
+    sigungu_cd: '28260',
+    sigungu_nm: '서구',
     income_class: '그외',
     disability: { has: true, type: '청각' },
-    location: { lat: 37.6057, lon: 127.017 },
+    location: { lat: 37.5459, lon: 126.6568 },
   },
   {
     id: 'P5',
@@ -381,7 +383,7 @@ const P3: AssessResponse = {
   },
 }
 
-// ---------- P4: dvoucher ✗(연령 초과) → 공급공백 + 장애 특화 대체경로 ----------
+// ---------- P4: 인천 서구 · dvoucher ✗(연령 초과) → 공급공백 + 장애 특화 대체경로 ----------
 const P4: AssessResponse = {
   eligibility: [
     {
@@ -420,27 +422,27 @@ const P4: AssessResponse = {
       verified: true,
     },
   ],
+  // 인천 서구(28260) 실 DB 기준: 반경 3km 안에 접근성 지원 공공시설이 잡히지 않아
+  // 경로는 제도 대안까지만 이어진다(시설 홉 없음). 없는 시설을 만들어 붙이지 않는다(P-1).
   path: [
     { from: 'person', to: 'dvoucher', edge: '자격', result: 'fail', label: '연령 72 > 69 상한' },
     { from: 'dvoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: '접근성 지원 공공프로그램', curated: '검증 대기' },
-    { from: 'public_program', to: 'facility:P01', edge: '적합·접근', result: 'ok', label: '성북구민체육센터(접근성 지원) · 1.6km' },
   ],
   alt_edges: P4_ALT_EDGES,
   nearby: {
     voucher_facilities: [],
-    alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설(접근성 지원)', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 · 실버 수중걷기 무료교실 · 저가 프로그램', disability_support: true, fee_month: 0, source: 'public', addr: '서울 성북구 화랑로 189' },
-    ],
+    alternatives: [],
   },
   supply_gap: {
     radius_km: 3,
     voucher_count: 0,
     voucher_scope: 'sigungu',
-    sigungu_nm: '성북구',
-    alt_count: 1,
-    nearest: { name: '서울장애인체육관', coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구' },
-    message: '성북구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
-    coverage: COVERAGE_SB_NEARPOOR,
+    sigungu_nm: '서구',
+    alt_count: 0,
+    nearest: { name: '153합기도', coord_source: 'centroid', dist_km: null, sigungu_nm: '서해구' },
+    message: '서구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
+    // 커버리지(수급률)는 서울 15구 실측분뿐 — 인천은 데이터가 없어 null 이다.
+    coverage: null,
   },
 }
 

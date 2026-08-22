@@ -103,24 +103,26 @@ export const SEX_LABEL: Record<Sex, string> = { F: '여성', M: '남성' }
 //
 // ★ 표는 "코드 → 이름"일 뿐이고, 실제로 어떤 시도를 보여줄지는 오직 데이터가 정한다 —
 //   getSigungu() 결과에 존재하는 접두 2자리만 렌더한다(하드코딩 전수 렌더 금지).
-//   어휘는 서버 chat.py SIDO_NAMES 와 같은 계열이며, 칩 라벨은 그중 가장 짧은 통칭을 쓴다.
+//   어휘는 서버 chat.py SIDO_NAMES(= server/app/region.py) 와 같은 계열이며,
+//   칩 라벨은 배열의 **마지막** 원소(가장 짧은 통칭)를 쓴다.
 //   별칭 배열은 컴포저 자유입력의 로컬 매칭("인천 서구")에 쓰인다.
+//
+// ★ 2026-07-01 개편: 광주(29)+전남(46) → 전남광주통합특별시(12), 강원(42)→51, 전북(45)→52.
+//   구 시도 접두는 데이터에서 사라졌으므로 표에서도 지운다. 대신 구 시도명("광주"·"전남"·
+//   "강원도"·"전라북도")은 현행 코드의 별칭으로 흡수한다 — 사용자가 개편 전 이름으로 써도
+//   "광주 북구" → 12300 으로 가야 하기 때문(구코드로 가면 가맹 0곳 거짓 배너).
 export const SIDO_ALIASES: [prefix: string, names: string[]][] = [
   ['11', ['서울특별시', '서울시', '서울']],
-  ['12', ['전남광주통합특별시', '광주전남', '전남광주']],
+  ['12', ['전남광주통합특별시', '광주광역시', '전라남도', '광주시', '광주', '전남', '광주전남', '전남광주']],
   ['26', ['부산광역시', '부산시', '부산']],
   ['27', ['대구광역시', '대구시', '대구']],
   ['28', ['인천광역시', '인천시', '인천']],
-  ['29', ['광주광역시', '광주시', '광주']],
   ['30', ['대전광역시', '대전시', '대전']],
   ['31', ['울산광역시', '울산시', '울산']],
   ['36', ['세종특별자치시', '세종시', '세종']],
   ['41', ['경기도', '경기']],
-  ['42', ['강원도', '강원']],
   ['43', ['충청북도', '충북']],
   ['44', ['충청남도', '충남']],
-  ['45', ['전라북도', '전북']],
-  ['46', ['전라남도', '전남']],
   ['47', ['경상북도', '경북']],
   ['48', ['경상남도', '경남']],
   ['50', ['제주특별자치도', '제주도', '제주']],
@@ -131,6 +133,12 @@ export const SIDO_ALIASES: [prefix: string, names: string[]][] = [
 const SIDO_SHORT: Record<string, string> = Object.fromEntries(
   SIDO_ALIASES.map(([cd, names]) => [cd, names[names.length - 1]]),
 )
+
+// 자유입력 매칭용 평탄화 목록 — **긴 별칭 우선**(서버 chat._SIDO_ALIASES 와 같은 규칙).
+// 배열 순서와 무관하게 '광주광역시'가 '광주'보다 먼저 걸리도록.
+const SIDO_ALIAS_BY_LEN: [name: string, cd: string][] = SIDO_ALIASES.flatMap(
+  ([cd, names]) => names.map((n) => [n, cd] as [string, string]),
+).sort((a, b) => b[0].length - a[0].length)
 
 export function sidoCdOf(sigunguCd: string): string {
   return (sigunguCd || '').slice(0, 2)
@@ -347,8 +355,8 @@ function norm(s: string): string {
 export function matchSido(raw: string): string | null {
   const q = norm(raw)
   if (q === '') return null
-  for (const [cd, names] of SIDO_ALIASES) {
-    if (names.some((n) => n === q)) return cd
+  for (const [name, cd] of SIDO_ALIAS_BY_LEN) {
+    if (name === q) return cd
   }
   return null
 }
@@ -358,15 +366,15 @@ export function matchSigungu(list: Sigungu[], raw: string): Sigungu[] {
   if (q === '') return []
 
   // "인천서구"처럼 시도가 앞에 붙어 있으면 그 시도로 좁힌 뒤 나머지로 찾는다.
+  // 구 시도명("광주 북구")도 현행 시도(12)로 좁혀진다 — SIDO_ALIASES 가 흡수한 별칭.
   let pool = list
   let needle = q
-  for (const [cd, names] of SIDO_ALIASES) {
-    const hit = names.find((n) => q.startsWith(n) && q.length > n.length)
-    if (!hit) continue
+  for (const [name, cd] of SIDO_ALIAS_BY_LEN) {
+    if (!(q.startsWith(name) && q.length > name.length)) continue
     const scoped = list.filter((s) => sidoCdOf(s.cd) === cd)
     if (scoped.length === 0) continue
     pool = scoped
-    needle = q.slice(hit.length)
+    needle = q.slice(name.length)
     break
   }
   if (needle === '') return pool

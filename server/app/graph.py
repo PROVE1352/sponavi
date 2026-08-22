@@ -3,11 +3,13 @@
 이 모듈은 graph_nodes/graph_edges(+videos) 를 읽어 약점요인 → 운동/종목/영상 서브그래프를
 결정론으로 구성한다. **생성(LLM)은 여기서 하지 않는다** — 근거 있는 후보만 골라 넘긴다.
 
-핵심 함수 recommend_for_weakness(factors, age, db_conn) 는 독립 실행형이며, 다음 배치에서
-fitness.py 가 이 함수를 호출해 /api/fitness 응답에 근거 경로를 붙인다(지금은 무접촉).
+핵심 함수 recommend_for_weakness(factors, age, db_conn) 는 독립 실행형이며, fitness.py 가
+이를 호출해 /api/fitness 응답에 근거 경로를 붙이고, ai.py 가 그 provenance 를 처방 항목에 싣는다.
 
 정직성/폴백: graph 테이블이 없으면 빈 dict 를 돌려준다(데모/레거시 DB 안전).
 provenance(출처·검증상태·티어)를 모든 후보에 동봉 — 출처 없는 추천은 내보내지 않는다.
+멀티홉(운동→목적→요인) 후보의 provenance 는 **두 홉 중 약한 쪽**을 쓴다(_weakest) — 강한 홉을
+경로 전체 등급으로 표기하면 거짓 정밀도가 되기 때문(P-1). via_goal/via_goal_source 로 경로를 남긴다.
 """
 from __future__ import annotations
 
@@ -88,17 +90,30 @@ def _nid(typ: str, name: str) -> str:
     return f"{typ.lower()}:{name}"
 
 
-def _provenance(source: str, weight: float, curated_status, via_goal=None) -> dict:
+def _provenance(source: str, weight: float, curated_status,
+                via_goal=None, via_goal_source=None) -> dict:
     tier, _rank = SOURCE_TIER.get(source, ("?", 0))
     p = {"source": source, "tier": tier, "weight": weight,
          "curated_status": curated_status}
     if via_goal:
         p["via_goal"] = via_goal
+        # 경로의 두 홉 중 강한 쪽도 남긴다(UI 가 "목적 경유" 를 설명할 수 있게).
+        p["via_goal_source"] = via_goal_source
     return p
 
 
 def _rank(source: str, weight: float) -> tuple[int, float]:
     return (SOURCE_TIER.get(source, ("?", 0))[1], weight or 0.0)
+
+
+def _weakest(a: tuple, b: tuple) -> tuple:
+    """(source, weight, curated_status) 두 홉 중 **약한 쪽**을 경로 신뢰도로 채택.
+
+    멀티홉(Exercise --targets--> Goal --improves--> Factor)에서 목적→요인 엣지가 A급이라도
+    운동→목적 엣지가 V급이면 그 운동의 근거는 V급이다. 강한 홉을 경로 전체의 등급으로
+    쓰면 거짓 정밀도가 된다(P-1).
+    """
+    return a if _rank(a[0], a[1]) <= _rank(b[0], b[1]) else b
 
 
 # ---------------------------------------------------------------------------
@@ -137,13 +152,14 @@ def _exercises_for_factor(conn, factor, group, suits) -> list[dict]:
     fid = _nid("Factor", factor)
     picked: dict[str, dict] = {}   # exercise name -> item (best tier kept)
 
-    def _offer(name, source, weight, cstatus, via_goal=None):
+    def _offer(name, source, weight, cstatus, via_goal=None, via_goal_source=None):
         cur = picked.get(name)
         cand_rank = _rank(source, weight)
         if cur is None or cand_rank > cur["_rank"]:
             picked[name] = {
                 "name": name,
-                "provenance": _provenance(source, weight, cstatus, via_goal),
+                "provenance": _provenance(source, weight, cstatus,
+                                          via_goal, via_goal_source),
                 "_rank": cand_rank,
             }
 
@@ -155,16 +171,21 @@ def _exercises_for_factor(conn, factor, group, suits) -> list[dict]:
         if _age_ok(src, group, suits):
             _offer(name, source, weight, cstatus)
 
-    # 멀티홉: Goal --improves--> Factor, 그 Goal 을 targets 하는 Exercise 를 끌어옴
-    for goal_id, goal_name, gsource, gweight in conn.execute(
-            "SELECT e.src, n.name, e.source, e.weight "
+    # 멀티홉: Goal --improves--> Factor, 그 Goal 을 targets 하는 Exercise 를 끌어옴.
+    # 경로 등급 = 두 홉 중 약한 쪽(_weakest) — 목적 엣지가 A급이어도 운동→목적이 V급이면 V급.
+    for goal_id, goal_name, gsource, gweight, gstatus in conn.execute(
+            "SELECT e.src, n.name, e.source, e.weight, e.curated_status "
             "FROM graph_edges e JOIN graph_nodes n ON n.id=e.src "
             "WHERE e.dst=? AND e.rel='improves' AND n.type='Goal'", (fid,)):
-        for ex_id, ex_name in conn.execute(
-                "SELECT e.src, n.name FROM graph_edges e JOIN graph_nodes n ON n.id=e.src "
+        for ex_id, ex_name, esource, eweight, estatus in conn.execute(
+                "SELECT e.src, n.name, e.source, e.weight, e.curated_status "
+                "FROM graph_edges e JOIN graph_nodes n ON n.id=e.src "
                 "WHERE e.dst=? AND e.rel='targets' AND n.type='Exercise'", (goal_id,)):
             if _age_ok(ex_id, group, suits):
-                _offer(ex_name, gsource, gweight, None, via_goal=goal_name)
+                src, w, cs = _weakest((gsource, gweight, gstatus),
+                                      (esource, eweight, estatus))
+                _offer(ex_name, src, w, cs,
+                       via_goal=goal_name, via_goal_source=gsource)
 
     items = sorted(picked.values(), key=lambda x: x["_rank"], reverse=True)
     for it in items:

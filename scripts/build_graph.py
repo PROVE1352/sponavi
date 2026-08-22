@@ -14,8 +14,10 @@ FITNESS_GRAPH.md §2(스키마)·§3(종목34×요인 매트릭스)·§4(빌드 
 엣지 (provenance 필수 — 출처 없는 엣지는 존재하지 않는다):
   S급 kspo_standard w=1.0  improves  KSPO 공식 요인→운동 매핑(nfa selectFitnessStandard.kspo)
   V급 kspo_video    w=0.7  improves/suits/targets  영상 카탈로그 분류축(요인·연령·목적)
-  A급 guideline     w=0.8  suits     정부·국제 지침(청소년 뼈부하 / 노인 평형)
-  B급 curated       w=0.5(●)/0.3(○)  trains  §3 매트릭스 B셀 (curated_status='pending')
+  A급 guideline     w=0.8  suits/improves  정부·국제 지침(청소년 뼈부하 / 노인 평형 /
+                                    신체조성=유산소+근력 / 목적→요인 시드 일부)
+  B급 curated       w=0.5(●)/0.3(○)  trains/improves  §3 매트릭스 B셀 + 목적→요인 시드
+                                    (curated_status='pending')
 
 Usage:
   python scripts/build_graph.py [--db data/sponavi.db]
@@ -45,7 +47,8 @@ AGE_GROUPS = ["유아", "유소년", "청소년", "성인", "어르신"]
 
 KSPO_URL = "https://nfa.kspo.or.kr/classroom/program/selectFitnessStandard.kspo"
 
-TIER_WEIGHT = {"kspo_standard": 1.0, "guideline": 0.8, "kspo_video": 0.7}
+TIER_WEIGHT = {"kspo_standard": 1.0, "guideline": 0.8, "kspo_video": 0.7,
+               "curated": 0.5}   # curated 기본치(§3 매트릭스 셀은 MARK_WEIGHT 사용)
 MARK_WEIGHT = {"●": 0.5, "○": 0.3}
 
 
@@ -154,6 +157,121 @@ GUIDELINE_SUITS = [
      "청소년 뼈부하 운동 주3일(점프·달리기): 줄넘기·농구·배구 (복지부·WHO 2020)"),
     ("Goal", "낙상예방", "어르신",
      "노인 평형성 운동 주3일: 낙상예방 (복지부 2023·WHO 2020)"),
+]
+
+# ---------------------------------------------------------------------------
+# A급: 지침 improves — 신체조성 (KSPO 공식 매핑에 신체조성 행이 없어 고아였던 요인)
+#   measurement_item 에 bmi·whtr·body_fat(신체조성)이 있어 약점으로 판정될 수 있는데
+#   improves 엣지가 0이면 recommend_for_weakness(["신체조성"]) 가 빈 배열이 된다.
+#   → 정부·국제 지침(복지부 2023·WHO 2020·ACSM)으로 유산소+근력을 연결한다.
+# ---------------------------------------------------------------------------
+BODY_COMP_EVIDENCE = (
+    "체중·체지방 관리에는 중강도 유산소 주 150~300분(또는 고강도 주 75~150분)과 "
+    "주요 근육군 근력운동 주 2일 이상의 병행을 권장 "
+    "(보건복지부 한국인 신체활동 지침 2023 · WHO 신체활동 지침 2020 · ACSM 체중관리 권고)"
+)
+# (src_type, src_name, dst_factor, evidence)
+GUIDELINE_IMPROVES = [
+    ("Exercise", "걷기", "신체조성", BODY_COMP_EVIDENCE),
+    ("Exercise", "조깅", "신체조성", BODY_COMP_EVIDENCE),
+    ("Exercise", "자전거", "신체조성", BODY_COMP_EVIDENCE),
+    ("Sport", "수영", "신체조성", BODY_COMP_EVIDENCE),
+    ("Sport", "헬스", "신체조성", BODY_COMP_EVIDENCE),
+]
+
+# ---------------------------------------------------------------------------
+# A/B급: Goal → Factor (improves) 시드
+#
+# 왜: 영상 카탈로그의 목적(Goal) 16개에는 targets 엣지가 462개 붙어 있으나 Goal 이
+#     Factor 로 이어지지 않아 graph.py 의 멀티홉(Exercise --targets--> Goal --improves-->
+#     Factor)이 사실상 죽어 있었다(낙상예방 2개 뿐). 요인 태그가 빈 운동 다수가 미도달.
+#
+# 티어 정책(정직성 P-1) — 연결 수보다 근거가 우선:
+#   guideline(A, w=0.8) : 복지부 한국인 신체활동 지침 2023 · WHO 2020 · ACSM · 질병관리청
+#                         으로 "이 목적에는 이 요인의 운동" 을 **구체 문장으로 쓸 수 있을 때만**.
+#   curated (B, w=0.5, curated_status='pending') : 그 외 전부.
+#                         근거는 ① 목적 분류명에 요인이 명시된 경우(이름 근거)
+#                                ② 공단 영상 요인 태그 실측 분포(루틴 구성 근거)
+#                         — UI 는 "전문가 큐레이션(검증 중)" 배지로 표기.
+#
+# 카탈로그 실측 근거 채택 기준: 해당 목적 영상 중 그 요인 태그의 점유율 **20% 이상**
+#   (예: 직장인동료짝운동의 '근력/근지구력' 11/92=12% → 제외). 태그는 videos.factor 원문
+#   ('근력/근지구력' 은 두 요인으로 분리)이며 수치는 2026-07-21 적재본 실측.
+#
+# ⚠ 명시적 비매핑(P-1): 질병예방 목적(고혈압·당뇨·우울증)의 유산소 지침은 존재하지만
+#   해당 루틴 영상에 심폐지구력 태그가 하나도 없어 심폐지구력으로는 잇지 않는다.
+#   지침 수치는 처방의 FITT 슬롯(ai.py)에서 별도 인용된다.
+#
+# (goal, [factors], source, evidence)
+# ---------------------------------------------------------------------------
+GOAL_FACTOR_EDGES: list[tuple[str, list[str], str, str]] = [
+    # ── A급 guideline ──────────────────────────────────────────────────────
+    ("스트레칭", ["유연성"], "guideline",
+     "유연성 운동은 주요 관절별 정적 스트레칭을 30~60초 유지, 주 2~3일 이상 권장"
+     "(ACSM 운동처방 지침 · 보건복지부 한국인 신체활동 지침 2023). "
+     "공단 영상 요인 태그 실측: 유연성 104/117."),
+    ("근력운동", ["근력", "근지구력"], "guideline",
+     "성인은 주요 근육군을 사용하는 근력(저항)운동을 주 2일 이상 권장 — 근력·근지구력 향상 수단"
+     "(보건복지부 한국인 신체활동 지침 2023 · WHO 신체활동 지침 2020). "
+     "공단 영상 요인 태그 실측: '근력/근지구력' 387/388."),
+    ("유산소", ["심폐지구력"], "guideline",
+     "유산소 신체활동은 중강도 주 150~300분 또는 고강도 주 75~150분이 표준 권고이며 "
+     "심폐지구력 향상의 직접 수단(보건복지부 2023 · WHO 2020). "
+     "※이 목적 영상의 공단 요인 태그는 '근력/근지구력'(30/35)으로 표기돼 있어 "
+     "카탈로그가 아니라 목적명·지침을 근거로 매핑한다."),
+    ("낙상예방", ["근력", "근지구력"], "guideline",
+     "노인은 평형·근력을 포함한 복합(multicomponent) 신체활동을 주 3일 이상 권장 — 낙상 예방"
+     "(WHO 신체활동 지침 2020 · 보건복지부 2023). 평형성·민첩성은 KSPO 공식 매핑(S급)에서 이미 연결. "
+     "공단 영상 요인 태그 실측: '근력/근지구력' 56/216."),
+    ("골다공증예방", ["근력", "근지구력"], "guideline",
+     "뼈 건강 유지·향상에는 체중부하 활동과 근력(저항)운동을 권장"
+     "(WHO 신체활동 지침 2020 · ACSM 골건강 권고). "
+     "공단 영상 요인 태그 실측: '근력/근지구력' 93/104."),
+    ("당뇨병예방", ["근력", "근지구력"], "guideline",
+     "제2형 당뇨 예방·관리에는 유산소 주 150분 이상과 근력운동 주 2일 이상의 병행을 권장"
+     "(질병관리청 · ACSM). 공단 영상 요인 태그 실측: '근력/근지구력' 36/50."),
+    # ── B급 curated (pending) ─────────────────────────────────────────────
+    ("당뇨병예방", ["유연성"], "curated",
+     "공단 '당뇨병예방' 루틴 영상 요인 태그 실측 유연성 14/50(28%) — 루틴 구성 근거. "
+     "유연성에 대한 당뇨 특이 지침 문장은 없어 curated."),
+    ("고혈압예방", ["유연성", "근력", "근지구력"], "curated",
+     "공단 '고혈압예방' 루틴 영상 요인 태그 실측 유연성 144/253·'근력/근지구력' 96/253 — 루틴 구성 근거. "
+     "※고혈압의 유산소 권고(중강도 주 150분 이상, 질병관리청·WHO 2020)는 FITT 슬롯에서 인용하며, "
+     "이 루틴에는 심폐지구력 태그가 없어 심폐지구력으로 잇지 않는다."),
+    ("우울증예방", ["근력", "근지구력", "유연성"], "curated",
+     "공단 '우울증예방' 루틴 영상 요인 태그 실측 '근력/근지구력' 65/123·유연성 47/123 — 루틴 구성 근거. "
+     "※신체활동의 우울 완화 근거(WHO 2020)는 목적 자체의 근거이지 요인 매핑 근거는 아니어서 curated."),
+    ("우울증예방(댄스운동편)", ["유연성"], "curated",
+     "공단 '우울증예방(댄스운동편)' 영상 요인 태그 실측 유연성 31/111(28%) — 루틴 구성 근거."),
+    ("우울증예방(댄스운동편)", ["심폐지구력", "협응력"], "curated",
+     "댄스 운동의 유산소·협응 성분 — FITNESS_GRAPH §3 매트릭스 '댄스(줌바 등)·무용(발레 등)' 행"
+     "(심폐 ● · 협응 ●)과 동일 근거. 이 목적 영상 111건 중 71건은 공단 요인 태그가 비어 있어 "
+     "루틴 성격으로 매핑(체대 검증 대기)."),
+    ("인지노쇠예방", ["근력", "근지구력"], "curated",
+     "공단 '인지노쇠예방' 루틴 영상 요인 태그 실측 '근력/근지구력' 77/81 — 루틴 구성 근거."),
+    ("요통예방", ["근력", "근지구력", "유연성"], "curated",
+     "공단 '요통예방' 루틴 영상 요인 태그 실측 '근력/근지구력' 66/117·유연성 47/117 — "
+     "체간(코어) 근지구력·유연성 중심 루틴 구성 근거."),
+    ("PAPS4-5등급학생체력증진",
+     ["심폐지구력", "유연성", "근력", "근지구력", "순발력", "민첩성", "신체조성"], "curated",
+     "PAPS(학생건강체력평가)는 심폐지구력·유연성·근력/근지구력·순발력·신체조성 5개 체력요인으로 "
+     "구성되며, 4~5등급 학생 대상 체력증진 프로그램은 이 요인 전반의 향상을 목표로 한다(교육부 PAPS). "
+     "공단 영상 요인 태그 실측: '근력/근지구력' 107·유연성 105·'민첩성/순발력' 55 /272. "
+     "교육부 자료는 FITNESS_GRAPH §2 의 지침 티어(복지부·질병청·WHO·ACSM) 밖이라 curated 로 둔다."),
+    ("민첩성/순발력/협응력/집중력/근력강화/체력증진",
+     ["민첩성", "순발력", "협응력", "근력"], "curated",
+     "목적 분류명이 체력요인을 직접 명시(민첩성·순발력·협응력·근력강화) — 이름 근거 매핑. "
+     "공단 영상 요인 태그 실측: '민첩성/순발력' 100/100."),
+    ("낙상예방", ["순발력"], "curated",
+     "공단 '낙상예방' 영상 요인 태그 '민첩성/순발력' 146/216 — 순발력 성분은 카탈로그 근거"
+     "(평형성·민첩성은 KSPO 공식 S급, 근력·근지구력은 지침 A급으로 별도 연결)."),
+    ("직장인다리부종예방", ["유연성", "근력"], "curated",
+     "공단 '직장인다리부종예방' 영상 요인 태그 실측 유연성 30/53·근력 21/53 — 루틴 구성 근거."),
+    ("직장인뭉친어깨예방", ["유연성", "근력", "근지구력"], "curated",
+     "공단 '직장인뭉친어깨예방' 영상 요인 태그 실측 유연성 19/38·'근력/근지구력' 18/38 — 루틴 구성 근거."),
+    ("직장인동료짝운동", ["유연성"], "curated",
+     "공단 '직장인동료짝운동' 영상 요인 태그 실측 유연성 79/92(86%) — 루틴 구성 근거. "
+     "'근력/근지구력' 11/92(12%)는 채택 기준(20%) 미만이라 제외."),
 ]
 
 # ---------------------------------------------------------------------------
@@ -358,6 +476,27 @@ def build(conn: sqlite3.Connection) -> dict:
         g.add_edge(src, nid("AgeGroup", age), "suits", "guideline",
                    TIER_WEIGHT["guideline"], {"text": text})
 
+    # ---- A급: 지침 improves (신체조성 등 KSPO 공식 매핑 공백 보강) ----
+    for src_type, src_name, factor, text in GUIDELINE_IMPROVES:
+        if src_type == "Sport" and src_name not in sport_set:
+            continue
+        src = g.add_node(src_type, src_name)
+        g.add_edge(src, nid("Factor", factor), "improves", "guideline",
+                   TIER_WEIGHT["guideline"], {"text": text})
+
+    # ---- A/B급: Goal → Factor (improves) 시드 ----
+    #  영상에서 만들어진 Goal 노드에만 붙인다(없는 목적은 skip — 유령 노드 금지).
+    goal_names = {n["name"] for n in g.nodes.values() if n["type"] == "Goal"}
+    for goal, factors, source, evidence in GOAL_FACTOR_EDGES:
+        if goal not in goal_names:
+            print(f"[warn] Goal '{goal}' 노드 없음(영상 미적재) → Goal→Factor 엣지 skip",
+                  file=sys.stderr)
+            continue
+        for factor in factors:
+            g.add_edge(nid("Goal", goal), nid("Factor", factor), "improves", source,
+                       TIER_WEIGHT[source], {"text": evidence},
+                       curated_status="pending" if source == "curated" else None)
+
     # ---- B급: §3 매트릭스 (trains, curated, pending) ----
     for db_sports, cells in MATRIX_B:
         for sp in db_sports:
@@ -417,6 +556,11 @@ def _stats(conn: sqlite3.Connection) -> dict:
         "FROM graph_edges e JOIN graph_nodes n ON n.id=e.dst "
         "WHERE n.type='Factor' AND e.src IN (SELECT id FROM graph_nodes WHERE type='Sport') "
         "GROUP BY n.name ORDER BY 2 DESC").fetchall()
+    # Goal→Factor improves (멀티홉 시드) — 목적별 요인 수
+    goal_factor = q(
+        "SELECT s.name, COUNT(DISTINCT e.dst) "
+        "FROM graph_edges e JOIN graph_nodes s ON s.id=e.src "
+        "WHERE e.rel='improves' AND s.type='Goal' GROUP BY s.name ORDER BY 2 DESC, 1").fetchall()
     # 고아 노드 (엣지 미접속)
     orphans = q(
         "SELECT type, name FROM graph_nodes "
@@ -430,6 +574,7 @@ def _stats(conn: sqlite3.Connection) -> dict:
         "edges_by_rel": edges_by_rel,
         "per_factor_exercise": per_factor,
         "per_factor_sport": per_factor_sport,
+        "goal_factor": goal_factor,
         "orphans": orphans,
     }
 
@@ -449,6 +594,9 @@ def print_stats(st: dict) -> None:
     print("  요인별 연결 종목 수:")
     for name, c in st["per_factor_sport"]:
         print(f"      {name:8s} {c:4d}")
+    print(f"  Goal→Factor 매핑 {len(st['goal_factor'])}개 목적:")
+    for name, c in st["goal_factor"]:
+        print(f"      {name} → 요인 {c}개")
     orphans = st["orphans"]
     print(f"  고아 노드 {len(orphans)}개" +
           (": " + ", ".join(f"{t}:{n}" for t, n in orphans) if orphans else ""))

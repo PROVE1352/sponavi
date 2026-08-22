@@ -168,13 +168,14 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     summary: '장애인 이용권 ✗(연령 초과) → 공급공백 배너 + 장애 특화 대체경로',
     age: 72,
     sex: 'M',
-    // PRD ★FR-P4: 데모 지역 = 인천 서구(28260). 실 DB 기준 이 구의 dvoucher 가맹은 0건이고
-    // 커버리지(수급률)는 서울 15구만 실측이라 coverage=null 이다 — 목도 그 형태를 따른다.
-    sigungu_cd: '28260',
-    sigungu_nm: '서구',
+    // PRD ★FR-P4(2026-08-22 개정): 데모 지역 = 강원 고성군(51820). 전국 정규화 후 장애인이용권
+    // 가맹 0곳인 시군구는 고성군·울릉군뿐(인천 서구 383:0 은 코드 전환기 잔재 → 영역그룹 카운트로
+    // 해소). 커버리지(수급률)는 서울 15구만 실측이라 coverage=null — 목도 그 형태를 따른다.
+    sigungu_cd: '51820',
+    sigungu_nm: '고성군',
     income_class: '그외',
     disability: { has: true, type: '청각' },
-    location: { lat: 37.5459, lon: 126.6568 },
+    location: { lat: 38.3502, lon: 128.4803 },
   },
   {
     id: 'P5',

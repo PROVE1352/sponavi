@@ -112,9 +112,9 @@ def test_assess_persona_expectations(client, personas_by_id, db_store):
     assert p2["eligibility"][0]["eligible"] is False
     assert any(h["edge"] == "대체경로" for h in p2["path"])
 
-    # P4 자격 X (연령) — 인천 서구(28260), 전국 DB 필요
+    # P4 자격 X (연령) — 강원 고성군(51820), 전국 DB 필요
     if db_store is None:
-        pytest.skip("P4(인천 서구)는 전국 DB 필요")
+        pytest.skip("P4(강원 고성군)는 전국 DB 필요")
     p4 = client.post("/api/assess", json=personas_by_id["P4"]["body"]).json()
     assert p4["eligibility"][0]["eligible"] is False
     assert any(r["field"] == "age" and not r["ok"] for r in p4["eligibility"][0]["reasons"])

@@ -38,15 +38,16 @@
     "alternatives":       [ { "id": "F1", "name": "성북구민체육센터", "type": "공공체육시설", "sports": ["요가"], "lat": 0, "lon": 0, "dist_km": 0.7, "note": "저가 오전시간대", "disability_support": true } ]
   },
   "supply_gap": {
-    "radius_km": 3, "voucher_count": 0, "alt_count": 2,
-    "nearest": { "name": "...", "dist_km": 4.2 },
-    "message": "반경 3km 내 이용권 가맹시설이 없습니다",
+    "radius_km": 3, "voucher_count": 0, "voucher_scope": "sigungu", "alt_count": 2,
+    "scope_codes": ["11290"], "scope_label": null, "scope_reason": null,
+    "nearest": { "name": "...", "coord_source": "centroid", "dist_km": null, "sigungu_nm": "강북구" },
+    "message": "성북구에 장애인스포츠강좌이용권 가맹시설이 없습니다",
     "coverage": { "sigungu": "성북구", "class": "차상위·한부모", "target": 602, "recipient": 9, "rate": 0.015, "year": 2025 }
   }
 }
 ```
 규칙: `eligible=true`인 제도가 있으면 path는 직접 경로(자격 ✓ → 신청·근처). 없으면 alt_edges를
-순서대로 평가해 첫 성립 대안으로 멀티홉 경로 구성. `supply_gap`은 항상 포함(있어도 통계 노출).
+순서대로 평가해 첫 성립 대안으로 멀티홉 경로 구성. `supply_gap`은 항상 포함(있어도 통계 노출). 이용권 카운트는 구 단위(`voucher_scope:"sigungu"`)이며 행정구역 개편 전환기 영역그룹(FR-05 AC4, 예: 인천 서해구·검단구 ← 옛 서구)이면 `scope_codes`에 합산한 코드들, `scope_label`에 "○○ 일대(옛 △△)", `scope_reason`에 사유가 실린다(그룹이 아니면 자기 코드 1개·null).
 
 ## POST /api/fitness
 

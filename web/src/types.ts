@@ -157,6 +157,10 @@ export interface SupplyGap {
   // 이용권 카운트 기준: 'sigungu'=구 단위(실좌표 아님), 'radius'=반경(실좌표 풀).
   voucher_scope?: 'sigungu' | 'radius'
   sigungu_nm?: string | null
+  // 영역그룹(FR-05 AC4): 실제로 센 코드들. 그룹이면 label/reason 에 '일대(옛 ○○)'와 사유.
+  scope_codes?: string[]
+  scope_label?: string | null
+  scope_reason?: string | null
   alt_count: number
   // 근사좌표 최근접이면 dist_km=null·sigungu_nm 노출.
   nearest:

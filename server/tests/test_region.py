@@ -190,13 +190,15 @@ def test_public_facilities_sigungu_resolved(db_store):
     assert stale == 0
 
 
-def test_persona_p4_region_is_incheon_seogu(db_store):
-    """PRD ★FR-P4: P4 데모 지역 = 인천 서구(28260)."""
+def test_persona_p4_region_is_goseong(db_store):
+    """PRD ★FR-P4(2026-08-22 개정): P4 데모 지역 = 강원 고성군(51820) — 전국 정규화 후
+    장애인이용권 가맹 0곳인 시군구는 고성군·울릉군뿐이라 공급공백 실데이터 시연이 정직하다.
+    (인천 서구 383:0 은 코드 전환기 잔재 → 영역그룹 카운트로 해소, test_sigungu_groups.py)"""
     from app.personas import PERSONAS
 
     p4 = {p["id"]: p for p in PERSONAS}["P4"]
-    assert p4["body"]["sigungu_cd"] == "28260"
-    assert p4["body"]["sigungu_nm"] == "서구"
+    assert p4["body"]["sigungu_cd"] == "51820"
+    assert p4["body"]["sigungu_nm"] == "고성군"
     _need_db(db_store)
-    c = db_store.centroid("28260")
-    assert c and c["nm"] == "서구"
+    c = db_store.centroid("51820")
+    assert c and c["nm"] == "고성군"

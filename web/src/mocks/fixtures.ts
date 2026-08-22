@@ -31,6 +31,8 @@ export const FACILITIES: RawFacility[] = [
   { id: 'P02', source: 'public',   name: '아리랑체육관',       sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 아리랑로 82', lat: 37.6008, lon: 127.0117, coord_source: 'api', sports: ['배드민턴', '탁구'], disability_support: false, phone: '02-000-0012' },
   { id: 'P03', source: 'public',   name: '월곡스포츠문화센터', sigungu_cd: '11290', sigungu_nm: '성북구', addr: '서울 성북구 월곡로 21', lat: 37.6022, lon: 127.0405, coord_source: 'api', sports: ['필라테스', '요가', '스트레칭'], disability_support: false, phone: '02-000-0013' },
   { id: 'P04', source: 'public',   name: '용산가족체육센터',   sigungu_cd: '11170', sigungu_nm: '용산구', addr: '서울 용산구 이촌로 200', lat: 37.5220, lon: 126.9720, coord_source: 'api', sports: ['수영', '헬스'], disability_support: true, phone: '02-000-0014' },
+  // P4(고성군) 최근접 장애인이용권 시설 — 실 DB 최근접(속초시, 구 중심 근사)을 본뜬다.
+  { id: 'D02', source: 'dvoucher', name: '동진볼링장',         sigungu_cd: '51210', sigungu_nm: '속초시', addr: '강원 속초시 중앙로 1', lat: 38.1670, lon: 128.5554, coord_source: 'centroid', sports: ['볼링'], disability_support: true, phone: '033-000-0001' },
   { id: 'D01', source: 'dvoucher', name: '서울장애인체육관',   sigungu_cd: '11305', sigungu_nm: '강북구', addr: '서울 강북구 한천로 1000', lat: 37.6396, lon: 127.0257, coord_source: 'centroid', sports: ['수영', '재활운동', '탁구'], disability_support: true, phone: '02-000-0021' },
 ]
 
@@ -142,6 +144,9 @@ export const SIGUNGU: Sigungu[] = [
   { cd: '12240', nm: '서구', lat: 35.1518, lon: 126.8902 },
   { cd: '12300', nm: '북구', lat: 35.1988, lon: 126.9027 },
   { cd: '36110', nm: '세종특별자치시', lat: 36.4801, lon: 127.289 },
+  // 강원(51) — P4 데모 지역(고성군)과 그 최근접 이용권 시설이 있는 속초시.
+  { cd: '51820', nm: '고성군', lat: 38.3502, lon: 128.4803 },
+  { cd: '51210', nm: '속초시', lat: 38.167, lon: 128.5554 },
   { cd: '41111', nm: '수원시 장안구', lat: 37.3049, lon: 127.0107 },
   { cd: '41135', nm: '성남시 분당구', lat: 37.3826, lon: 127.1189 },
 ]

@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from typing import Any, Optional
 
+from . import region
 from .store import Store, haversine_km
 
 # distance parameters
@@ -378,8 +379,11 @@ def _supply_gap(
     # FR-04 AC2: 이용권 시설은 실좌표가 아니므로 "반경 N km" 금지.
     #            사용자 시군구(sigungu_cd) 일치 = "OO구 가맹 N곳"(구 단위 카운트, SQL COUNT).
     user_sigungu_nm = _sigungu_nm(store, sigungu_cd)
-    if sigungu_cd:
-        voucher_count = store.count_facilities_in_sigungu(source, sigungu_cd)
+    # FR-05 AC4: 행정구역 개편 전환기로 한 생활권이 옛/신 코드 여럿에 걸친 곳(인천 서해구·
+    #            검단구 ← 옛 서구 등)은 영역그룹으로 합산한다 — 한 코드만 세면 거짓 공급공백.
+    scope_codes, group = region.count_scope(sigungu_cd)
+    if scope_codes:
+        voucher_count = store.count_facilities_in_sigungus(source, scope_codes)
     else:
         voucher_count = 0  # 시군구 미상(좌표만 입력) → 구 단위 카운트 근거 없음
 
@@ -403,7 +407,8 @@ def _supply_gap(
         }
 
     label = _voucher_label(disability_has)
-    where = user_sigungu_nm or "이 지역"
+    # 그룹이면 문구에 '일대(옛 ○○)'를 밝힌다 — 어느 코드들을 합쳤는지 숨기지 않는다(P-1).
+    where = (group["label"] if group else None) or user_sigungu_nm or "이 지역"
     # 헤드라인은 짧게. 최근접 상세(실좌표면 km, 아니면 '△△구')는 nearest 구조체로 전달
     # (표기 규칙은 소비자가 coord_source 로 판단 — 문구 중복 방지).
     if voucher_count == 0:
@@ -418,6 +423,9 @@ def _supply_gap(
         "voucher_count": voucher_count,
         "voucher_scope": "sigungu",          # 이용권 카운트 기준: 구 단위(반경 아님)
         "sigungu_nm": user_sigungu_nm,
+        "scope_codes": list(scope_codes),     # 실제로 센 코드들(그룹이면 여럿)
+        "scope_label": group["label"] if group else None,
+        "scope_reason": group["reason"] if group else None,
         "alt_count": len(alt_in),
         "nearest": nearest,
         "message": message,

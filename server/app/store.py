@@ -322,6 +322,18 @@ class Store:
         )
         return int(cur.fetchone()[0])
 
+    def count_facilities_in_sigungus(self, source: str, sigungu_cds) -> int:
+        """구 단위 카운트 — 영역그룹(region.SIGUNGU_GROUPS)이면 코드 여럿을 합산한다."""
+        codes = [c for c in (sigungu_cds or ()) if c]
+        if not codes:
+            return 0
+        marks = ",".join("?" for _ in codes)
+        cur = self.conn.execute(
+            f"SELECT COUNT(*) FROM facilities WHERE source = ? AND sigungu_cd IN ({marks})",
+            (source, *codes),
+        )
+        return int(cur.fetchone()[0])
+
     def courses_for(self, facility_id: str) -> list[dict]:
         cur = self.conn.execute(
             "SELECT * FROM courses WHERE facility_id = ?", (facility_id,)

@@ -291,3 +291,43 @@ def resolve_sigungu(
             return sole[s], s, "sole"
 
     return None, (cands[0] if cands else None), "nomatch"
+
+
+# ---------------------------------------------------------------------------
+# ④ 카운트 영역그룹 — 분할·통합(1:N / N:M) 시군구는 크로스워크가 아니라 "같이 센다"
+# ---------------------------------------------------------------------------
+# 2026-07-01 인천 행정체제 개편(법률 2024-01-30 공포):
+#   옛 서구(28260)          → 서해구(28275) + 검단구(28290)      (분구, 아라뱃길 경계)
+#   옛 중구(28110)·동구(28140) → 제물포구(28125) + 영종구(28155)  (내륙/영종 통합·조정)
+# 공단 원천은 전환기라 voucher 는 옛 코드, dvoucher·public 은 신 코드를 쓴다(2026-07-21 적재본
+# 실측: 28260 voucher 383·dvoucher 0 / 28275 33·70 / 28290 29·44 — 세 코드 주소가 전부
+# "인천광역시 서구"이고 같은 시설이 양쪽에 존재). 한 코드만 세면 "가맹 0곳"이라는 **거짓
+# 공급공백**이 된다(P-1 위반). 이름으로는 한쪽에 붙일 수 없으므로(분할) 시설 코드는 손대지
+# 않고, **구 단위 카운트(FR-04 AC2)만 그룹 합산**한다. 문구에는 '일대(옛 ○○)'를 밝힌다.
+SIGUNGU_GROUPS: tuple[dict, ...] = (
+    {
+        "id": "28-seohae-geomdan",
+        "label": "서해구·검단구 일대(옛 서구)",
+        "members": ("28260", "28275", "28290"),
+        "reason": "2026-07-01 인천 서구 → 서해구·검단구 분구 — 원천이 옛/신 코드 혼재",
+    },
+    {
+        "id": "28-jemulpo-yeongjong",
+        "label": "제물포구·영종구 일대(옛 중구·동구)",
+        "members": ("28110", "28125", "28140", "28155"),
+        "reason": "2026-07-01 인천 중구·동구 → 제물포구·영종구 통합·조정 — 원천이 옛/신 코드 혼재",
+    },
+)
+GROUP_OF: dict[str, dict] = {m: g for g in SIGUNGU_GROUPS for m in g["members"]}
+
+
+def count_scope(sigungu_cd: Optional[str]) -> tuple[tuple[str, ...], Optional[dict]]:
+    """구 단위 카운트에 포함할 코드 튜플 + (그룹이면) 그룹 정보.
+
+    그룹이 아니면 (자기 코드,) 와 None — 지어내지 않는다."""
+    if not sigungu_cd:
+        return (), None
+    g = GROUP_OF.get(str(sigungu_cd))
+    if g is None:
+        return (str(sigungu_cd),), None
+    return tuple(g["members"]), g

@@ -100,6 +100,13 @@ CREATE TABLE IF NOT EXISTS sigungu (
     lat     REAL,
     lon     REAL
 );
+-- 구(舊) 시군구코드 → 현행 코드. 마스터에는 현행 코드만 남기고, 전환기 입력(챗 NLU·
+-- assess 요청)으로 구 코드가 오면 이 표로 결정론 해석한다. reason = sido_merge|sido_recode.
+CREATE TABLE IF NOT EXISTS sigungu_alias (
+    old_cd TEXT PRIMARY KEY,
+    new_cd TEXT NOT NULL,
+    reason TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_fac_sigungu ON facilities(sigungu_cd);
 CREATE INDEX IF NOT EXISTS idx_fac_source  ON facilities(source);
 CREATE INDEX IF NOT EXISTS idx_course_fac  ON courses(facility_id);
@@ -203,6 +210,13 @@ class Store:
                 }
         except sqlite3.OperationalError:
             pass  # sigungu table absent (legacy DB) — seed-only fallback
+        # 구 시군구코드 → 현행 코드(전환기 입력 해석). 표가 없으면 빈 dict = 무변환.
+        self._sigungu_alias: dict[str, str] = {}
+        try:
+            cur = self.conn.execute("SELECT old_cd, new_cd FROM sigungu_alias")
+            self._sigungu_alias = {r["old_cd"]: r["new_cd"] for r in cur.fetchall()}
+        except sqlite3.OperationalError:
+            pass
 
     # -- programs / rules ---------------------------------------------------
     def program(self, pid: str) -> Optional[dict]:
@@ -211,17 +225,37 @@ class Store:
     def edges_from(self, pid: str) -> list[dict]:
         return [e for e in self.alt_edges if e.get("from") == pid]
 
+    # -- 지역 코드 정규화 ----------------------------------------------------
+    def canonical_sigungu(self, sigungu_cd: Optional[str]) -> Optional[str]:
+        """구 시군구코드로 들어온 입력을 현행 코드로 해석한다(sigungu_alias).
+
+        표에 없는 코드는 **그대로 돌려준다** — 시도 접두만 보고 뒷자리를 지어내지
+        않는다(29170→12300 같은 매핑은 이름 대조로만 도출된다, region.py)."""
+        if not sigungu_cd:
+            return sigungu_cd
+        return self._sigungu_alias.get(sigungu_cd, sigungu_cd)
+
     # -- centroids ----------------------------------------------------------
     def centroid(self, sigungu_cd: str) -> Optional[dict]:
-        # Seoul seed first (pilot), then nationwide sigungu table.
-        return self._centroids.get(sigungu_cd) or self._sigungu.get(sigungu_cd)
+        # 구 코드 입력도 현행 코드로 해석한 뒤 Seoul seed → 전국 sigungu 순으로.
+        cd = self.canonical_sigungu(sigungu_cd)
+        return self._centroids.get(cd) or self._sigungu.get(cd)
 
     def all_centroids(self) -> list[dict]:
-        # GET /api/meta/sigungu -> Seoul 25 (docs/API.md; pilot region SPEC §1).
-        return [self._centroids[k] for k in self._centroids]
+        """GET /api/meta/sigungu — 전국 시군구 [{cd,nm,lat,lon}](현행 코드).
+
+        서울 25는 시드 좌표(구청 실측)를 우선한다. 좌표를 못 구한 시군구는 지도에
+        찍을 수 없으므로 목록에서 뺀다 — 가짜 좌표를 지어내지 않는다(P-1).
+        sigungu 테이블이 없는 레거시 DB 는 시드(서울 25)로 폴백."""
+        rows: dict[str, dict] = {}
+        for cd, s in self._sigungu.items():
+            rows[cd] = {"cd": cd, "nm": s["nm"], "lat": s["lat"], "lon": s["lon"]}
+        for cd, c in self._centroids.items():
+            rows[cd] = {"cd": cd, "nm": c.get("nm"), "lat": c["lat"], "lon": c["lon"]}
+        return [rows[k] for k in sorted(rows)]
 
     def sigungu_all(self) -> list[dict]:
-        """전국 시군구 마스터 [{cd, nm}] — 좌표 유무 무관(실 DB 278개).
+        """전국 시군구 마스터 [{cd, nm}] — 좌표 유무 무관(현행 코드만).
         챗 NLU 의 지역 원문 → 코드 결정론 대조용(chat.py). 테이블이 없는
         데모/레거시 DB 는 시드(서울 25) 로 폴백한다."""
         try:

@@ -38,33 +38,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "server"))
 
+from app import region  # noqa: E402  (지역 코드 정규화 단일 표 — 서버와 공유)
 from app import store as store_mod  # noqa: E402  (SCHEMA_SQL + paths)
 
 RAW = REPO_ROOT / "data" / "raw"
 DATA = REPO_ROOT / "data"
 
-# 행정표준 시도 코드 (신 코드 기준) + 약칭/정식/특별자치 명칭 변형.
-SIDO_NAME_TO_CD = {
-    "서울": "11", "서울특별시": "11",
-    "부산": "26", "부산광역시": "26",
-    "대구": "27", "대구광역시": "27",
-    "인천": "28", "인천광역시": "28",
-    "광주": "29", "광주광역시": "29",
-    "대전": "30", "대전광역시": "30",
-    "울산": "31", "울산광역시": "31",
-    "세종": "36", "세종시": "36", "세종특별자치시": "36",
-    "경기": "41", "경기도": "41",
-    "충북": "43", "충청북도": "43",
-    "충남": "44", "충청남도": "44",
-    "전남": "46", "전라남도": "46",
-    "경북": "47", "경상북도": "47",
-    "경남": "48", "경상남도": "48",
-    "제주": "50", "제주도": "50", "제주특별자치도": "50",
-    "강원": "51", "강원도": "51", "강원특별자치도": "51",
-    "전북": "52", "전라북도": "52", "전북특별자치도": "52",
-}
-# legacy sido prefixes seen in voucher/dvoucher local_cd -> canonical (centroid fallback only)
-LEGACY_SIDO_ALIAS = {"42": "51", "45": "52"}
+# 시도 명칭·구 코드 표는 server/app/region.py 하나만 쓴다(적재와 조회가 같은 표).
+SIDO_NAME_TO_CD = region.SIDO_NAME_TO_CD
 KOREA_DEFAULT = (36.5, 127.8)  # geographic center — last-resort facility coord
 
 # public_facility field-name candidates (defensive: exact names may vary by page)
@@ -166,39 +147,34 @@ def course_target(name, desc=None) -> str:
     return "전연령"
 
 
-def sido_cd_from_name(nm):
-    n = _norm(nm)
-    if not n:
-        return None
-    if n in SIDO_NAME_TO_CD:
-        return SIDO_NAME_TO_CD[n]
-    for k, v in SIDO_NAME_TO_CD.items():
-        if n.startswith(k) or k.startswith(n):
-            return v
-    return None
+sido_cd_from_name = region.sido_cd_from_name
 
 
 # ---------------------------------------------------------------------------
 # sigungu master (code<->name) from voucher + dvoucher
 # ---------------------------------------------------------------------------
 def build_sigungu_master(vf, df):
-    code2nm: dict[str, str] = {}
+    """원천 local_cd/local_nm → (현행 마스터, 구코드 별칭, 이름 인덱스, 미해소).
+
+    API 가 전환기라 구·신 시도코드를 섞어 준다(29·46 ↔ 12, 42→51, 45→52).
+    마스터 단계에서 현행 코드 하나로 접고, 구 코드는 버리는 대신 별칭으로 남긴다
+    (입력으로 구 코드가 와도 결정론으로 해석되도록 — server/app/region.py).
+    """
+    raw: dict[str, str] = {}
     for r in (vf or []) + (df or []):
         cd = _cd5(r.get("local_cd"))
         nm = _clean(r.get("local_nm"))
         if cd and nm:
-            code2nm.setdefault(cd, nm)
-    # name index per sido for public mapping
-    nm2code_by_sido: dict[str, dict[str, str]] = defaultdict(dict)
-    for cd, nm in code2nm.items():
-        nm2code_by_sido[cd[:2]].setdefault(_norm(nm), cd)
-    return code2nm, nm2code_by_sido
+            raw.setdefault(cd, nm)
+    code2nm, alias, unresolved = region.canonicalize_master(raw)
+    nm2code_by_sido = region.build_name_index(code2nm)
+    return code2nm, alias, nm2code_by_sido, unresolved
 
 
 def sido_candidates(row):
-    """Ordered candidate 시도 codes for a public row. cp_nm/fmng_cp_nm are always
-    present when addr_ctpv_nm is null; '전남광주통합특별시' fans out to 전남+광주;
-    road/jibun address first token is a last resort."""
+    """Ordered candidate 시도 codes for a public row (현행 코드). cp_nm/fmng_cp_nm are
+    always present when addr_ctpv_nm is null; road/jibun address first token is a
+    last resort. '전남광주통합특별시'·'광주광역시'·'전라남도' 는 전부 12 로 접힌다."""
     cands: list[str] = []
 
     def add(s):
@@ -206,56 +182,26 @@ def sido_candidates(row):
             cands.append(s)
 
     for k in PF_SIDO:
-        v = row.get(k)
-        if _norm(v) and ("전남광주" in _norm(v) or "광주전남" in _norm(v)):
-            add("46")  # 전라남도
-            add("29")  # 광주 (name disambiguates: 전남 시/군 vs 광주 자치구)
-        else:
-            add(sido_cd_from_name(v))
+        add(region.sido_cd_from_name(row.get(k)))
     for k in PF_ROAD + PF_ADDR:
         v = row.get(k)
         toks = str(v or "").split()
         if toks:
-            add(sido_cd_from_name(toks[0]))
+            add(region.sido_cd_from_name(toks[0]))
     return cands
 
 
-def _match_in_sido(idx, cpb):
-    """Return (cd, how) matching one 시도's name index, or (None, None)."""
-    cpbn = _norm(cpb)
-    if not cpbn or not idx:
-        return None, None
-    if cpbn in idx:                                   # city-level exact (cpb_nm)
-        return idx[cpbn], "exact"
-    parts = str(cpb or "").split()
-    if len(parts) >= 2:                               # "고양시 덕양구" -> "고양시"
-        first = _norm(parts[0])
-        if first in idx:
-            return idx[first], "citytoken"
-    for nm, cd in idx.items():                        # "고양시" ⊂ "고양시덕양구"
-        if len(nm) >= 2 and cpbn.startswith(nm):
-            return cd, "prefix"
-    if len(parts) >= 2:                               # last token = 구/군
-        last = _norm(parts[-1])
-        if last in idx:
-            return idx[last], "lasttoken"
-    return None, None
+def map_public_code(row, nm2code_by_sido, sole):
+    """public row -> (sigungu_cd|None, sido_cd|None, how).
 
-
-def map_public_code(row, nm2code_by_sido):
-    """public row -> (sigungu_cd|None, sido_cd|None, how). Tries every 시군구 name
-    field against every candidate 시도 index; first hit wins."""
+    이름 대조(기존) → 개칭 별칭 → 주소 앞 2토큰 → 시군구 1곳뿐인 시도 순.
+    규칙 본체는 region.resolve_sigungu 가 소유한다(마이그레이션 스크립트와 공유)."""
     cands = sido_candidates(row)
     if not cands:
         return None, None, "sido_fail"
     names = [row.get(k) for k in PF_SIGUNGU if _norm(row.get(k))]
-    for sido in cands:
-        idx = nm2code_by_sido.get(sido, {})
-        for nm in names:
-            cd, how = _match_in_sido(idx, nm)
-            if cd:
-                return cd, sido, how
-    return None, cands[0], ("sido_only" if names else "sido_only")
+    addr = _clean(_first(row, PF_ROAD)) or _clean(_first(row, PF_ADDR))
+    return region.resolve_sigungu(cands, names, addr, nm2code_by_sido, sole)
 
 
 # ---------------------------------------------------------------------------
@@ -294,7 +240,7 @@ def make_coord_resolvers(centroid, sido_centroid):
         """Real centroid or (None, None) — for applicant-location resolution."""
         if cd in centroid:
             return centroid[cd]
-        s = LEGACY_SIDO_ALIAS.get(cd[:2], cd[:2]) if cd else None
+        s = region.canonical_sido(cd)
         if s in sido_centroid:
             return sido_centroid[s]
         return (None, None)
@@ -310,9 +256,20 @@ def make_coord_resolvers(centroid, sido_centroid):
 # ---------------------------------------------------------------------------
 # facility / course assembly
 # ---------------------------------------------------------------------------
-def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
-    """Parse raw rows into intermediate dicts (coords filled later)."""
+def assemble(vf, vc, df, dc, pf, nm2code_by_sido, code2nm, alias):
+    """Parse raw rows into intermediate dicts (coords filled later).
+
+    시설의 시군구 코드는 여기서 현행 코드로 접는다(alias). 이름도 현행 마스터 값을
+    쓴다 — 원천 local_nm 은 구 코드 시절 표기가 섞여 있다."""
     report = {}
+    recoded = Counter()
+
+    def canon(cd):
+        """구 코드 → 현행 코드(+집계). 별칭에 없으면 그대로 둔다."""
+        if cd and cd in alias:
+            recoded[(cd, alias[cd])] += 1
+            return alias[cd]
+        return cd
 
     # ---- voucher facilities (dedupe by (brno, facil_sn), union main_event) ----
     vfac: dict[tuple, dict] = {}
@@ -320,7 +277,7 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
         brno = _digits(r.get("brno"))
         sn = _clean(r.get("facil_sn"))
         key = (brno, sn)
-        cd = _cd5(r.get("local_cd"))
+        cd = canon(_cd5(r.get("local_cd")))
         if key not in vfac:
             vfac[key] = {
                 "id": f"voucher-{brno}-{sn}",
@@ -328,7 +285,7 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
                 "name": _clean(r.get("facil_nm")),
                 "sido_cd": (cd or "")[:2] or None,
                 "sigungu_cd": cd,
-                "sigungu_nm": _clean(r.get("local_nm")),
+                "sigungu_nm": code2nm.get(cd) or _clean(r.get("local_nm")),
                 "addr": _clean(r.get("road_addr")) or _clean(r.get("faci_daddr")),
                 "sports": set(),
                 "disability_support": None,
@@ -372,7 +329,7 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
     # ---- dvoucher facilities (disability-dedicated => disability_support=1) ----
     dfac: list[dict] = []
     for i, r in enumerate(df or []):
-        cd = _cd5(r.get("local_cd"))
+        cd = canon(_cd5(r.get("local_cd")))
         ev = _sport(r.get("main_event_nm"))
         dfac.append({
             "id": f"dvoucher-{i}",
@@ -380,7 +337,7 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
             "name": _clean(r.get("facil_nm")),
             "sido_cd": (cd or "")[:2] or None,
             "sigungu_cd": cd,
-            "sigungu_nm": _clean(r.get("local_nm")),
+            "sigungu_nm": code2nm.get(cd) or _clean(r.get("local_nm")),
             "addr": _clean(r.get("road_addr")) or _clean(r.get("faci_daddr")),
             "sports": {ev} if ev else set(),
             "disability_support": 1,
@@ -415,15 +372,20 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
     how_ctr: Counter = Counter()
     public_code_names: dict[str, str] = {}
     dropped_closed = 0
+    sole = region.sole_sigungu(nm2code_by_sido)
     for r in pf or []:
         status = _clean(_first(r, PF_STAT))
         if any(bad in status for bad in ("폐업", "폐쇄", "말소", "취소")):
             dropped_closed += 1
             continue
-        cd, sido, how = map_public_code(r, nm2code_by_sido)
+        cd, sido, how = map_public_code(r, nm2code_by_sido, sole)
         how_ctr[how] += 1
         sigungu_nm = _clean(_first(r, ("addr_cpb_nm", "cpb_nm", "fmng_cpb_nm")))
-        if cd:
+        # 이름이 비었거나(주소·단일시군구로 확정) 폐지 지명이었던 행(개칭 별칭)은
+        # 마스터의 현행 명칭으로 표시한다 — 없어진 구 이름을 그대로 보여주지 않는다.
+        if cd and (how in ("rename", "addr", "sole") or not sigungu_nm):
+            sigungu_nm = code2nm.get(cd) or sigungu_nm
+        if cd and sigungu_nm:
             public_code_names.setdefault(cd, sigungu_nm)
         lat = _float(_first(r, PF_LAT))
         lon = _float(_first(r, PF_LON))
@@ -454,13 +416,14 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido):
     report["public_dropped_closed"] = dropped_closed
     report["public_map_how"] = dict(how_ctr)
     report["public_code_names"] = public_code_names
+    report["recoded"] = dict(recoded)
     return vfac, dfac, pfac, courses, report
 
 
 # ---------------------------------------------------------------------------
 # write DB
 # ---------------------------------------------------------------------------
-def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, public_code_names,
+def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, alias, public_code_names,
              seed_json, sigungu_coord, facility_coord):
     if out.exists():
         out.unlink()
@@ -544,7 +507,8 @@ def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, public_code_names,
             ),
         )
 
-    # sigungu — union(master, seoul seed, public-mapped), coords from centroids
+    # sigungu — union(master, seoul seed, public-mapped), coords from centroids.
+    # 마스터는 이미 현행 코드만 남긴 상태(region.canonicalize_master).
     sig: dict[str, str] = dict(code2nm)
     for c in seed_json.get("centroids", []):
         sig.setdefault(c["cd"], c["nm"])
@@ -555,6 +519,14 @@ def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, public_code_names,
         conn.execute(
             "INSERT OR REPLACE INTO sigungu (cd, nm, sido_cd, lat, lon) VALUES (?,?,?,?,?)",
             (cd, sig[cd], cd[:2], la, lo),
+        )
+
+    # sigungu_alias — 구 코드로 들어온 입력(챗 NLU·assess 요청)을 현행 코드로 해석하는 표.
+    for old, new in sorted(alias.items()):
+        reason = "sido_merge" if old[:2] in region.SIDO_MERGE else "sido_recode"
+        conn.execute(
+            "INSERT OR REPLACE INTO sigungu_alias (old_cd, new_cd, reason) VALUES (?,?,?)",
+            (old, new, reason),
         )
 
     conn.commit()
@@ -592,13 +564,20 @@ def main() -> None:
     if vf is None and df is None and pf is None:
         sys.exit("[build_db] 시설 raw가 하나도 없어 빌드 불가")
 
-    code2nm, nm2code_by_sido = build_sigungu_master(vf, df)
-    vfac, dfac, pfac, courses, rep = assemble(vf, vc, df, dc, pf, nm2code_by_sido)
+    code2nm, alias, nm2code_by_sido, unresolved = build_sigungu_master(vf, df)
+    if unresolved:
+        print(f"[build_db] ⚠ 구 시군구코드 {len(unresolved)}건을 현행 코드로 옮기지 못함 "
+              f"(추측 매핑 금지 — 구 코드 그대로 적재):", file=sys.stderr)
+        for u in unresolved:
+            print(f"    {u['cd']} {u['nm']} — {u['reason']}", file=sys.stderr)
+    vfac, dfac, pfac, courses, rep = assemble(
+        vf, vc, df, dc, pf, nm2code_by_sido, code2nm, alias
+    )
     seed_json = json.loads((DATA / "sigungu_centroids.json").read_text("utf-8"))
     centroid, sido_centroid = build_centroids(seed_json, pfac)
     sigungu_coord, facility_coord = make_coord_resolvers(centroid, sido_centroid)
 
-    conn = write_db(out, vfac, dfac, pfac, courses, code2nm,
+    conn = write_db(out, vfac, dfac, pfac, courses, code2nm, alias,
                     rep["public_code_names"], seed_json, sigungu_coord, facility_coord)
 
     # ---- report (actual queries) ----
@@ -616,10 +595,20 @@ def main() -> None:
         "GROUP BY source, coord_source ORDER BY source, coord_source"
     ).fetchall()
     sb = q("SELECT COUNT(*) FROM facilities WHERE sigungu_cd = '11290'")
+    n_alias = q("SELECT COUNT(*) FROM sigungu_alias")
+    n_null = q("SELECT COUNT(*) FROM facilities WHERE sigungu_cd IS NULL")
+    n_legacy = q(
+        "SELECT COUNT(*) FROM facilities WHERE substr(sigungu_cd,1,2) IN ('29','46','42','45')"
+    )
 
     print(f"\n[build_db] {out} 생성 완료")
     print(f"  facilities {n_fac} · courses {n_course} · coverage {n_cov}행 · "
-          f"sigungu {n_sig}({n_sig_geo} 좌표보유)")
+          f"sigungu {n_sig}({n_sig_geo} 좌표보유) · sigungu_alias {n_alias}")
+    print(f"  지역 정규화: 구코드 시설 잔여 {n_legacy}건 · sigungu_cd NULL {n_null}건")
+    if rep.get("recoded"):
+        top = sorted(rep["recoded"].items(), key=lambda kv: -kv[1])[:5]
+        print("  구→현행 재코딩 상위: "
+              + ", ".join(f"{o}→{n}={c}" for (o, n), c in top))
     print(f"  source 분포: {', '.join(f'{s}={c}' for s, c in by_src)}")
     print(f"  coord_source 분포: {', '.join(f'{s}/{cs}={c}' for s, cs, c in by_coord)}")
     print(f"  성북구(11290) 시설 {sb}개")
@@ -631,9 +620,10 @@ def main() -> None:
     how = rep.get("public_map_how") or {}
     if how:
         tot = sum(how.values())
-        matched = tot - how.get("nomatch", 0) - how.get("sido_fail", 0) - how.get("sido_only", 0)
-        print(f"  public 시군구명→코드 매칭: {matched}/{tot} "
-              f"({(matched/tot*100 if tot else 0):.1f}%) 상세={how}")
+        matched = tot - how.get("nomatch", 0) - how.get("sido_fail", 0)
+        print(f"  public 시군구→코드 매칭: {matched}/{tot} "
+              f"({(matched/tot*100 if tot else 0):.1f}%) 상세={how} "
+              f"(name=이름대조 · rename=개칭별칭 · addr=주소토큰 · sole=시군구 1곳뿐인 시도)")
         print(f"  public 폐업 제외: {rep.get('public_dropped_closed',0)}건")
     else:
         print("  public_facility 미확보 → 전국 centroid 근사 없음(Seoul seed만). "

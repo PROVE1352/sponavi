@@ -103,6 +103,9 @@
     예: `{"source":"curated","tier":"B","curated_status":"pending",
     "via_goal":"PAPS4-5등급학생체력증진","via_goal_source":"curated"}`.
     **경로 등급 = 두 홉 중 약한 쪽**(강한 홉을 경로 전체 등급으로 올려 쓰지 않는다 — P-1).
+- **소비처(웹)**: `FitnessResult.tsx` 처방 항목의 "왜 이 운동?" 펼침(FR-08 AC8) — 근거 경로 한 줄 +
+  출처 배지 + FITT 수치 출처. `provenance` 가 `null` 이면 펼침 대신 "근거 정보 없음"을 렌더한다
+  (구버전 캐시·그래프 미연결 항목 — 없는 배지를 만들지 않는다).
 - 캐시 키 = 연령군·성별·측정값(반올림) + `norm{건수}.graph{건수}.{응답스키마버전}` 해시.
   응답 스키마 버전(`rx2` = provenance 포함)이 바뀌면 옛 캐시는 자동 무효화된다.
 

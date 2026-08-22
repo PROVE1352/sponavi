@@ -103,6 +103,8 @@ fixtures에는 성북구 인근 장애인 지원 시설을 0~1개만 넣어 **�
   (fastapi, uvicorn, pydantic, pytest, httpx). LLM 사용 없음(전부 규칙·데이터).
 - `web/` — **React 19 + Vite + TypeScript + Tailwind v4**. 지도는 **MapLibre GL + OpenFreeMap 벡터 타일**(키 불필요 — v1.8 2026-08-19 전환, 구 Leaflet+OSM 래스터).
   API 베이스 `/api` (vite dev proxy → :8000). 모바일 우선(심사위원 폰).
+  체력 처방 결과 카드는 항목마다 **"왜 이 운동?" 펼침**(그래프 근거 경로 + 출처 배지 + FITT 수치 출처)을 달고,
+  근거가 없으면 "근거 정보 없음"이라고 적는다 — 자격 카드의 사유와 같은 UX 문법(PRD FR-08 AC8).
 - `scripts/` — fetch_data.py(키 주입형), geocode.py, build_db.py.
 - 배포(빌드 후 단계): Docker + 기존 오라클 서버 Caddy. MVP 단계에선 미포함.
 - **[v2 2026-08-18] 챗 NLU**: OpenAI API(무료 일일 토큰 250만, 기본 `gpt-5.4-mini`) — 자유 텍스트 이해 전용,

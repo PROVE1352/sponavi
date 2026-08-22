@@ -225,6 +225,6 @@ RulesFallback    # 빈 slot_updates + provider="rules" — 클라가 칩 모드 
 - `ChatApp.tsx`(App 대체): 헤더(다크토글·데모배지 유지) + 스트림(`role="log"` aria-live) + 컴포저(입력+칩) + 패널.
 - `chat/store.tsx`: useReducer+Context(신규 의존성 없음) — messages·slots·phase·panel·filterSports(구 ResultView 소유분 이주)·llmMode.
 - `chat/policy.ts`: 결정론 대화 정책 — 질문 순서(나이→성별→지역→소득→장애→판정), 칩 정의, 발화 템플릿(§6 정직성 사전 준수), P1~P5 퀵스타트 칩.
-- 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할.
+- 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할. FitnessResult 는 추천 블록(운동·연결 종목 출처 배지, 멀티홉 "목적 경유")과 AI 처방 항목별 "왜 이 운동?" 펼침(FR-08 AC8)을 소유 — 근거 문장은 전부 서버 provenance 를 옮긴 것이고 화면이 만들지 않는다(P-2).
 - 지도(MapLibre GL, v1.8에서 Leaflet 대체)는 **패널 상주 1인스턴스**(메시지별 재마운트 금지 — fitBounds·타일 재요청 방지). 스타일: 라이트 positron·다크 dark(OpenFreeMap, 키 불필요), CSP connect-src/worker-src 계약은 main.py.
 - 목모드: 칩 경로가 기존 mocks/engine·personas를 그대로 소비 — nlu 목 불필요, e2e는 서버·LLM 없이 완주.

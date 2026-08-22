@@ -7,13 +7,24 @@ def test_health(client):
     assert r.status_code == 200
 
 
-def test_meta_sigungu_25(client):
+def test_meta_sigungu_nationwide(client, db_store):
+    """전국 시군구 목록(서울 25 고정이 아니다). 좌표 없는 행은 내보내지 않는다."""
     r = client.get("/api/meta/sigungu")
     assert r.status_code == 200
     rows = r.json()
-    assert len(rows) == 25
     for row in rows:
         assert set(row) >= {"cd", "nm", "lat", "lon"}
+        assert row["lat"] is not None and row["lon"] is not None
+    codes = {row["cd"] for row in rows}
+    assert "11290" in codes  # 서울 시드는 항상
+    if db_store is None:
+        assert len(rows) == 25  # fixtures 데모 = 서울 25
+        return
+    # 전국 DB: 서울 밖 시도가 실제로 들어 있고, 구 시도코드는 남아 있지 않다
+    assert len(rows) > 200
+    sidos = {c[:2] for c in codes}
+    assert {"12", "28", "51", "52"} <= sidos
+    assert not (sidos & {"29", "46", "42", "45"})
 
 
 def test_personas_endpoint_p5_included(client):
@@ -50,8 +61,11 @@ def _assert_coord_honesty(f):
 
 
 @pytest.mark.parametrize("pid", ["P1", "P2", "P3", "P4", "P5"])
-def test_assess_contract_shape_for_personas(client, personas_by_id, pid):
+def test_assess_contract_shape_for_personas(client, personas_by_id, db_store, pid):
     body = personas_by_id[pid]["body"]
+    # P4는 PRD ★FR-P4로 인천 서구(28260) — 서울 fixtures 데모에는 없는 지역이다.
+    if db_store is None and not body["sigungu_cd"].startswith("11"):
+        pytest.skip("전국 DB 없이 검증 불가(서울 fixtures 데모)")
     r = client.post("/api/assess", json=body)
     assert r.status_code == 200, r.text
     data = r.json()
@@ -88,7 +102,7 @@ def test_assess_contract_shape_for_personas(client, personas_by_id, pid):
     assert "반경" not in data["supply_gap"]["message"]
 
 
-def test_assess_persona_expectations(client, personas_by_id):
+def test_assess_persona_expectations(client, personas_by_id, db_store):
     # P1 자격 O
     p1 = client.post("/api/assess", json=personas_by_id["P1"]["body"]).json()
     assert p1["eligibility"][0]["eligible"] is True
@@ -98,7 +112,9 @@ def test_assess_persona_expectations(client, personas_by_id):
     assert p2["eligibility"][0]["eligible"] is False
     assert any(h["edge"] == "대체경로" for h in p2["path"])
 
-    # P4 자격 X (연령)
+    # P4 자격 X (연령) — 인천 서구(28260), 전국 DB 필요
+    if db_store is None:
+        pytest.skip("P4(인천 서구)는 전국 DB 필요")
     p4 = client.post("/api/assess", json=personas_by_id["P4"]["body"]).json()
     assert p4["eligibility"][0]["eligible"] is False
     assert any(r["field"] == "age" and not r["ok"] for r in p4["eligibility"][0]["reasons"])

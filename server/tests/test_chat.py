@@ -122,9 +122,11 @@ def test_partial_drop_keeps_valid_fields(monkeypatch):
 # --------------------------------------------------------------------------
 # ③ 시군구 결정론 (FR-13 AC4)
 # --------------------------------------------------------------------------
+# 12xxx = 전남광주통합특별시(2026-07-01 광주+전남 통합) — 마스터는 현행 코드만 쓴다.
 SYNTHETIC = [
     {"cd": "11290", "nm": "성북구"}, {"cd": "28260", "nm": "서구"},
-    {"cd": "29140", "nm": "서구"}, {"cd": "27170", "nm": "서구"},
+    {"cd": "12240", "nm": "서구"}, {"cd": "27170", "nm": "서구"},
+    {"cd": "12300", "nm": "북구"},
     {"cd": "41280", "nm": "고양시 일산서구"}, {"cd": "11140", "nm": "중구"},
     {"cd": "36110", "nm": "세종시"},
 ]
@@ -154,7 +156,7 @@ def test_region_ambiguous_returns_candidates():
     confirmed, cands = chat.resolve_region("서구", _entries())
     assert confirmed is None, "복수 매칭이면 확정하지 않는다"
     assert len(cands) == 3
-    assert {c["cd"] for c in cands} == {"28260", "29140", "27170"}
+    assert {c["cd"] for c in cands} == {"12240", "28260", "27170"}
     # 후보 표시명은 시도명을 붙여 구분 가능해야 한다
     assert any("인천" in c["label"] for c in cands)
 
@@ -200,10 +202,23 @@ def test_region_sentence_and_suffix_forms():
     assert chat.resolve_region("세종", entries)[0]["cd"] == "36110"
 
 
+def test_region_legacy_sido_names_reach_current_codes():
+    """구 시도명("광주"·"전남")으로 말해도 통합 시도(12) 안에서 확정돼야 한다.
+
+    이게 깨지면 "광주 북구"가 폐지된 29170 을 가리켜 거짓 공급공백이 뜬다(WP1 회귀 원점)."""
+    entries = _entries()
+    assert chat.resolve_region("광주 북구", entries)[0]["cd"] == "12300"
+    assert chat.resolve_region("광주광역시 서구", entries)[0]["cd"] == "12240"
+    assert chat.resolve_region("전남광주통합특별시 북구", entries)[0]["cd"] == "12300"
+    # 시도 라벨도 현행 명칭으로
+    hit = chat.resolve_region("광주 북구", entries)[0]
+    assert hit["label"].startswith("전남광주통합특별시")
+
+
 def test_region_no_false_substring_match():
     """'일산서구' 안의 '서구' 처럼 더 긴 지명의 일부는 매칭하지 않는다(오확정 방지)."""
     entries = _build_entries(type("S", (), {"sigungu_all": lambda self: [
-        {"cd": "28260", "nm": "서구"}, {"cd": "29140", "nm": "서구"},
+        {"cd": "28260", "nm": "서구"}, {"cd": "12240", "nm": "서구"},
     ]})())
     assert chat.resolve_region("일산서구", entries) == (None, [])
     assert chat.resolve_region("성동구", entries) == (None, [])

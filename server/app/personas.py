@@ -44,11 +44,13 @@ PERSONAS = [
     },
     {
         "id": "P4",
-        "label": "72세 남 · 청각장애 · 성북구 (연령 초과)",
+        "label": "72세 남 · 청각장애 · 인천 서구 (연령 초과)",
         "expected": "장애인스포츠강좌이용권 ✗(연령 5~69세 초과) → 장애 특화 대체경로 + 공급공백 신호",
+        # PRD ★FR-P4: 데모 지역은 인천 서구(28260). 커버리지(수급률)는 서울 15구만
+        # 실측이라 이 구는 coverage=null 로 나온다 — 없는 통계를 만들지 않는다(P-1).
         "body": {
             "age": 72, "sex": "M",
-            "sigungu_cd": "11290", "sigungu_nm": "성북구",
+            "sigungu_cd": "28260", "sigungu_nm": "서구",
             "income_class": "그외",
             "disability": {"has": True, "type": "청각"},
         },

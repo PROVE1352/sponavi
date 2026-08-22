@@ -540,7 +540,10 @@ def assess(store: Store, payload: dict) -> dict:
     income_class = payload.get("income_class", "그외")
     disability = payload.get("disability") or {}
     disability_has = bool(disability.get("has"))
-    sigungu_cd = payload.get("sigungu_cd")
+    # 구 시군구코드(전환기 잔존 입력, 예: 광주 북구 29170)는 현행 코드로 먼저 해석한다.
+    # 이 한 줄이 없으면 시설·커버리지·공급공백이 전부 빈 코드를 조회해 "가맹 0곳"이라는
+    # 거짓 공급공백이 뜬다(P-1). 정규화 표는 DB sigungu_alias = server/app/region.py.
+    sigungu_cd = store.canonical_sigungu(payload.get("sigungu_cd"))
 
     # resolve location
     loc = payload.get("location")

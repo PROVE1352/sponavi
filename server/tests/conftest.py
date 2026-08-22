@@ -22,6 +22,18 @@ def personas_by_id():
 
 
 @pytest.fixture(scope="session")
+def db_store():
+    """전국 DB(data/sponavi.db)가 있을 때만 그 Store, 없으면 None.
+
+    지역 코드 정규화(구코드 별칭·전국 시군구)는 fixtures(서울 25) 로는 검증할 수 없다 —
+    DB 없는 환경에서는 해당 테스트를 스킵한다."""
+    db = store_mod.db_path()
+    if not db.exists():
+        return None
+    return store_mod.open_db_store(str(db))
+
+
+@pytest.fixture(scope="session")
 def client():
     # patch the app singleton to a fresh store, then return a TestClient
     from fastapi.testclient import TestClient

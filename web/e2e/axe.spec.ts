@@ -63,3 +63,26 @@ test('체력 폼 턴(PAR-Q 통과 후 연령군 동적 폼) axe critical 0', asy
 
   await expectNoCritical(page)
 })
+
+test('체력 판정 결과 + AI 처방 "왜 이 운동?" 펼침(FR-08 AC8) axe critical 0', async ({ page }) => {
+  await openDemo(page)
+  await startPersona(page, 'P2')
+  await startFitnessThroughParq(page)
+  await page.getByTestId('fit-input-reaction_time').fill('0.9')
+  await page.getByTestId('fit-input-air_time').fill('0.1')
+  await page.getByTestId('fit-input-bmi').fill('31')
+  await page.getByTestId('fit-input-sit_reach').fill('-3')
+  await page.getByTestId('fitness-submit').click()
+  await expect(page.getByTestId('fitness-result')).toBeVisible()
+
+  await page.getByTestId('ai-prescribe-btn').click()
+  await expect(page.getByTestId('ai-result')).toBeVisible()
+
+  // 접힌 상태 · 펼친 상태 둘 다 같은 게이트를 통과해야 한다
+  await expectNoCritical(page)
+  const toggles = page.getByTestId('rx-why-toggle')
+  const n = await toggles.count()
+  for (let i = 0; i < n; i += 1) await toggles.nth(i).click()
+  await expect(page.getByTestId('rx-why-panel').first()).toBeVisible()
+  await expectNoCritical(page)
+})

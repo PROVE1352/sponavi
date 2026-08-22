@@ -4,7 +4,7 @@
 이므로 fitness.py 는 데모 근사 컷으로 폴백한다. 이 파일은 그 무중단 폴백 계약을 검증한다.
 (공식 인증기준 경로는 test_fitness_official.py 가 data/sponavi.db 로 검증.)
 """
-from app.fitness import assess_fitness
+from app.fitness import _with_unit, assess_fitness
 
 
 def test_store_fixture_is_fallback_path(store):
@@ -66,3 +66,24 @@ def test_videos_labeled_and_filtered(store):
     assert any("유연성" in (v["title"] or "") for v in res["videos"])
     for v in res["videos"]:
         assert v["source"]
+
+
+# ---------------------------------------------------------------------------
+# 단위 결합 표기 (_with_unit) — '기간/단위' 형식 단위의 값 뭉개짐 회귀
+#   chair_stand 단위는 '30초/회'(30초 동안 몇 회). 그대로 이어붙이면 '1430초/회'.
+# ---------------------------------------------------------------------------
+def test_with_unit_period_unit_is_unpacked():
+    assert _with_unit(14, "30초/회") == "14회(30초)"
+    assert _with_unit(15.0, "30초/회") == "15회(30초)"      # 정수형 float 소수점 제거
+    assert _with_unit(12, "60초/회") == "12회(60초)"
+
+
+def test_with_unit_plain_units_unchanged():
+    # 기존 비교문 형식 보존(공백 없이 붙임) — API.md 예시 문자열과 동치
+    assert _with_unit(38, "회") == "38회"
+    assert _with_unit(-3, "cm") == "-3cm"
+    assert _with_unit(12.5, "초") == "12.5초"
+    assert _with_unit(31, "㎏/㎡") == "31㎏/㎡"        # 슬래시가 있어도 기간이 아니면 그대로
+    assert _with_unit(45.2, "ml/kg/min") == "45.2ml/kg/min"
+    assert _with_unit(28, None) == "28"
+    assert _with_unit(28, "") == "28"

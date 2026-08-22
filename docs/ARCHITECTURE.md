@@ -152,12 +152,14 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 - 시스템: "국민체력100 데이터 기반 운동처방 보조. 진단·치료 조언 금지. JSON만."
 - 입력 직렬화: 프로필 + 항목별 {값, 단위, 요인, higher_better} + (있으면) fitness_norm 등급.
 - 출력 JSON 스키마(서버 pydantic 검증, 실패 시 1회 재시도 후 폴백):
-  `{"약점":[{항목,등급,근거}], "우선순위":[], "처방":[{운동,목표체력요인,강도,주당빈도}], "주의":""}`
+  `{"약점":[{항목,등급,근거}], "우선순위":[], "처방":[{운동,목표체력요인,강도,주당빈도,provenance}], "주의":""}`
+  `provenance` 는 **서버가 채우는 필드** — LLM 이 무엇을 돌려주든 슬롯(그래프 추천)의 출처로
+  덮어쓴다(P-2 날조 차단). 프롬프트에는 아예 넣지 않는다. 상세 계약은 API.md `/api/fitness/ai`.
 - 후처리(결정론): 처방 운동명 → fitness_map/종목 사전으로 정규화 → `facilities.sports` 매칭 → "이 운동 되는 근처 강좌" 반환. **LLM은 시설·가격·자격을 절대 언급하지 않음**(프롬프트 금지 + 후처리에서 무시).
 - UI 표기: "AI 보조 처방(전문가 큐레이션 규칙 검증) · 의료 조언 아님".
 
 ### 6.4 비용·성능
-- 캐시 키: (연령군·성별·항목값 반올림) 해시 **+ norm_version + graph_version** — 기준표·그래프 갱신 시 스테일 처방 자동 무효화. SQLite 캐시 테이블, TTL 없음(같은 키=같은 답).
+- 캐시 키: (연령군·성별·항목값 반올림) 해시 **+ norm_version + graph_version + 응답스키마버전** — 기준표·그래프·응답 스키마 갱신 시 스테일 처방 자동 무효화. SQLite 캐시 테이블, TTL 없음(같은 키=같은 답).
 - 비동기 UI(처방 스텝만 로딩 상태), 실측 42s → 캐시 적중 시 0s. 페르소나 4종은 배포 시 사전 캐시(워밍).
 
 ## 7. [M3] 배포 아키텍처 (기존 오라클 A1 재사용)
@@ -244,6 +246,6 @@ RulesFallback    # 빈 slot_updates + provider="rules" — 클라가 칩 모드 
 - `ChatApp.tsx`(App 대체): 헤더(다크토글·데모배지 유지) + 스트림(`role="log"` aria-live) + 컴포저(입력+칩) + 패널.
 - `chat/store.tsx`: useReducer+Context(신규 의존성 없음) — messages·slots·phase·panel·filterSports(구 ResultView 소유분 이주)·llmMode.
 - `chat/policy.ts`: 결정론 대화 정책 — 질문 순서(나이→성별→지역→소득→장애→판정), 칩 정의, 발화 템플릿(§6 정직성 사전 준수), P1~P5 퀵스타트 칩.
-- 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할.
+- 재사용: EligibilityCard(+SelectionBlock·AltRoutesBlock export 승격), SupplyGapBanner, PathDiagram, AccessibilityFilter, ErrorPanel, ui.tsx 전부. NearbyList의 VoucherRow·AltRow export 승격 = 챗 임베드 시설 카드. FitnessStep은 useFitness() 훅 + ParqGate/측정폼/FitnessResult 3분할. FitnessResult 는 추천 블록(운동·연결 종목 출처 배지, 멀티홉 "목적 경유")과 AI 처방 항목별 "왜 이 운동?" 펼침(FR-08 AC8)을 소유 — 근거 문장은 전부 서버 provenance 를 옮긴 것이고 화면이 만들지 않는다(P-2).
 - 지도(MapLibre GL, v1.8에서 Leaflet 대체)는 **패널 상주 1인스턴스**(메시지별 재마운트 금지 — fitBounds·타일 재요청 방지). 스타일: 라이트 positron·다크 dark(OpenFreeMap, 키 불필요), CSP connect-src/worker-src 계약은 main.py.
 - 목모드: 칩 경로가 기존 mocks/engine·personas를 그대로 소비 — nlu 목 불필요, e2e는 서버·LLM 없이 완주.

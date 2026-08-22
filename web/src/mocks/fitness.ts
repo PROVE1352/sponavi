@@ -123,7 +123,14 @@ export function mockFitnessItems(age: number): FitnessItemsResponse {
   return resp
 }
 
-// 데모 3등급 근사 컷(코드→컷값). 신체조성(hb=null)은 판정 생략.
+// 데모 신체조성 건강범위(코드→규칙). 공식 경로(_body_band)와 같은 문법 —
+// 등급 컷이 아니라 "3등급 건강범위" 규칙이고, 벗어나면 기준 미달 약점이 된다.
+const DEMO_RANGE: Record<string, { rule: string; ok: (v: number) => boolean }> = {
+  bmi: { rule: '18.5이상 25미만', ok: (v) => v >= 18.5 && v < 25 },
+  body_fat: { rule: '7%초과 27%미만', ok: (v) => v > 7 && v < 27 },
+}
+
+// 데모 3등급 근사 컷(코드→컷값). 신체조성(hb=null)은 DEMO_RANGE 로 판정한다.
 const DEMO_CUT: Record<string, number> = {
   grip_rel: 45, crunch_cross: 35, reaction_time: 0.35, shuttle_10m_run: 11,
   air_time: 0.5, standing_jump: 190, shuttle_20m: 35, treadmill_step: 35, sit_reach: 8,
@@ -133,8 +140,28 @@ const DEMO_CUT: Record<string, number> = {
 }
 
 // 그래프 추천 목(요인→운동·종목·영상 + provenance). 4개 출처 배지가 모두 등장하도록 구성.
+//   티어·가중치는 server/app/graph.py SOURCE_TIER 와 같은 서열(S 1.0 > A 0.8 > V 0.7 > B 0.5)이고,
+//   각 배열은 서버와 같이 **랭크 내림차순**으로 둔다(처방은 요인당 상위 2개를 인용하므로 순서가 곧 계약).
+const TIER_W: Record<string, number> = { S: 1.0, A: 0.8, V: 0.7, B: 0.5 }
+
 function P(source: Provenance['source'], tier: Provenance['tier'], pending = false): Provenance {
-  return { source, tier, weight: tier === 'S' ? 1 : 0.5, curated_status: pending ? 'pending' : null }
+  return {
+    source,
+    tier,
+    weight: TIER_W[String(tier)] ?? 0.5,
+    curated_status: pending ? 'pending' : null,
+  }
+}
+// 멀티홉(운동 →targets→ 목적 →improves→ 요인). 경로 등급은 두 홉 중 **약한 쪽**이고
+// via_goal_source 는 강한 쪽(목적→요인)의 출처다 — graph._weakest 규칙 그대로(P-1).
+function PVia(
+  source: Provenance['source'],
+  tier: Provenance['tier'],
+  goal: string,
+  goalSource: string,
+  pending = false,
+): Provenance {
+  return { ...P(source, tier, pending), via_goal: goal, via_goal_source: goalSource }
 }
 function ex(name: string, p: Provenance): GraphNamed {
   return { name, provenance: p }
@@ -143,7 +170,16 @@ function vid(title: string, aim?: string): GraphVideo {
   return { title, url: 'https://nfa.kspo.or.kr/', img_url: THUMB, trng_nm: title, provenance: { source: 'kspo_video', tier: 'V', ...(aim ? { aim } : {}) } }
 }
 
-const GRAPH: Record<string, { exercises: GraphNamed[]; sports: GraphNamed[]; videos: GraphVideo[] }> = {
+interface GraphBlock {
+  exercises: GraphNamed[] | string[]
+  sports: GraphNamed[] | string[]
+  videos: GraphVideo[]
+  // 'graph' = 지식그래프 경로(provenance 동봉) / 'fitness_map' = 근거 없는 레거시 매핑 폴백.
+  source?: string
+  curated?: string
+}
+
+const GRAPH: Record<string, GraphBlock> = {
   심폐지구력: {
     exercises: [ex('걷기', P('kspo_standard', 'S')), ex('조깅', P('kspo_standard', 'S')), ex('실내 자전거타기', P('kspo_video', 'V'))],
     sports: [ex('수영', P('kspo_standard', 'S')), ex('에어로빅', P('guideline', 'A')), ex('복싱', P('curated', 'B', true))],
@@ -155,12 +191,18 @@ const GRAPH: Record<string, { exercises: GraphNamed[]; sports: GraphNamed[]; vid
     videos: [vid('앉았다 일어서기'), vid('밴드 근력 운동')],
   },
   근지구력: {
-    exercises: [ex('교차 윗몸 일으키기', P('kspo_video', 'V')), ex('자전거', P('kspo_standard', 'S')), ex('플랭크', P('curated', 'B', true))],
+    exercises: [ex('자전거', P('kspo_standard', 'S')), ex('교차 윗몸 일으키기', P('kspo_video', 'V')), ex('플랭크', P('curated', 'B', true))],
     sports: [ex('헬스', P('kspo_standard', 'S')), ex('유도', P('curated', 'B', true))],
     videos: [vid('교차 윗몸 일으키기'), vid('윗몸 말아 올리기')],
   },
   유연성: {
-    exercises: [ex('스트레칭', P('kspo_standard', 'S')), ex('어깨 돌리기', P('kspo_video', 'V')), ex('요통 예방 운동', P('guideline', 'A'))],
+    // 2번째는 멀티홉 데모: 공단 영상(V) 운동이 A급 목적('스트레칭'→유연성) 경유로 도달 —
+    // 목적 홉이 A여도 경로 등급은 약한 쪽인 V로 내려 잡는다(server test_multihop_provenance_is_weakest_link).
+    exercises: [
+      ex('스트레칭', P('kspo_standard', 'S')),
+      ex('어깨 돌리기', PVia('kspo_video', 'V', '스트레칭', 'guideline')),
+      ex('누워서 다리 당기기', P('kspo_video', 'V')),
+    ],
     sports: [ex('요가', P('kspo_standard', 'S')), ex('필라테스', P('kspo_standard', 'S'))],
     videos: [vid('어깨 돌리기'), vid('요통 예방 운동', '요통 예방')],
   },
@@ -169,10 +211,15 @@ const GRAPH: Record<string, { exercises: GraphNamed[]; sports: GraphNamed[]; vid
     sports: [ex('배드민턴', P('curated', 'B', true)), ex('탁구', P('curated', 'B', true))],
     videos: [vid('반복 옆뛰기')],
   },
+  // 근거 없는 레거시 매핑(fitness_map) 폴백 형태 — 문자열 배열이라 provenance 가 없다.
+  // 서버도 이 경우 처방 항목의 provenance 를 null 로 내보내고(ai._build_slots), 화면은
+  // 배지를 만드는 대신 "근거 정보 없음" 이라고 말한다(P-1). 그 경로를 목모드에서도 재현한다.
   순발력: {
-    exercises: [ex('점프 스쿼트', P('guideline', 'A')), ex('제자리 멀리뛰기', P('kspo_video', 'V'))],
-    sports: [ex('태권도', P('curated', 'B', true))],
+    exercises: ['점프 스쿼트', '제자리 멀리뛰기'],
+    sports: ['태권도'],
     videos: [vid('제자리 멀리뛰기')],
+    source: 'fitness_map',
+    curated: '체대 검증 대기',
   },
   협응력: {
     exercises: [ex('손 뼉치기 스텝', P('kspo_video', 'V')), ex('줄넘기', P('kspo_video', 'V'))],
@@ -180,9 +227,23 @@ const GRAPH: Record<string, { exercises: GraphNamed[]; sports: GraphNamed[]; vid
     videos: [vid('협응 스텝')],
   },
   평형성: {
-    exercises: [ex('한 발 서기', P('kspo_video', 'V')), ex('앉아 균형 잡기', P('guideline', 'A'))],
+    exercises: [
+      ex('한 발 서기', P('kspo_standard', 'S')),
+      ex('앉아 균형 잡기', PVia('kspo_video', 'V', '낙상예방', 'guideline')),
+    ],
     sports: [ex('요가', P('guideline', 'A')), ex('승마', P('curated', 'B', true))],
     videos: [vid('낙상 예방 운동', '낙상 예방')],
+  },
+  // FITNESS_GRAPH §3.5 신체조성 연결(A급 지침 5행 + Goal 경유 1건, curated/pending).
+  신체조성: {
+    exercises: [
+      ex('걷기', P('guideline', 'A')),
+      ex('조깅', P('guideline', 'A')),
+      ex('자전거', P('guideline', 'A')),
+      ex('맨몸 근력 순환운동', PVia('curated', 'B', 'PAPS4-5등급학생체력증진', 'curated', true)),
+    ],
+    sports: [ex('수영', P('guideline', 'A')), ex('헬스', P('guideline', 'A'))],
+    videos: [vid('걷기 운동')],
   },
 }
 
@@ -190,6 +251,16 @@ function comparison(name: string, value: number, unit: string | null, cut: numbe
   const u = unit ?? ''
   const tail = hb === 0 ? '초과' : '미달'
   return `${name} ${value}${u} — 3등급 컷 ${cut}${u} ${tail}`
+}
+
+// 신체조성 비교문(서버 _comparison 의 건강범위 분기와 같은 문형).
+function rangeComparison(name: string, value: number, unit: string | null, rule: string): string {
+  return `${name} ${value}${unit ?? ''} — 3등급 건강범위(${rule}) 벗어남`
+}
+
+// 블록 후보(GraphNamed | string) → 이름. fitness_map 폴백은 문자열이라 근거가 없다.
+function nameOf(x: GraphNamed | string): string {
+  return typeof x === 'string' ? x : x.name
 }
 
 export function mockFitness(req: FitnessRequest): FitnessResponse {
@@ -209,11 +280,33 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
     if (value == null || !it) continue
     measuredFactors.add(it.factor)
     const cut = DEMO_CUT[code]
+    const range = DEMO_RANGE[code]
     let band = '측정 완료'
     let grade: number | null = 3
+    let cmp: string | null = null
     if (it.higher_better === null) {
-      band = '신체조성 참고'
-      grade = null
+      if (range) {
+        const pass = range.ok(value)
+        band = pass ? '건강범위(3등급)' : '기준 미달'
+        grade = pass ? 3 : null
+        if (!pass) {
+          cmp = rangeComparison(it.name, value, it.unit, range.rule)
+          weaknesses.push({
+            item: it.factor,
+            name: it.name,
+            value,
+            unit: it.unit,
+            band: '기준 미달',
+            cut: null,
+            cut_grade: 3,
+            comparison: cmp,
+            basis,
+          })
+        }
+      } else {
+        band = '신체조성 참고'
+        grade = null
+      }
     } else if (cut != null) {
       const pass = it.higher_better === 0 ? value <= cut : value >= cut
       band = pass ? '3등급 수준 이상' : '기준 미달'
@@ -232,13 +325,14 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
         })
       }
     }
+    if (cmp == null) {
+      cmp = grade === null && it.higher_better !== null
+        ? comparison(it.name, value, it.unit, cut ?? 0, it.higher_better)
+        : `${it.name} ${value}${it.unit ?? ''} — ${band}`
+    }
     items.push({
       code, name: it.name, factor: it.factor, value, unit: it.unit,
-      band, grade,
-      comparison: grade === null && it.higher_better !== null
-        ? comparison(it.name, value, it.unit, cut ?? 0, it.higher_better)
-        : `${it.name} ${value}${it.unit ?? ''} — ${band}`,
-      basis,
+      band, grade, comparison: cmp, basis,
     })
   }
 
@@ -258,9 +352,13 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
       exercises: block.exercises,
       sports: block.sports,
       videos: block.videos,
-      source: 'graph',
+      source: block.source ?? 'graph',
+      ...(block.curated ? { curated: block.curated } : {}),
     })
-    for (const s of block.sports) if (!recSports.includes(s.name)) recSports.push(s.name)
+    for (const sp of block.sports as (GraphNamed | string)[]) {
+      const n = nameOf(sp)
+      if (!recSports.includes(n)) recSports.push(n)
+    }
     for (const v of block.videos) {
       const key = v.url ?? v.title
       if (key && !seenVid.has(key)) {
@@ -310,6 +408,13 @@ function fittFor(factor: string, group: string): { 강도: string; 주당빈도:
   if (factor === '근력' || factor === '근지구력') return { 강도: '주요 근육군 · 8~12회 반복 2~3세트', 주당빈도: '주 2~3회' }
   if (factor === '유연성') return { 강도: '정적 스트레칭 30~60초 유지', 주당빈도: '주 3회 이상' }
   if (factor === '평형성') return { 강도: '낙상예방 평형·균형 운동', 주당빈도: '주 3일 이상' }
+  // 신체조성은 유산소+근력 병행이 지침 — 두 FITT 수치를 함께 인용한다(ai._fitt_for_factor 미러).
+  if (factor === '신체조성') {
+    return {
+      강도: `${aerobic} + 주요 근육군 주 2일 이상`,
+      주당빈도: '유산소 주 3~5회 · 근력 주 2일 이상',
+    }
+  }
   return { 강도: '낮은 강도부터 점진적으로', 주당빈도: '주 2~3회' }
 }
 
@@ -320,9 +425,17 @@ export function mockFitnessAi(req: FitnessRequest): FitnessAiResponse {
   const 처방: FitnessAiResponse['처방'] = []
   for (const r of f.recommendations) {
     const fitt = fittFor(r.weakness, group)
-    const exs = (r.exercises as GraphNamed[]).slice(0, 2)
+    // 서버 RulesFallback 과 같은 규칙: 요인당 상위 2개 + provenance 를 그대로 실어 보낸다.
+    // 문자열(fitness_map 폴백) 후보는 근거가 없으므로 provenance = null 로 나간다(P-1).
+    const exs = (r.exercises as (GraphNamed | string)[]).slice(0, 2)
     for (const e of exs) {
-      처방.push({ 운동: e.name, 목표체력요인: r.weakness, 강도: fitt.강도, 주당빈도: fitt.주당빈도 })
+      처방.push({
+        운동: nameOf(e),
+        목표체력요인: r.weakness,
+        강도: fitt.강도,
+        주당빈도: fitt.주당빈도,
+        provenance: typeof e === 'string' ? null : e.provenance,
+      })
     }
   }
   return {

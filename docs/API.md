@@ -64,6 +64,51 @@
 ```
 `videos`는 fixtures(2~3개)로 충분 — 실 API 연동은 키 주입 후.
 
+공식 경로(measurement_item/fitness_norm 적재 DB)에서는 `items[]`/`weaknesses[]` 에 실측 컷
+인용 `comparison` 이 붙는다. 값+단위 표기는 단위가 **'기간/단위'**(`chair_stand` = `30초/회`)면
+`14회(30초)` 로 풀어 쓴다 — `14` + `30초/회` 를 그대로 이어붙이면 `1430초/회` 가 되기 때문.
+그 밖의 단위(`회`·`cm`·`초`·`%`·`㎏/㎡`·`ml/kg/min`)는 종전대로 붙인다. `value`/`unit` 원본
+필드는 바뀌지 않는다.
+
+## POST /api/fitness/ai
+
+요청: `POST /api/fitness` 와 동일 바디. 응답(실측, 30세 남 `shuttle_20m=30`, LLM off):
+```json
+{
+  "provider": "rules",
+  "age_group": "성인",
+  "age_gap": false,
+  "약점": [ { "항목": "20m 왕복 오래달리기", "등급": "기준 미달",
+             "근거": "20m 왕복 오래달리기 30회 — 30~34세 남 3등급 컷 31회 미달" } ],
+  "우선순위": ["20m 왕복 오래달리기"],
+  "처방": [
+    { "운동": "걷기", "목표체력요인": "심폐지구력",
+      "강도": "중강도 주 150~300분 또는 고강도 주 75~150분", "주당빈도": "주 3~5회",
+      "provenance": { "source": "kspo_standard", "tier": "S", "weight": 1.0,
+                      "curated_status": null } }
+  ],
+  "주의": "운동 참고 정보이며 의료 조언이 아닙니다. 통증·질환이 있으면 전문가와 상담하세요.",
+  "facility_filter_sports": ["수영", "복싱", "축구(풋살)"],
+  "disclaimer": "…"
+}
+```
+- `provider`: `claude|gemini|rules` — UI 정직 라벨의 원천(FR-08 AC3).
+- **`처방[].provenance`** (FR-08 AC8 서버 측): 그래프 엣지 출처. **서버 소유 필드**다 —
+  LLM 이 돌려준 provenance 는 신뢰하지 않고 서버가 슬롯(그래프 추천)에서 운동명으로 다시 찾아
+  덮어쓴다(P-2 날조 차단). 근거가 없으면 `null`(배지 없음 — 없는 출처를 만들지 않는다).
+  - `source`: `kspo_standard`(S 공단 공식) · `guideline`(A 정부·국제 지침) ·
+    `kspo_video`(V 공단 콘텐츠 분류) · `curated`(B 전문가 큐레이션)
+  - `tier`: `S|A|V|B` · `weight`: 0~1 · `curated_status`: `pending|null`(B급은 "검증 중" 배지)
+  - `via_goal` / `via_goal_source`: 멀티홉(운동 →targets→ 목적 →improves→ 요인) 경로일 때만.
+    예: `{"source":"curated","tier":"B","curated_status":"pending",
+    "via_goal":"PAPS4-5등급학생체력증진","via_goal_source":"curated"}`.
+    **경로 등급 = 두 홉 중 약한 쪽**(강한 홉을 경로 전체 등급으로 올려 쓰지 않는다 — P-1).
+- **소비처(웹)**: `FitnessResult.tsx` 처방 항목의 "왜 이 운동?" 펼침(FR-08 AC8) — 근거 경로 한 줄 +
+  출처 배지 + FITT 수치 출처. `provenance` 가 `null` 이면 펼침 대신 "근거 정보 없음"을 렌더한다
+  (구버전 캐시·그래프 미연결 항목 — 없는 배지를 만들지 않는다).
+- 캐시 키 = 연령군·성별·측정값(반올림) + `norm{건수}.graph{건수}.{응답스키마버전}` 해시.
+  응답 스키마 버전(`rx2` = provenance 포함)이 바뀌면 옛 캐시는 자동 무효화된다.
+
 ## GET /api/meta/sigungu
 `[ { "cd": "11290", "nm": "성북구", "lat": 37.6, "lon": 127.02 } ]` — **전국 시군구**(현행
 행정코드, 실 DB 233개 / DB 없는 fixtures 데모는 서울 25). `cd` 오름차순.

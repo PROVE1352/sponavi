@@ -236,7 +236,10 @@ export interface Provenance {
   tier?: 'S' | 'A' | 'V' | 'B' | string
   weight?: number
   curated_status?: string | null
+  // 멀티홉(운동 →targets→ 목적 →improves→ 요인)일 때만. 경로 등급은 두 홉 중 약한 쪽이고,
+  // via_goal_source 는 강한 쪽(목적→요인 엣지)의 출처다 — UI가 "목적 경유"를 설명하는 근거.
   via_goal?: string
+  via_goal_source?: string
   op?: string
   aim?: string
 }
@@ -332,6 +335,9 @@ export interface AiPrescription {
   목표체력요인: string
   강도: string
   주당빈도: string
+  // FR-08 AC8: 그래프 근거(서버 소유 필드 — LLM 값은 서버가 덮어쓴다).
+  // 근거가 없으면 null/부재 — UI는 배지를 만들지 않고 "근거 정보 없음"이라고 말한다(P-1).
+  provenance?: Provenance | null
 }
 
 export interface FitnessAiResponse {

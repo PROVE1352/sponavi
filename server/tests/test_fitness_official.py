@@ -260,3 +260,22 @@ def test_legacy_keys_mapped(client):
     # 레거시 flex_cm → 공식 sit_reach 로 매핑되어 판정됨
     names = {i["code"] for i in d.get("items", [])}
     assert "sit_reach" in names
+
+
+# ---------------------------------------------------------------------------
+# 단위가 '기간/단위'인 항목(chair_stand='30초/회')의 비교문 회귀
+#   버그: f"{값}{단위}" 연결로 "1430초/회" 렌더 (공식 기준 배지 바로 밑 문장)
+# ---------------------------------------------------------------------------
+def test_chair_stand_comparison_unit_not_mangled(off_store):
+    from app.fitness import assess_fitness
+    res = assess_fitness(off_store, {
+        "age": 70, "sex": "M", "measures": {"chair_stand": 14},
+    })
+    cmp_line = res["items"][0]["comparison"]
+    assert cmp_line == (
+        "의자에 앉았다 일어서기 14회(30초) — 70~74세 남 3등급 컷 15회(30초) 미달")
+    assert "1430초" not in cmp_line
+    # 약점 쪽 비교문도 같은 표기
+    assert res["weaknesses"] and res["weaknesses"][0]["comparison"] == cmp_line
+    # 원본 값·단위 필드는 그대로(표기만 바뀜)
+    assert res["items"][0]["value"] == 14 and res["items"][0]["unit"] == "30초/회"

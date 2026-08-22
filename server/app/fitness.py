@@ -46,6 +46,26 @@ def _fmt(n: Any) -> str:
     return str(n)
 
 
+# 단위가 '기간/단위' 형식인 항목: chair_stand='30초/회'(30초 동안 몇 회).
+# 그대로 이어붙이면 "14" + "30초/회" = "1430초/회" 로 읽혀 값이 뭉개진다.
+_PERIOD_UNIT = re.compile(r"^(\d+(?:\.\d+)?(?:초|분|시간))\s*/\s*(.+)$")
+
+
+def _with_unit(value: Any, unit: Optional[str]) -> str:
+    """값+단위 결합 표기. '30초/회' 는 '14회(30초)' 로, 그 밖의 단위는 종전대로 붙인다.
+
+    'ml/kg/min' 처럼 슬래시가 있어도 앞이 기간이 아니면 건드리지 않는다.
+    """
+    v = _fmt(value)
+    u = (unit or "").strip()
+    if not u:
+        return v
+    m = _PERIOD_UNIT.match(u)
+    if m:
+        return f"{v}{m.group(2)}({m.group(1)})"
+    return f"{v}{u}"
+
+
 # ---------------------------------------------------------------------------
 # 연령군 판별
 # ---------------------------------------------------------------------------
@@ -159,29 +179,32 @@ def _threshold_grade(cuts: dict) -> Optional[int]:
 
 
 def _comparison(meta: dict, value: float, band: str, grade: Optional[int], cuts: dict) -> str:
-    """비교문. 예: '교차윗몸 일으키기 38회 — 19~24세 남 3등급 컷 42회 미달'."""
+    """비교문. 예: '교차윗몸 일으키기 38회 — 19~24세 남 3등급 컷 42회 미달'.
+    단위가 '기간/단위'(chair_stand='30초/회')면 '14회(30초)' 로 푼다(_with_unit)."""
     name = meta["name"]
     unit = meta["unit"] or ""
     band_lbl = meta["age_band"]
     sexk = "남" if meta.get("sex") == "M" else "여"
     hb = meta["higher_better"]
+    val = _with_unit(value, unit)
     if grade is None:
         tg = _threshold_grade(cuts)
         cut = cuts.get(tg, {}).get("value") if tg else None
         cut_r = cuts.get(tg, {}).get("rule") if tg else None
         if cut is not None:
             tail = "초과" if hb == 0 else "미달"
-            return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} {tg}등급 컷 {_fmt(cut)}{unit} {tail}"
+            return (f"{name} {val} — {band_lbl} {sexk} {tg}등급 컷 "
+                    f"{_with_unit(cut, unit)} {tail}")
         if cut_r is not None:
-            return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} {tg}등급 건강범위({cut_r}) 벗어남"
-        return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} 기준 미달"
+            return f"{name} {val} — {band_lbl} {sexk} {tg}등급 건강범위({cut_r}) 벗어남"
+        return f"{name} {val} — {band_lbl} {sexk} 기준 미달"
     cut = cuts.get(grade, {}).get("value")
     cut_r = cuts.get(grade, {}).get("rule")
     if cut is not None:
-        return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} {band}(컷 {_fmt(cut)}{unit})"
+        return f"{name} {val} — {band_lbl} {sexk} {band}(컷 {_with_unit(cut, unit)})"
     if cut_r is not None:
-        return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} {band}({cut_r})"
-    return f"{name} {_fmt(value)}{unit} — {band_lbl} {sexk} {band}"
+        return f"{name} {val} — {band_lbl} {sexk} {band}({cut_r})"
+    return f"{name} {val} — {band_lbl} {sexk} {band}"
 
 
 def _reference_grade(factor_best: dict, present_factors: set, missing_factors: list) -> dict:

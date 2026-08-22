@@ -565,10 +565,65 @@ def _empty_result(age_group: str, message: str, basis: str, certifiable: bool = 
 # ===========================================================================
 # entry point
 # ===========================================================================
+# ---------------------------------------------------------------------------
+# 파생 항목 (FR-07 AC8) — 사용자는 자기 BMI 를 모른다(QA 실사용 피드백). 키·몸무게를 받아
+# **서버가** 계산한다(결정론, P-2). bmi = 몸무게(kg) ÷ 키(m)² (WHO 표준 정의).
+#   · 직접 bmi 값이 오면 그것이 우선(측정기·인바디 값 존중).
+#   · 키 100~250cm·몸무게 20~300kg 범위 밖이면 계산하지 않는다 — 오타로 나온 값을 판정에 넣는
+#     것보다 비우는 편이 정직하다(P-1). 계산 근거는 응답 derived[] 로 그대로 돌려준다.
+# ---------------------------------------------------------------------------
+DERIVED_ITEMS: dict[str, dict] = {
+    "bmi": {
+        "inputs": [
+            {"code": "height_cm", "name": "키", "unit": "cm", "min": 100, "max": 250},
+            {"code": "weight_kg", "name": "몸무게", "unit": "kg", "min": 20, "max": 300},
+        ],
+        "formula": "몸무게(kg) ÷ 키(m)²",
+    },
+}
+
+
+def _derive_bmi(height_cm: float, weight_kg: float) -> float:
+    return round(weight_kg / ((height_cm / 100.0) ** 2), 1)
+
+
+def derive_measures(measures: dict) -> tuple[dict, list[dict]]:
+    """입력 measures 에서 파생 항목을 계산해 채운 **사본**과 계산 근거 목록을 돌려준다.
+    직접값이 있으면 건드리지 않고, 입력이 모자라거나 범위 밖이면 계산하지 않는다."""
+    out = dict(measures or {})
+    derived: list[dict] = []
+    for code, spec in DERIVED_ITEMS.items():
+        if out.get(code) is not None:
+            continue  # 직접값 우선
+        vals: dict[str, float] = {}
+        ok = True
+        for inp in spec["inputs"]:
+            raw = out.get(inp["code"])
+            try:
+                fv = float(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                fv = None
+            if fv is None or not (inp["min"] <= fv <= inp["max"]):
+                ok = False
+                break
+            vals[inp["code"]] = fv
+        if not ok:
+            continue
+        if code != "bmi":
+            continue  # 현재 파생 항목은 bmi 뿐
+        value = _derive_bmi(vals["height_cm"], vals["weight_kg"])
+        out[code] = value
+        derived.append({"code": code, "value": value, "from": vals, "formula": spec["formula"]})
+    return out, derived
+
+
 def assess_fitness(store: Store, payload: dict) -> dict:
     age = int(payload.get("age", 0))
     sex = payload.get("sex", "M")
-    measures = payload.get("measures") or {}
+    measures, derived = derive_measures(payload.get("measures") or {})
     if store.has_fitness_norms():
-        return _assess_official(store, age, sex, measures)
-    return _assess_demo(store, age, sex, measures)
+        result = _assess_official(store, age, sex, measures)
+    else:
+        result = _assess_demo(store, age, sex, measures)
+    result["derived"] = derived  # 계산 근거(키·몸무게 → BMI) — 화면이 "자동 계산" 출처를 밝힌다
+    return result

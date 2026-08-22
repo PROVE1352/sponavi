@@ -13,6 +13,7 @@ import type {
   GraphVideo,
   Provenance,
   Weakness,
+  FitnessMeasures,
 } from '../types'
 
 // 1x1 회색 썸네일(오프라인 프리뷰에서도 깨지지 않게 self-contained data URI).
@@ -100,6 +101,26 @@ function catalogFor(age: number): RawItem[] {
   return ADULT
 }
 
+// 파생 항목 입력 스펙 + 계산(서버 derive_measures 와 같은 규칙: 직접값 우선, 범위 밖이면 계산 안 함).
+const DERIVED_BMI_INPUTS = [
+  { code: 'height_cm', name: '키', unit: 'cm', min: 100, max: 250 },
+  { code: 'weight_kg', name: '몸무게', unit: 'kg', min: 20, max: 300 },
+]
+function deriveMock(measures: FitnessMeasures): { measures: FitnessMeasures; derived: NonNullable<FitnessResponse['derived']> } {
+  const out: FitnessMeasures = { ...measures }
+  const derived: NonNullable<FitnessResponse['derived']> = []
+  if (out.bmi == null) {
+    const h = out.height_cm
+    const w = out.weight_kg
+    if (h != null && w != null && h >= 100 && h <= 250 && w >= 20 && w <= 300) {
+      const v = Math.round((w / Math.pow(h / 100, 2)) * 10) / 10
+      out.bmi = v
+      derived.push({ code: 'bmi', value: v, from: { height_cm: h, weight_kg: w }, formula: '몸무게(kg) ÷ 키(m)²' })
+    }
+  }
+  return { measures: out, derived }
+}
+
 const GROUP_LABEL: Record<string, string> = {
   유아: '유아기', gap: '만7~10(공백)', 유소년: '유소년', 청소년: '청소년', 성인: '성인', 어르신: '어르신',
 }
@@ -109,7 +130,10 @@ export function mockFitnessItems(age: number): FitnessItemsResponse {
   const raw = catalogFor(age)
   const items: FitnessItem[] = raw.map((it) => ({
     code: it.code, name: it.name, unit: it.unit, factor: it.factor,
-    alt_group: it.alt_group, higher_better: it.higher_better, hint: hint(it.higher_better),
+    alt_group: it.alt_group, higher_better: it.higher_better,
+    hint: it.code === 'bmi' ? '키·몸무게를 넣으면 자동 계산 · 건강범위 충족(신체조성)' : hint(it.higher_better),
+    // 파생 항목(FR-07 AC8): 서버 fitness.DERIVED_ITEMS 와 같은 입력 스펙.
+    ...(it.code === 'bmi' ? { derived_from: DERIVED_BMI_INPUTS, formula: '몸무게(kg) ÷ 키(m)²' } : {}),
   }))
   const resp: FitnessItemsResponse = {
     age,
@@ -267,7 +291,7 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
   const g = groupOf(req.age)
   const cat = catalogFor(req.age)
   const byCode = new Map(cat.map((c) => [c.code, c]))
-  const measures = req.measures ?? {}
+  const { measures, derived } = deriveMock(req.measures ?? {})
 
   const items: NonNullable<FitnessResponse['items']> = []
   const weaknesses: Weakness[] = []
@@ -392,6 +416,7 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
     weaknesses,
     reference_grade,
     recommendations,
+    derived,
     videos,
     facility_filter_sports: recSports,
   }

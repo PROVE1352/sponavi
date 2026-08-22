@@ -49,10 +49,18 @@
 규칙: `eligible=true`인 제도가 있으면 path는 직접 경로(자격 ✓ → 신청·근처). 없으면 alt_edges를
 순서대로 평가해 첫 성립 대안으로 멀티홉 경로 구성. `supply_gap`은 항상 포함(있어도 통계 노출). 이용권 카운트는 구 단위(`voucher_scope:"sigungu"`)이며 행정구역 개편 전환기 영역그룹(FR-05 AC4, 예: 인천 서해구·검단구 ← 옛 서구)이면 `scope_codes`에 합산한 코드들, `scope_label`에 "○○ 일대(옛 △△)", `scope_reason`에 사유가 실린다(그룹이 아니면 자기 코드 1개·null).
 
+## GET /api/fitness/items?age=N
+
+연령군별 공식 측정항목 카탈로그(폼 동적 렌더). 항목: `{code,name,unit,factor,alt_group,higher_better,hint}`.
+**파생 항목(FR-07 AC8)**은 `derived_from`(입력 스펙 `[{code,name,unit,min,max}]`)과 `formula`를 추가로 싣는다 —
+현재 `bmi`: `derived_from=[height_cm(키,cm,100~250), weight_kg(몸무게,kg,20~300)]`, `formula="몸무게(kg) ÷ 키(m)²"`.
+폼은 이 항목의 값 대신 입력들을 `measures`에 넣고, 서버가 계산한다(직접 `bmi`가 오면 그것이 우선).
+
 ## POST /api/fitness
 
 요청: `{ "age": 27, "sex": "M", "measures": { "grip_kg": 30, "situp_cnt": 20, "flex_cm": -3, "shuttle_cnt": 25 } }`
 (4항목만 MVP: 악력·윗몸말아올리기·앉아윗몸앞으로굽히기·왕복오래달리기. null 허용)
+`measures`에 `height_cm`·`weight_kg`가 오면 서버가 `bmi`를 계산해 판정에 넣고, 응답 `derived: [{code:"bmi", value, from:{height_cm,weight_kg}, formula}]`로 근거를 돌려준다(FR-07 AC8). 범위 밖·누락이면 계산하지 않고 `derived=[]`.
 
 응답:
 ```json

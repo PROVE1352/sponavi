@@ -76,7 +76,10 @@ test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배�
 async function submitFourWeaknesses(page: Page) {
   await page.getByTestId('fit-input-reaction_time').fill('0.9')
   await page.getByTestId('fit-input-air_time').fill('0.1')
-  await page.getByTestId('fit-input-bmi').fill('31')
+  // BMI 는 직접 입력칸이 없다(FR-07 AC8) — 키·몸무게를 넣으면 자동 계산된다(170cm·90kg → 31.1)
+  await page.getByTestId('fit-input-height_cm').fill('170')
+  await page.getByTestId('fit-input-weight_kg').fill('90')
+  await expect(page.getByTestId('fit-derived-bmi')).toContainText('31.1')
   await page.getByTestId('fit-input-sit_reach').fill('-3')
   await page.getByTestId('fitness-submit').click()
   await expect(page.getByTestId('fitness-result')).toBeVisible()
@@ -247,4 +250,24 @@ test('P1 만10세 → 측정 폼에 만7~10 공백 고지 배너 (FR-07 AC6)', a
   await expect(banner).toBeVisible()
   await expect(banner).toContainText('공식 기준이 없')
   await expect(banner).toContainText('유소년')
+})
+
+test('BMI 는 직접 입력칸 없이 키·몸무게로 자동 계산되고, 결과에 계산 출처가 남는다 (FR-07 AC8)', async ({ page }) => {
+  await startPersona(page, 'P2') // 27세 성인 — 신체조성(BMI) 항목이 있는 연령군
+  await startFitnessThroughParq(page)
+  const form = page.getByTestId('fitness-form')
+  await expect(form).toBeVisible()
+  await expect(page.getByTestId('fit-input-bmi')).toHaveCount(0)            // 직접 입력칸 없음
+  await expect(page.getByTestId('fit-derived-field-bmi')).toBeVisible()
+  // 하나만 넣으면 계산 안 됨(+ 제출도 이 항목만으론 불가)
+  await page.getByTestId('fit-input-height_cm').fill('170')
+  await expect(page.getByTestId('fit-derived-bmi')).toContainText('모두 넣으면')
+  await expect(page.getByTestId('fitness-submit')).toBeDisabled()
+  await page.getByTestId('fit-input-weight_kg').fill('70')
+  await expect(page.getByTestId('fit-derived-bmi')).toContainText('24.2')
+  await page.getByTestId('fitness-submit').click()
+  const result = page.getByTestId('fitness-result')
+  await expect(result).toBeVisible()
+  await expect(result.getByTestId('derived-note-bmi')).toContainText('키 170cm')
+  await expect(result.getByTestId('derived-note-bmi')).toContainText('24.2')
 })

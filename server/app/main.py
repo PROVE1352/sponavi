@@ -304,7 +304,22 @@ _DEMO_ITEMS = [
 ]
 
 
-def _item_hint(higher_better) -> str:
+def _item_extra(code: str) -> dict:
+    """파생 항목(FR-07 AC8): 폼이 BMI 대신 키·몸무게를 받도록 입력 스펙과 공식을 동봉."""
+    spec = fitness.DERIVED_ITEMS.get(code)
+    if not spec:
+        return {}
+    return {
+        "derived_from": [
+            {k: d[k] for k in ("code", "name", "unit", "min", "max")} for d in spec["inputs"]
+        ],
+        "formula": spec["formula"],
+    }
+
+
+def _item_hint(higher_better, code: str = "") -> str:
+    if code in fitness.DERIVED_ITEMS:
+        return "키·몸무게를 넣으면 자동 계산 · 건강범위 충족(신체조성)"
     if higher_better == 0:
         return "낮을수록 좋음(시간 단축)"
     if higher_better is None:
@@ -330,7 +345,8 @@ def get_fitness_items(age: int) -> dict:
             "code": it["code"], "name": it["name"], "unit": it["unit"],
             "factor": it["factor"], "alt_group": it.get("alt_group"),
             "higher_better": it.get("higher_better"),
-            "hint": _item_hint(it.get("higher_better")),
+            "hint": _item_hint(it.get("higher_better"), it["code"]),
+            **_item_extra(it["code"]),
         }
         for it in raw
     ]

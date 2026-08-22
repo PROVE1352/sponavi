@@ -4,6 +4,7 @@
 //   AC3 단위·측정법 힌트 · AC4 인증센터 안내 · AC6 만 7~10 공백 고지 배너
 
 import { useMemo, useState } from 'react'
+import type { FitnessItem } from '../types'
 import type { FitnessFormRow, FitnessLaneApi } from '../types_chat'
 import { Skeleton } from './Skeleton'
 import { WarnIcon } from './ui'
@@ -12,6 +13,33 @@ function parse(v: string): number | null {
   if (v.trim() === '') return null
   const n = Number(v)
   return Number.isFinite(n) ? n : null
+}
+
+// 파생 항목(FR-07 AC8)의 입력 묶음이 전부 유효할 때만 {code: value}, 아니면 null.
+// 서버가 같은 범위 규칙으로 다시 계산한다 — 여기 값은 전송·표시용이지 판정이 아니다(P-2).
+function derivedInputs(item: FitnessItem, values: Record<string, string>): Record<string, number> | null {
+  const inputs = item.derived_from ?? []
+  if (inputs.length === 0) return null
+  const out: Record<string, number> = {}
+  for (const d of inputs) {
+    const v = parse(values[d.code] ?? '')
+    if (v == null) return null
+    if (d.min != null && v < d.min) return null
+    if (d.max != null && v > d.max) return null
+    out[d.code] = v
+  }
+  return out
+}
+
+// 화면 미리보기용 계산(서버 fitness.derive_measures 와 같은 공식). BMI 만 지원.
+export function previewDerived(code: string, inputs: Record<string, number>): number | null {
+  if (code === 'bmi') {
+    const h = inputs.height_cm
+    const w = inputs.weight_kg
+    if (!h || !w) return null
+    return Math.round((w / Math.pow(h / 100, 2)) * 10) / 10
+  }
+  return null
 }
 
 // 결과 카드와 함께 잔존해야 하는 하단 고정 고지(FR-07 AC4 · FR-08 AC5).
@@ -36,6 +64,12 @@ export function FitnessFormCard({
     const m: Record<string, number> = {}
     for (const [, rows] of lane.grouped) {
       for (const row of rows) {
+        // 파생 항목(BMI): 값 대신 입력 묶음(키·몸무게)을 보낸다 — 전부 유효할 때만.
+        if (row.kind === 'single' && row.item.derived_from?.length) {
+          const d = derivedInputs(row.item, values)
+          if (d) Object.assign(m, d)
+          continue
+        }
         const code =
           row.kind === 'single' ? row.item.code : (altChoice[row.altGroup] ?? row.options[0].code)
         const v = parse(values[code] ?? '')
@@ -207,6 +241,52 @@ function DynamicForm({
           {/* 390px 에서는 1열(입력 한 칸이 화면 폭을 온전히 쓴다) — 좁은 2열은 숫자가 잘린다 */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {frows.map((row) => {
+              if (row.kind === 'single' && row.item.derived_from?.length) {
+                const it = row.item
+                const d = derivedInputs(it, values)
+                const preview = d ? previewDerived(it.code, d) : null
+                return (
+                  <fieldset key={it.code} className="min-w-0" data-testid={`fit-derived-field-${it.code}`}>
+                    <legend className={labelCls}>
+                      {it.name}
+                      <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                        (자동 계산{it.unit ? ` · ${it.unit}` : ''})
+                      </span>
+                    </legend>
+                    {/* 입력 2칸(키·몸무게)을 한 줄에 — 390px 에서도 숫자 3~4자리는 충분히 들어간다 */}
+                    <div className="mt-1 grid grid-cols-2 gap-2">
+                      {it.derived_from!.map((inp) => (
+                        <label key={inp.code} className="block min-w-0">
+                          <span className="text-xs text-slate-600 dark:text-slate-400">
+                            {inp.name} ({inp.unit})
+                          </span>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            min={inp.min}
+                            max={inp.max}
+                            data-testid={`fit-input-${inp.code}`}
+                            value={values[inp.code] ?? ''}
+                            onChange={(e) => onValue(inp.code, e.target.value)}
+                            className={fieldCls}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <span
+                      data-testid={`fit-derived-${it.code}`}
+                      aria-live="polite"
+                      className={hintCls}
+                    >
+                      {preview != null
+                        ? `${it.name} ${preview} — ${it.formula ?? '자동 계산'} (자동 계산, 판정은 서버가 같은 공식으로)`
+                        : `${it.derived_from!.map((x) => x.name).join('·')}를 모두 넣으면 ${it.name}가 계산됩니다`}
+                    </span>
+                    {it.hint && <span className={hintCls}>{it.hint}</span>}
+                  </fieldset>
+                )
+              }
               if (row.kind === 'single') {
                 const it = row.item
                 return (

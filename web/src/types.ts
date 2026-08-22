@@ -205,6 +205,17 @@ export interface FitnessItem {
   alt_group: string | null
   higher_better: number | null
   hint: string
+  // 파생 항목(FR-07 AC8): 있으면 폼은 이 항목 대신 입력들(키·몸무게)을 받고 서버가 계산한다.
+  derived_from?: DerivedInput[]
+  formula?: string
+}
+
+export interface DerivedInput {
+  code: string
+  name: string
+  unit: string
+  min?: number
+  max?: number
 }
 
 export interface FitnessItemsResponse {
@@ -324,6 +335,8 @@ export interface FitnessResponse {
   videos: FitnessVideo[]
   facility_filter_sports: string[]
   message?: string
+  // 서버가 계산한 파생값의 근거(FR-07 AC8) — 화면이 "자동 계산" 출처를 밝힌다.
+  derived?: { code: string; value: number; from: Record<string, number>; formula: string }[]
 }
 
 // ---- POST /api/fitness/ai ----

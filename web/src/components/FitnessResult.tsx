@@ -121,6 +121,18 @@ export function FitnessResultCard({
               </li>
             ))}
           </ul>
+          {/* 파생값 출처(FR-07 AC8) — 어디서 온 숫자인지 숨기지 않는다(P-1) */}
+          {(result.derived ?? []).map((d) => (
+            <p
+              key={d.code}
+              data-testid={`derived-note-${d.code}`}
+              className="mt-2 text-xs text-slate-600 dark:text-slate-400"
+            >
+              {d.code.toUpperCase()} {d.value}는 {Object.entries(d.from)
+                .map(([k, v]) => `${k === 'height_cm' ? '키' : k === 'weight_kg' ? '몸무게' : k} ${v}${k === 'height_cm' ? 'cm' : k === 'weight_kg' ? 'kg' : ''}`)
+                .join(' · ')}에서 계산한 값입니다({d.formula}).
+            </p>
+          ))}
         </div>
       )}
 

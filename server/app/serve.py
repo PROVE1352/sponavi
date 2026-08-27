@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
 from starlette.staticfiles import StaticFiles
 from starlette.types import Scope
 
@@ -36,6 +38,30 @@ class CachedStaticFiles(StaticFiles):
         return response
 
 
+# ---------------------------------------------------------------------------
+# 짧은 주소 (결정 4A) — mount("/") 앞에 명시 라우트로 둔다. 뒤에 두면 StaticFiles 가
+# 먼저 잡아 404 가 된다. 라우트는 mount 유무와 무관하게 항상 등록한다.
+# ---------------------------------------------------------------------------
+@app.get("/demo", include_in_schema=False)
+async def demo_redirect(request: Request) -> RedirectResponse:
+    """보고서 QR 주소 `/demo?p=P2&auto=1` → SPA 해시 라우트 `/#/demo?p=P2&auto=1`.
+
+    쿼리는 **해시 안쪽**으로 옮긴다 — 클라(route.ts)가 `location.search` 가 아니라
+    해시 내부를 읽고, PDF 링크 추출에서 fragment 가 탈락하지 않도록 QR 은 `/demo` 를
+    찍기 때문이다.
+    """
+    query = request.url.query
+    target = f"/#/demo?{query}" if query else "/#/demo"
+    return RedirectResponse(target, status_code=302)
+
+
+@app.get("/gap", include_in_schema=False)
+async def gap_redirect() -> RedirectResponse:
+    """뒷면(공급공백 정적 표)의 짧은 주소. 실체는 `web/public/gap.html`(W3 산출물)."""
+    return RedirectResponse("/gap.html", status_code=302)
+
+
 if _dist.exists():
-    # 라우트 등록 이후의 mount이므로 /api/*가 우선 매칭된다. html=True로 SPA 진입점 서빙.
+    # 라우트 등록 이후의 mount이므로 /api/*와 위 짧은 주소가 우선 매칭된다.
+    # html=True로 SPA 진입점 서빙.
     app.mount("/", CachedStaticFiles(directory=_dist, html=True), name="web")

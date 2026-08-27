@@ -59,6 +59,27 @@ def test_centroid_facility_path_label_has_no_distance(store):
         assert "Nonekm" not in hop["label"]
 
 
+# ③ 대안 목록 정렬(OV1): 실좌표 행이 구중심 폴백 행보다 앞
+def test_alternatives_real_coords_first(db_store):
+    """전국 DB 의 public 시설은 실좌표·구중심 폴백이 섞여 있다 — 폴백 행이 목록 머리를
+    차지하면 거리를 못 밝히는 행만 보인다(P2 대안 6곳 전부 폴백이던 회귀)."""
+    if db_store is None:
+        pytest.skip("전국 DB(data/sponavi.db) 없이 검증 불가")
+    from app.engine import assess
+
+    alts = assess(db_store, _body(27, "그외"))["nearby"]["alternatives"]
+    assert alts
+    real = [a for a in alts if a["coord_source"] != "centroid"]
+    if not real:
+        pytest.skip("이 지역 public 시설에 실좌표 행이 없음")
+    # 실좌표 행이 있으면 앞자리(최대 3행)는 전부 실좌표여야 한다
+    head = alts[: min(3, len(real))]
+    assert all(a["coord_source"] != "centroid" for a in head)
+    # 정렬 불변식: centroid 행이 한 번 나오면 그 뒤엔 실좌표 행이 없다
+    flags = [a["coord_source"] == "centroid" for a in alts]
+    assert flags == sorted(flags)
+
+
 def test_geocoded_facility_exposes_distance():
     """M2 지오코딩(coord_source='geocoded')은 실좌표 — 거리 노출 대상(FR-04).
 

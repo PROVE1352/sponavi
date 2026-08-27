@@ -33,9 +33,14 @@
     { "from": "svoucher", "to": "public_program", "edge": "대체경로", "result": "ok", "label": "무료/저가 공공프로그램", "curated": "검증 대기" },
     { "from": "public_program", "to": "facility:F123", "edge": "적합·접근", "result": "ok", "label": "도보 8분" }
   ],
+  "alt_edges": [
+    { "to": "tteuntteun", "note": "…", "curated": "공식 확인(2026-07-21)",
+      "program": { "id": "tteuntteun", "name": "…", "benefit": "…", "apply_url": "…" } }
+  ],
   "nearby": {
-    "voucher_facilities": [ { "id": "V1", "name": "성북 OO스포츠클럽", "sports": ["수영"], "lat": 0, "lon": 0, "dist_km": 0.5, "fee_month": 90000, "subsidy": 105000, "copay": 0, "disability_support": null } ],
-    "alternatives":       [ { "id": "F1", "name": "성북구민체육센터", "type": "공공체육시설", "sports": ["요가"], "lat": 0, "lon": 0, "dist_km": 0.7, "note": "저가 오전시간대", "disability_support": true } ]
+    "primary": "voucher | alternatives",
+    "voucher_facilities": [ { "id": "V1", "name": "성북 OO스포츠클럽", "source": "voucher", "sports": ["수영"], "lat": 0, "lon": 0, "dist_km": 0.5, "fee_month": 90000, "subsidy": 105000, "copay": 0, "disability_support": null } ],
+    "alternatives":       [ { "id": "F1", "name": "성북구민체육센터", "type": "공공체육시설", "sports": ["요가"], "lat": 0, "lon": 0, "dist_km": 0.7, "faci_gb": "공공", "note": "저가 오전시간대", "disability_support": true } ]
   },
   "supply_gap": {
     "radius_km": 3, "voucher_count": 0, "voucher_scope": "sigungu", "alt_count": 2,
@@ -46,8 +51,47 @@
   }
 }
 ```
-규칙: `eligible=true`인 제도가 있으면 path는 직접 경로(자격 ✓ → 신청·근처). 없으면 alt_edges를
-순서대로 평가해 첫 성립 대안으로 멀티홉 경로 구성. `supply_gap`은 항상 포함(있어도 통계 노출). 이용권 카운트는 구 단위(`voucher_scope:"sigungu"`)이며 행정구역 개편 전환기 영역그룹(FR-05 AC4, 예: 인천 서해구·검단구 ← 옛 서구)이면 `scope_codes`에 합산한 코드들, `scope_label`에 "○○ 일대(옛 △△)", `scope_reason`에 사유가 실린다(그룹이 아니면 자기 코드 1개·null).
+규칙: `eligible=true`인 제도가 있으면 path는 직접 경로(자격 ✓ → 신청·근처). 없으면 alt_edges의
+**첫 항목**(= 아래 dedupe·공식확인 우선 정렬의 1순위)으로 멀티홉 경로 구성 — 경로 그림의 대체 홉과
+`alt_edges[0].to`는 항상 같다. `supply_gap`은 항상 포함(있어도 통계 노출). 이용권 카운트는 구 단위(`voucher_scope:"sigungu"`)이며 행정구역 개편 전환기 영역그룹(FR-05 AC4, 예: 인천 서해구·검단구 ← 옛 서구)이면 `scope_codes`에 합산한 코드들, `scope_label`에 "○○ 일대(옛 △△)", `scope_reason`에 사유가 실린다(그룹이 아니면 자기 코드 1개·null).
+
+### `alt_edges` — 복수 대체경로 (FR-02 AC3 · 2026-08-27 결정 CQ2A)
+
+자격 ✗(또는 dvoucher 자격 ✓ + 예상 4·5순위·미정)일 때 "지금 바로 되는 것" 목록.
+`program`은 `rules.json`에 정의가 있을 때만 채워지고 없으면 `null`.
+
+- **`to`는 유일하다.** 같은 대상 제도로 가는 엣지가 사유별로 여러 개여도(예:
+  `svoucher → public_program`이 `income_fail`·`age_fail` 두 벌) 한 줄로 합친다.
+  - `note`는 rules 순서상 **첫** 매칭 엣지 것.
+  - `curated`는 중복 중 **가장 강한** 값(`공식 확인…` > `검증 대기`). 없는 검증을
+    만들지 않으므로 전부 `검증 대기`면 승격되지 않는다.
+- **정렬: `공식 확인…`이 앞, 그 밖(`검증 대기`)이 뒤.** 같은 등급 안에서는 rules 순서 유지.
+- `path`의 `대체경로` 홉은 이 목록의 **첫 항목**과 같다(OV4).
+- 헤딩의 N(“지금 바로 되는 것 N가지”)은 **`공식 확인` 항목 수만** 센다 — `검증 대기`는
+  헤딩 밖 "확인 중 1건"으로 뺀다(P-1).
+- 실측(P2 = 27세·비장애·그외): `["tteuntteun"(공식), "culture_deduction"(공식),
+  "public_program"(검증 대기)]` — 3줄, dedupe 전에는 5줄이었다.
+
+### `nearby` (2026-08-27 · 결정 1A·OV1·OV3·OV6)
+
+- **`nearby.primary`**: `"voucher" | "alternatives"` — 이 응답을 만든 이용권 카드가
+  `eligible=true`면 `"voucher"`, 아니면 `"alternatives"`. **웹은 이 순서대로** 덱·리스트를
+  배치한다. 자격 ✗ 사용자에게 가맹시설이 1순위로 뜨던 문제(⚠#10)를 서버가 판정한다(P-2 —
+  자격 판단은 클라가 하지 않는다).
+- **`voucher_facilities[].source`**: `"voucher" | "dvoucher"` — 그 행이 어느 이용권의
+  가맹시설인지. 장애인 가맹 배지·FR-10 접근성 블록의 원천이다(`v.source === 'dvoucher'`).
+- **`subsidy`/`copay` 의미 — 자격 인지(결정 1A)**:
+  - `eligible=true` : `subsidy` = 제도 지원금, `copay = max(0, fee_month - subsidy)`.
+  - `eligible=false`: **`subsidy = 0`, `copay = fee_month`** (`fee_month`가 null이면 `copay`도 null).
+    받지 못할 지원금을 차감해 "자부담 0원 = 무료"라고 표기하면 거짓 금액이다(P-1).
+  - 세 값 모두 `number | null`. `null`은 "미등록 — 시설 문의"로 렌더한다(등록강좌 수강료 결측).
+- **`alternatives` 정렬(OV1)**: **실좌표(`coord_source` = `api`·`geocoded`) 행이 먼저**,
+  시군구 중심 폴백(`centroid`) 행이 뒤. 각 그룹 안에서는 거리 오름차순이고, 잘라내기
+  (최대 6곳)는 정렬 **후**에 한다. 폴백 행은 거리를 밝힐 수 없어(FR-04) 목록 머리를
+  차지하면 "근처"를 보여주지 못한다.
+- **`alternatives[].faci_gb`**: `"공공" | "신고" | "등록" | null` — 시설 구분(원천
+  `faci_cd` 조인, `facilities.faci_gb` 컬럼). AltRow 배지·`gap.html`·성공기준이 같은
+  컬럼을 쓴다. 컬럼이 없는 옛 DB에서는 `null`(없는 배지를 만들지 않는다).
 
 ## GET /api/fitness/items?age=N
 
@@ -71,7 +115,21 @@
   "facility_filter_sports": ["요가","필라테스"]
 }
 ```
+(`facility_filter_sports`는 아래 별칭 확장을 거친 뒤의 배열이다 — 예시는 별칭이 없는 종목이라 그대로.)
 `videos`는 fixtures(2~3개)로 충분 — 실 API 연동은 키 주입 후.
+
+**`facility_filter_sports` 종목 별칭 확장(2026-08-27 · 결정 2A · C-27)**: 추천은 "헬스"라고
+말하는데 공공체육시설 데이터의 `sports`는 "체력단련장업"이라 근처 시설 매칭이 0건이었다.
+서버가 **추천 종목 + 시설 데이터 표기(별칭)**를 이어 붙여 내보낸다 — 추천 원문이 앞, 별칭이
+뒤, 중복 제거, 순서 보존. 예: `["헬스","유도","주짓수"]` →
+`["헬스","유도","주짓수","체력단련장","체력단련장업","기타체육시설(체력단련장)","투기체육관"]`.
+- 표의 소유자는 **`data/sport_alias.json` 하나**(`sigungu_alias` 선례 — 사람이 고치는 데이터).
+  키 = 추천 종목명, 값 = `facilities.sports`에 **실재하는** 표기만(없는 표기를 지어내지
+  않는다, P-1). `_`로 시작하는 키는 주석이며 데이터가 아니다.
+- 파일이 없으면 확장 없이 원본 그대로 나간다(무중단).
+- 공공체육시설 데이터에 대응 표기가 없는 추천 종목(요가·필라테스·탁구·볼링·배구·스쿼시·
+  펜싱·무용)은 비워 둔다 — 파일 `_meta.no_alias`에 그대로 적어 둔다.
+- 웹은 이 배열을 그대로 소비한다(매칭 로직 1벌: `web/src/lib/sports.ts`).
 
 공식 경로(measurement_item/fitness_norm 적재 DB)에서는 `items[]`/`weaknesses[]` 에 실측 컷
 인용 `comparison` 이 붙는다. 값+단위 표기는 단위가 **'기간/단위'**(`chair_stand` = `30초/회`)면
@@ -97,7 +155,8 @@
                       "curated_status": null } }
   ],
   "주의": "운동 참고 정보이며 의료 조언이 아닙니다. 통증·질환이 있으면 전문가와 상담하세요.",
-  "facility_filter_sports": ["수영", "복싱", "축구(풋살)"],
+  "facility_filter_sports": ["수영", "복싱", "축구(풋살)",
+                             "수영장", "수영장업", "권투", "투기체육관", "축구", "축구장", "풋살장"],
   "disclaimer": "…"
 }
 ```
@@ -132,7 +191,31 @@
 - 표의 소유자는 `server/app/region.py` 하나이고, 적재(`scripts/build_db.py`)와 조회가 공유한다.
 
 ## GET /api/demo/personas
-SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼 4개로 렌더.
+SPEC §5의 P1~P5를 assess 요청 바디 배열로 반환. 웹은 이걸 페르소나 버튼으로 렌더.
+
+```json
+[ { "id": "P2", "label": "27세 남 · 그 외(낀 계층) · 성북구 · 비장애",
+    "expected": "…",
+    "body": { "age": 27, "sex": "M", "sigungu_cd": "11290", "…": "…" },
+    "demo": {
+      "fitness": { "crunch_cross": 35, "shuttle_20m": 42, "sit_reach": 6,
+                   "grip_rel": 58, "height_cm": 175, "weight_kg": 72 },
+      "parq_preset": true
+    } } ]
+```
+
+**`demo` (2026-08-27 · 결정 3A)** — 자동재생이 소비하는 프리필 계약. **모든 페르소나가
+두 키를 항상 싣는다**(키 생략 없음, 웹 `normalizePersona`가 보존).
+- `demo.fitness`: `POST /api/fitness`의 `measures`에 그대로 넣는 값 dict, 또는 `null`.
+  항목 코드는 `GET /api/fitness/items` 카탈로그 기준(악력은 kg가 아니라 `grip_rel` %).
+  키·몸무게를 실어 BMI는 서버가 파생한다(FR-07 AC8).
+- `demo.parq_preset`: PAR-Q 문진을 데모용으로 미리 채울지(`boolean`). 채운 화면에는
+  "데모 페르소나 문진 프리셋 — 실사용은 직접 확인" 라벨이 붙는다(P-1).
+- 현재 값: **P2·P5만** `fitness` 있음 + `parq_preset:true`, P1·P3·P4는
+  `{"fitness": null, "parq_preset": false}`.
+- 값의 근거: 실 DB `fitness_norm` 연령·성별 컷 실측이며 **약점이 정확히 1건(근지구력)**
+  나오도록 골랐다 — P2는 25~29세 3등급 컷 38 대비 35, P5는 30~34세 컷 35 대비 33.
+  회귀 방지는 `server/tests/test_personas_demo.py`.
 
 ## POST /api/chat/nlu (v2 챗 — 자유 텍스트 이해 전용, 2026-08-18)
 
@@ -178,6 +261,11 @@ SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼
 - `slot_updates`는 AssessRequest 필드 검증(pydantic) 통과분만 반영. enum 밖 값은 버린다.
 - `reply` 후필터: 숫자·금액·%·프로그램명·자격 단정 표현 감지 시 폐기(null). 사실 문장은 전부
   클라 템플릿+엔진 출력(P-2).
+- `reply` **정합 보정**(2026-08-27 · 결정 CQ5A · ⚠#14): 후필터 통과 후, `slot_updates`와
+  어긋나는 발화를 템플릿으로 바꾼다. ① `slot_updates`가 비었는데 "확인해 뒀어요/기록했어요"
+  류(D-08) → 중립 템플릿("아직 반영된 정보는 없어요 …", 사실·자격 단정 없음). ② `slot_updates`가
+  있는데 "확인이 필요해요/확실하지 않아요" 류(D-10) → 확정 템플릿("확인했어요 — …"). 그 밖은
+  원문 그대로, `null`은 `null`. 템플릿은 슬롯 값을 되읊지 않는다(값 자체가 사실 문장이 될 수 있음).
 - `answer` 접지 레인(v1.9 · FR-13 AC9): 재료는 서버가 시스템 프롬프트에 주입한 **검증 텍스트
   (`GET /api/chat/faq` 사전 전문)뿐** — LLM은 그 안의 사실만 표현한다(원천 불변, 표현 주체만 LLM).
 - `answer` fact-lock 후필터: ①숫자 토큰(자릿수 콤마 제거 정규화)이 재료 원문에 전부 실재 ②제도명
@@ -199,3 +287,19 @@ SPEC §5의 P1~P4를 assess 요청 바디 배열로 반환. 웹은 이걸 버튼
 - 답변 본문은 rules.json의 `verified` 필드에서만 조립(SPEC §0-5 날조 금지) — LLM은 자유 질문을
   `faq_key`로 라우팅하고, 이 사전 전문을 재료로 받아 `answer`만 표현한다(v1.9 접지 레인, 위 참조).
 - 칩 모드(FAQ 목록 버튼)와 NLU 라우팅(`intent:ask_faq`) 양쪽이 같은 사전을 소비한다. 정적·캐시 가능.
+
+## 짧은 주소 리다이렉트 (2026-08-27 · 결정 4A)
+
+`/api` 밖의 서버 라우트 2개. `server/app/serve.py`가 `mount("/", …)` **앞**에 등록한다
+(뒤에 두면 정적 서빙이 먼저 잡아 404). 개발 서버(`app.main` 단독)에는 없다.
+
+| 요청 | 응답 | 비고 |
+|---|---|---|
+| `GET /demo?p=P2&auto=1` | `302` → `Location: /#/demo?p=P2&auto=1` | 쿼리를 **해시 안쪽**으로 보존 |
+| `GET /demo` | `302` → `Location: /#/demo` | 쿼리 없으면 그대로 |
+| `GET /gap` | `302` → `Location: /gap.html` | 뒷면 공급공백 정적 표(W3 산출물) |
+
+- 보고서 QR은 `/demo?p=P2&auto=1`을 찍는다 — PDF 링크 추출에서 fragment(`#…`)가 탈락하는
+  것을 피하려고 서버가 해시 주소로 넘긴다. 클라(`web/src/chat/route.ts`)는 `location.search`가
+  아니라 **해시 내부**의 쿼리를 읽는다.
+- `/`는 그대로 `index.html`(`Cache-Control: no-cache`)을 서빙한다.

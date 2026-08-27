@@ -97,26 +97,30 @@ def test_alt_edges_present_on_response(store):
     assert isinstance(res["alt_edges"], list)
 
 
-def test_alt_edges_p2_collects_all_matching(store):
-    # P2: 27세 비장애 그외 → svoucher 연령·소득 동시 미달 → 매칭 엣지 전부
+def test_alt_edges_p2_unique_and_official_first(store):
+    """P2(27세 비장애 그외): svoucher 연령·소득 동시 미달 → 대체경로 3종.
+
+    결정 CQ2A — 같은 `to` 로 가는 엣지가 사유별로 여럿이라도 한 줄로 합친다
+    (svoucher→public_program 은 income_fail·age_fail 두 벌, →tteuntteun 도 두 벌).
+    """
     res = assess(store, _body(27, "그외"))
     alts = res["alt_edges"]
 
-    # rules(=store) 파생 기대 집합: svoucher 엣지 중 failed(age·income) 매칭분 전부
-    sv = store.edges_from("svoucher")
-    when_to_fail = {"age_fail": "age", "income_fail": "income", "disability_fail": "disability"}
-    failed = {"age", "income"}
-    expected = [
-        e for e in sv
-        if e.get("when", "any") == "any" or when_to_fail.get(e.get("when")) in failed
-    ]
-    assert len(alts) == len(expected)
-    assert len(alts) >= 3
-
-    # income_fail 엣지(rules) 대상 프로그램은 전부 포함돼야 한다
-    income_fail_targets = {e["to"] for e in sv if e.get("when") == "income_fail"}
-    alt_targets = {a["to"] for a in alts}
-    assert income_fail_targets <= alt_targets
+    # ① to 는 유일하다
+    tos = [a["to"] for a in alts]
+    assert len(tos) == len(set(tos))
+    # ② 대상 제도 3종
+    assert set(tos) == {"public_program", "tteuntteun", "culture_deduction"}
+    # ③ '공식 확인' 엣지가 '검증 대기'보다 앞에 온다
+    ranks = [0 if a["curated"].startswith("공식 확인") else 1 for a in alts]
+    assert ranks == sorted(ranks)
+    assert alts[0]["curated"].startswith("공식 확인")
+    assert {a["to"] for a in alts if a["curated"].startswith("공식 확인")} == {
+        "tteuntteun", "culture_deduction"
+    }
+    # ④ 경로 그림의 대체 홉 = dedupe 목록 1순위 (OV4)
+    hops = [p for p in res["path"] if p["edge"] == "대체경로"]
+    assert hops and hops[0]["to"] == alts[0]["to"]
 
     # 각 항목 계약 형태 + curated 필드 존재
     for a in alts:
@@ -125,6 +129,23 @@ def test_alt_edges_p2_collects_all_matching(store):
         # program 정보는 store.program(to) 있으면 채워짐
         if a["program"] is not None:
             assert set(a["program"]) >= {"id", "name", "benefit", "apply_url"}
+
+
+def test_alt_edges_dedupe_keeps_first_note_and_best_curated(store):
+    """중복 병합 규칙: note 는 rules 순서상 첫 매칭 엣지, curated 는 가장 강한 값."""
+    res = assess(store, _body(27, "그외"))
+    by_to = {a["to"]: a for a in res["alt_edges"]}
+    sv = store.edges_from("svoucher")
+
+    def first_edge(to):
+        return next(e for e in sv if e["to"] == to)
+
+    for to, alt in by_to.items():
+        assert alt["note"] == first_edge(to).get("note", to)
+    # tteuntteun 은 income_fail·age_fail 두 벌 모두 '공식 확인' → 그대로 유지
+    assert by_to["tteuntteun"]["curated"].startswith("공식 확인")
+    # public_program 은 두 벌 모두 '검증 대기' → 승격되지 않는다(없는 검증을 만들지 않음)
+    assert by_to["public_program"]["curated"] == "검증 대기"
 
 
 def test_alt_edges_empty_for_high_priority_eligible(store):

@@ -272,20 +272,29 @@ def _nearest_facility(store: Store, source: str, lat: float, lon: float) -> Opti
 
 
 def _voucher_facilities(
-    store: Store, source: str, lat: float, lon: float, subsidy: int, age: int
+    store: Store, source: str, lat: float, lon: float, subsidy: int, age: int,
+    *, eligible: bool,
 ) -> list[dict]:
+    """이용권 가맹시설 행. `eligible` 은 이 시설을 만든 제도 카드의 자격 판정이다.
+
+    자격 미충족(✗)인데 지원금을 차감하면 "자부담 0원 = 무료"라는 거짓 금액이 나간다
+    (판결 제약 P-1). 비적격이면 지원금 0 · 자부담 = 수강료 그대로 (결정 1A).
+    """
     facs = _with_distance(
         store.facilities(source, bbox=_bbox(lat, lon, NEARBY_RADIUS_KM)), lat, lon
     )
+    row_subsidy = subsidy if eligible else 0
     out = []
     for f in facs:
         if f["dist_km"] > NEARBY_RADIUS_KM:
             continue
         fee = _representative_fee(store, f["id"], age)
-        copay = None if fee is None else max(0, fee - subsidy)
+        copay = None if fee is None else max(0, fee - row_subsidy)
         out.append({
             "id": f["id"],
             "name": f["name"],
+            # 이용권 종류(voucher|dvoucher) — 웹의 장애인 가맹 배지·접근성 블록 원천(OV3).
+            "source": source,
             "sports": f["sports"],
             "lat": f["lat"],
             "lon": f["lon"],
@@ -294,7 +303,7 @@ def _voucher_facilities(
             "dist_km": _expose_dist(f),
             "sigungu_nm": f["sigungu_nm"],
             "fee_month": fee,
-            "subsidy": subsidy,
+            "subsidy": row_subsidy,
             "copay": copay,
             "disability_support": f["disability_support"],
         })
@@ -309,6 +318,13 @@ def _alternatives(
     facs = _with_distance(
         store.facilities("public", bbox=_bbox(lat, lon, NEARBY_RADIUS_KM)), lat, lon
     )
+    # OV1: 실좌표(api·geocoded) 행 우선, 시군구 중심 폴백(centroid)은 후순위.
+    # 폴백 행은 거리를 못 밝히므로(FR-04) 목록 머리를 차지하면 "근처"를 못 보여준다.
+    # 같은 그룹 안에서는 거리 오름차순 유지(안정 정렬 — _with_distance 가 이미 정렬).
+    facs.sort(key=lambda f: (
+        f.get("coord_source") == "centroid",
+        f["dist_km"] if f["dist_km"] is not None else float("inf"),
+    ))
     out = []
     for f in facs:
         if f["dist_km"] > NEARBY_RADIUS_KM:
@@ -326,6 +342,9 @@ def _alternatives(
             # public 은 대부분 실좌표 → km 노출. 폴백 행만 미표기(null).
             "dist_km": _expose_dist(f),
             "sigungu_nm": f["sigungu_nm"],
+            # 시설 구분(공공/신고/등록) — AltRow 배지·gap.html 이 같은 컬럼을 쓴다(OV6).
+            # 마이그레이션 전 DB 는 컬럼이 없어 None (없는 배지를 만들지 않는다).
+            "faci_gb": f.get("faci_gb"),
             "note": _course_note(store, f["id"], age),
             "disability_support": f["disability_support"],
         })
@@ -438,6 +457,39 @@ def _supply_gap(
 # ---------------------------------------------------------------------------
 _FAIL_LABEL = {"age": "나이>기준", "income": "소득>기준", "disability": "장애요건"}
 _WHEN_TO_FAIL = {"age_fail": "age", "income_fail": "income", "disability_fail": "disability"}
+_CURATED_OFFICIAL = "공식 확인"
+
+
+def _curated_rank(curated: Any) -> int:
+    """정렬·병합용 큐레이션 강도. '공식 확인…' 0 · 그 밖('검증 대기') 1."""
+    return 0 if str(curated or "").startswith(_CURATED_OFFICIAL) else 1
+
+
+def _matching_alt_edges(store: Store, pid: str, active: set) -> list[dict]:
+    """매칭 대체경로 엣지를 `to` 기준으로 유일화한 목록 (결정 CQ2A).
+
+    같은 대상 제도로 가는 엣지가 사유별로 여러 개다(예: svoucher→public_program 이
+    income_fail·age_fail 두 벌) — 그대로 내보내면 UI 에 같은 줄이 중복된다.
+
+    - note·when·filter 는 rules 순서상 **첫** 매칭 엣지 것을 쓴다.
+    - curated 는 중복 중 **가장 강한** 값(공식 확인 > 검증 대기).
+    - 출력 순서는 공식 확인 먼저(그 안에서는 rules 순서), 그 다음 나머지.
+    """
+    order: list[str] = []
+    picked: dict[str, dict] = {}
+    for e in store.edges_from(pid):
+        when = e.get("when", "any")
+        if when != "any" and _WHEN_TO_FAIL.get(when) not in active:
+            continue
+        to = e["to"]
+        curated = e.get("curated", "검증 대기")
+        if to not in picked:
+            order.append(to)
+            picked[to] = {**e, "curated": curated}
+        elif _curated_rank(curated) < _curated_rank(picked[to]["curated"]):
+            picked[to]["curated"] = curated
+    # sorted 는 안정 정렬 — 같은 등급 안에서는 rules 순서가 그대로 남는다.
+    return sorted((picked[to] for to in order), key=lambda e: _curated_rank(e["curated"]))
 
 
 def _build_path(
@@ -468,22 +520,19 @@ def _build_path(
         "result": "fail", "label": fail_label,
     })
 
-    edge = None
-    for e in store.edges_from(pid):
-        when = e.get("when", "any")
-        if when == "any" or _WHEN_TO_FAIL.get(when) in failed:
-            edge = e
-            break
-
-    if edge is None:
+    # OV4: 주 경로도 dedupe 목록의 1순위(공식 확인 우선)를 쓴다 — alt_edges 첫 줄과
+    # 경로 그림의 대체 홉이 어긋나지 않는다.
+    edges = _matching_alt_edges(store, pid, set(failed))
+    if not edges:
         return path, False
+    edge = edges[0]
 
     disability_filter = bool((edge.get("filter") or {}).get("disability_support"))
     to = edge["to"]
     path.append({
         "from": pid, "to": to, "edge": "대체경로",
         "result": "ok", "label": edge.get("note", to),
-        "curated": edge.get("curated", "검증 대기"),
+        "curated": edge["curated"],
     })
     if alternatives:
         top = alternatives[0]
@@ -497,8 +546,8 @@ def _build_path(
 def _collect_alt_edges(
     store: Store, *, card: dict, failed: list[str], selection_rank: Optional[int],
 ) -> list[dict]:
-    """복수 대체경로: 주 제도의 매칭 엣지를 rules 순서대로 '전부' 수집(FR-02 AC3).
-    주 경로(path)는 최상위 1개만 쓰지만 응답 top-level엔 매칭 엣지 전부를 동봉해
+    """복수 대체경로: 주 제도의 매칭 엣지를 수집(FR-02 AC3). `to` 기준 유일 · 공식 확인
+    우선(CQ2A) — 주 경로(path)는 그 1순위를 쓰고, 응답 top-level 엔 전부를 동봉해
     UI가 상위 N개를 렌더하도록 한다.
 
     - 자격 미충족(failed) 카드: failed 사유에 맞는 엣지 매칭.
@@ -511,10 +560,7 @@ def _collect_alt_edges(
         active.add("income")
 
     out: list[dict] = []
-    for e in store.edges_from(pid):
-        when = e.get("when", "any")
-        if when != "any" and _WHEN_TO_FAIL.get(when) not in active:
-            continue
+    for e in _matching_alt_edges(store, pid, active):
         prog = store.program(e["to"])
         program_info = None
         if prog:
@@ -527,7 +573,7 @@ def _collect_alt_edges(
         out.append({
             "to": e["to"],
             "note": e.get("note", e["to"]),
-            "curated": e.get("curated", "검증 대기"),
+            "curated": e["curated"],
             "program": program_info,
         })
     return out
@@ -578,7 +624,9 @@ def assess(store: Store, payload: dict) -> dict:
     failed = card.pop("_failed")
 
     subsidy = program.get("subsidy_month", 0)
-    voucher_facilities = _voucher_facilities(store, source, lat, lon, subsidy, age)
+    voucher_facilities = _voucher_facilities(
+        store, source, lat, lon, subsidy, age, eligible=card["eligible"]
+    )
 
     # need the alt edge's disability filter before building alternatives -> peek path once
     # build path with a provisional (unfiltered) alt list, extract filter, then rebuild alts.
@@ -613,6 +661,9 @@ def assess(store: Store, payload: dict) -> dict:
         "path": path,
         "alt_edges": alt_edges,
         "nearby": {
+            # 결정 1A: 자격 ✗ 면 가맹시설이 1순위가 될 수 없다(⚠#10) — 웹은 이 순서대로
+            # 덱·리스트를 배치한다. 자격 판정은 서버 소유(P-2).
+            "primary": "voucher" if card["eligible"] else "alternatives",
             "voucher_facilities": voucher_facilities,
             "alternatives": alternatives,
         },

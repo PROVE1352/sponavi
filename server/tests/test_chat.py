@@ -271,6 +271,70 @@ def test_reply_filter_via_endpoint(monkeypatch):
     assert chat.nlu(st, {"text": "…", "slots": {}})["reply"] == "성북구에 사시는군요!"
 
 
+# --------------------------------------------------------------------------
+# ④-b reply/slot 정합 (결정 CQ5A · ⚠#14) — _reconcile_reply 순수 함수
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize("reply", [
+    "네, 확인해 뒀어요.",
+    "말씀하신 대로 기록했어요.",
+    "그렇게 설정했어요!",
+    "알겠습니다, 반영했어요.",
+])
+def test_reconcile_d08_no_slot_but_confirms(reply):
+    """D-08: 반영된 슬롯이 없는데 '확인해 뒀어요' 류 → 중립 템플릿."""
+    out = chat._reconcile_reply(reply, {})
+    assert out != reply
+    assert "아직 반영된 정보는 없어요" in out
+    # 중립 템플릿도 사실·자격 단정이 없어야 한다(P-2) — 후필터를 그대로 통과
+    assert chat.filter_reply(out, _fresh_store()) == out
+
+
+@pytest.mark.parametrize("reply", [
+    "아직 확인이 필요해요.",
+    "먼저 확인 후에 알려드릴게요.",
+    "주민센터에서 확인해 주세요.",
+    "확실하지 않아요.",
+])
+def test_reconcile_d10_slot_set_but_hedges(reply):
+    """D-10: 슬롯이 확정됐는데 '확인이 필요' 류 → 확정 템플릿."""
+    out = chat._reconcile_reply(reply, {"age": 27})
+    assert out != reply
+    assert out.startswith("확인했어요")
+    assert chat.filter_reply(out, _fresh_store()) == out
+
+
+@pytest.mark.parametrize("reply,updates", [
+    ("성북구에 사시는군요!", {"sigungu_cd": "11290"}),
+    ("알려주셔서 고마워요.", {}),
+    # 반대 조합은 불일치가 아니다 — 그대로 통과
+    ("네, 확인해 뒀어요.", {"age": 27}),
+    ("아직 확인이 필요해요.", {}),
+])
+def test_reconcile_passes_through_when_consistent(reply, updates):
+    assert chat._reconcile_reply(reply, updates) == reply
+
+
+def test_reconcile_none_stays_none():
+    assert chat._reconcile_reply(None, {}) is None
+    assert chat._reconcile_reply(None, {"age": 27}) is None
+    assert chat._reconcile_reply("", {}) == ""
+
+
+def test_reconcile_via_endpoint(monkeypatch):
+    """엔드포인트 경로: 후필터 통과 후 정합까지 적용된다."""
+    st = _fresh_store()
+    # D-08 — 슬롯 갱신 0건인데 확인 발화
+    _use(monkeypatch, _out(reply="네, 확인해 뒀어요."))
+    resp = chat.nlu(st, {"text": "…", "slots": {}})
+    assert resp["slot_updates"] == {}
+    assert "아직 반영된 정보는 없어요" in resp["reply"]
+    # D-10 — 슬롯이 확정됐는데 확인 필요 발화
+    _use(monkeypatch, _out(age=27, reply="아직 확인이 필요해요."))
+    resp = chat.nlu(st, {"text": "…", "slots": {}})
+    assert resp["slot_updates"]["age"] == 27
+    assert resp["reply"].startswith("확인했어요")
+
+
 def test_reply_filter_uses_rules_program_names():
     """블록리스트는 rules.json 프로그램명으로도 보강된다(상수 밖 제도명도 차단)."""
     st = _fresh_store()

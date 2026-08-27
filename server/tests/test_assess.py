@@ -31,15 +31,18 @@ def test_p1_svoucher_eligible(store):
     assert len(res["nearby"]["voucher_facilities"]) > 0
 
 
-def test_p2_svoucher_income_fail_routes_to_public(store):
+def test_p2_svoucher_income_fail_routes_to_alternative(store):
     res = assess(store, _body(27, "그외"))
     c = _card(res)
     assert c["eligible"] is False
     assert any(r["field"] == "income_class" and not r["ok"] for r in c["reasons"])
-    # 대체경로: svoucher -x-> public_program
+    # 대체경로: svoucher -x-> 공식 확인 1순위(OV4 — dedupe 목록의 첫 항목과 같다)
     edges = [p for p in res["path"] if p["edge"] == "대체경로"]
-    assert edges and edges[0]["to"] == "public_program"
-    assert edges[0]["curated"] == "검증 대기"
+    assert edges and edges[0]["to"] == res["alt_edges"][0]["to"]
+    assert edges[0]["to"] == "tteuntteun"
+    assert edges[0]["curated"].startswith("공식 확인")
+    # 검증 대기인 공공체육시설 대안은 사라지지 않고 alt_edges 에 남는다
+    assert "public_program" in {a["to"] for a in res["alt_edges"]}
 
 
 def test_p3_dvoucher_eligible_but_gap(store):
@@ -64,9 +67,11 @@ def test_p4_dvoucher_age_over_69(store):
     assert any(r["field"] == "age" and not r["ok"] for r in c["reasons"])
     # dvoucher는 소득무관 -> income reason은 ok여야 함
     assert any(r["field"] == "income_class" and r["ok"] for r in c["reasons"])
-    # age_fail 대체경로 -> public_program (장애지원 필터)
+    # age_fail 대체경로 -> 공식 확인 1순위(어르신 상품권), public_program 은 alt_edges 에 잔존
     edges = [p for p in res["path"] if p["edge"] == "대체경로"]
-    assert edges and edges[0]["to"] == "public_program"
+    assert edges and edges[0]["to"] == res["alt_edges"][0]["to"]
+    assert edges[0]["curated"].startswith("공식 확인")
+    assert "public_program" in {a["to"] for a in res["alt_edges"]}
 
 
 # --- age boundaries (svoucher 5~18) --------------------------------------
@@ -102,9 +107,10 @@ def test_dvoucher_is_income_agnostic(store):
     assert inc_ok is True
 
 
-# --- copay 계산: copay = max(0, fee_month - subsidy) ----------------------
+# --- copay 계산 (적격): copay = max(0, fee_month - subsidy) ----------------
 def test_copay_calculation(store):
     res = assess(store, _body(10, "기초생활수급"))
+    assert _card(res)["eligible"] is True
     for f in res["nearby"]["voucher_facilities"]:
         assert f["subsidy"] == 105000
         if f["fee_month"] is not None:
@@ -118,3 +124,30 @@ def test_copay_never_negative(store):
     res = assess(store, _body(14, "기초생활수급"))
     for f in res["nearby"]["voucher_facilities"]:
         assert f["copay"] is None or f["copay"] >= 0
+
+
+# --- ✗ 자부담 수학 (결정 1A): 비적격이면 지원금 0 · 자부담 = 수강료 -----------
+def test_copay_ineligible_gets_no_subsidy(store):
+    # P2(27세·그외): svoucher 연령·소득 미달 → 받지 못할 지원금을 차감하면 거짓 금액(P-1)
+    res = assess(store, _body(27, "그외"))
+    assert _card(res)["eligible"] is False
+    facs = res["nearby"]["voucher_facilities"]
+    assert facs, "성북 voucher 가맹시설 fixtures 비어있음"
+    for f in facs:
+        assert f["subsidy"] == 0
+        assert f["copay"] == f["fee_month"]  # None 이면 None 그대로
+
+
+def test_nearby_primary_follows_eligibility(store):
+    # ⚠#10: ✗ 판정 사용자에게 가맹시설을 1순위로 내보내지 않는다
+    assert assess(store, _body(27, "그외"))["nearby"]["primary"] == "alternatives"
+    # P1(10세·기초생활수급): 자격 ✓ → 가맹시설이 1순위
+    assert assess(store, _body(10, "기초생활수급"))["nearby"]["primary"] == "voucher"
+
+
+def test_voucher_rows_carry_source(store):
+    # OV3: 장애인 가맹 배지·FR-10 접근성 블록의 원천 필드
+    for body, expected in ((_body(10, "기초생활수급"), "voucher"),
+                           (_body(14, "차상위", {"has": True, "type": "지체"}), "dvoucher")):
+        for f in assess(store, body)["nearby"]["voucher_facilities"]:
+            assert f["source"] == expected

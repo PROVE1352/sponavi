@@ -44,8 +44,8 @@ def test_personas_endpoint_p5_included(client):
 
 
 ELIG_KEYS = {"program_id", "program_name", "eligible", "reasons", "benefit", "apply", "source", "verified"}
-FAC_KEYS = {"id", "name", "sports", "lat", "lon", "dist_km", "coord_source", "fee_month", "subsidy", "copay", "disability_support"}
-ALT_KEYS = {"id", "name", "type", "sports", "lat", "lon", "dist_km", "coord_source", "note", "disability_support"}
+FAC_KEYS = {"id", "name", "source", "sports", "lat", "lon", "dist_km", "coord_source", "fee_month", "subsidy", "copay", "disability_support"}
+ALT_KEYS = {"id", "name", "type", "sports", "lat", "lon", "dist_km", "coord_source", "faci_gb", "note", "disability_support"}
 SG_KEYS = {"radius_km", "voucher_count", "alt_count", "nearest", "message", "coverage"}
 
 
@@ -88,8 +88,10 @@ def test_assess_contract_shape_for_personas(client, personas_by_id, db_store, pi
         assert set(hop) >= {"from", "to", "edge", "result", "label"}
 
     # nearby
+    assert data["nearby"]["primary"] in ("voucher", "alternatives")
     for f in data["nearby"]["voucher_facilities"]:
         assert FAC_KEYS <= set(f)
+        assert f["source"] in ("voucher", "dvoucher")
         _assert_coord_honesty(f)
     for a in data["nearby"]["alternatives"]:
         assert ALT_KEYS <= set(a)

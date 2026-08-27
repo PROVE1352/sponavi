@@ -13,10 +13,11 @@ M1a — 판정 기준을 "데모 근사"에서 "국민체력100 공식 인증기
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Optional
 
-from .store import Store
+from .store import Store, data_dir
 
 # ---------------------------------------------------------------------------
 # 공통: 추천/영상 매핑 (fitness_map). 그래프 연동은 다음 배치 — 여기선 무접촉.
@@ -35,6 +36,42 @@ BODY_FACTOR = "신체조성"
 
 def _map_factor(factor: str) -> str:
     return _FACTOR_TO_MAP.get(factor, factor)
+
+
+# ---------------------------------------------------------------------------
+# 종목 별칭 (결정 2A · C-27) — 추천은 '헬스'라고 말하는데 시설 데이터는 '체력단련장업'
+# 이라 공공 대안 매칭이 0건이었다. 표의 소유자는 data/sport_alias.json 하나(사람이
+# 고치는 데이터, sigungu_alias 선례). 파일이 없으면 확장 없이 원본 그대로(무중단).
+# ---------------------------------------------------------------------------
+def _load_sport_alias() -> dict[str, list[str]]:
+    try:
+        with (data_dir() / "sport_alias.json").open(encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        k: [str(v) for v in vals]
+        for k, vals in raw.items()
+        if isinstance(k, str) and not k.startswith("_") and isinstance(vals, list)
+    }
+
+
+SPORT_ALIAS: dict[str, list[str]] = _load_sport_alias()
+
+
+def expand_sports(sports: list[str]) -> list[str]:
+    """추천 종목 + 시설 데이터 표기(별칭). 추천 원문이 앞, 별칭이 뒤 · 중복 제거."""
+    out: list[str] = []
+    for s in sports:
+        if s not in out:
+            out.append(s)
+    for s in sports:
+        for alias in SPORT_ALIAS.get(s, ()):
+            if alias not in out:
+                out.append(alias)
+    return out
 
 
 def _fmt(n: Any) -> str:
@@ -353,7 +390,8 @@ def _assess_official(store: Store, age: int, sex: str, measures: dict) -> dict:
         "reference_grade": reference_grade,
         "recommendations": recommendations,
         "videos": videos,
-        "facility_filter_sports": filter_sports,
+        # 결정 2A: 추천 종목 + 시설 데이터 표기(별칭) — 그래프/데모 두 경로 공통.
+        "facility_filter_sports": expand_sports(filter_sports),
     }
     if age_gap:
         result["message"] = "이 연령은 국민체력100 공식 기준이 없습니다. 유소년(11~12세) 기준을 참고로 제공합니다."
@@ -453,7 +491,8 @@ def _assess_demo(store: Store, age: int, sex: str, measures: dict) -> dict:
         "weaknesses": weaknesses,
         "recommendations": recommendations,
         "videos": videos,
-        "facility_filter_sports": filter_sports,
+        # 결정 2A: 추천 종목 + 시설 데이터 표기(별칭) — 그래프/데모 두 경로 공통.
+        "facility_filter_sports": expand_sports(filter_sports),
     }
 
 

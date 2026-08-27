@@ -4,7 +4,7 @@
 이므로 fitness.py 는 데모 근사 컷으로 폴백한다. 이 파일은 그 무중단 폴백 계약을 검증한다.
 (공식 인증기준 경로는 test_fitness_official.py 가 data/sponavi.db 로 검증.)
 """
-from app.fitness import _with_unit, assess_fitness
+from app.fitness import SPORT_ALIAS, _with_unit, assess_fitness, expand_sports
 
 
 def test_store_fixture_is_fallback_path(store):
@@ -66,6 +66,34 @@ def test_videos_labeled_and_filtered(store):
     assert any("유연성" in (v["title"] or "") for v in res["videos"])
     for v in res["videos"]:
         assert v["source"]
+
+
+# ---------------------------------------------------------------------------
+# 종목 별칭 확장 (결정 2A · C-27)
+#   추천은 '헬스'라고 말하는데 공공체육시설 데이터는 '체력단련장업' 이라 매칭이 0건이었다.
+# ---------------------------------------------------------------------------
+def test_sport_alias_table_loaded():
+    assert SPORT_ALIAS, "data/sport_alias.json 을 못 읽었다"
+    assert "체력단련장업" in SPORT_ALIAS["헬스"]
+    # '_meta' 같은 주석 키는 데이터가 아니다
+    assert not any(k.startswith("_") for k in SPORT_ALIAS)
+
+
+def test_expand_sports_keeps_order_and_dedupes():
+    out = expand_sports(["헬스", "헬스"])
+    assert out[0] == "헬스"                 # 추천 원문이 앞
+    assert "체력단련장업" in out             # 별칭이 뒤
+    assert len(out) == len(set(out))        # 중복 없음
+    assert expand_sports([]) == []
+    # 별칭 표에 없는 종목은 그대로 통과
+    assert expand_sports(["태권도"]) == ["태권도"]
+
+
+def test_facility_filter_sports_expanded_with_alias(store):
+    # 근력 약점(악력 낮음) → 추천 '헬스' → 시설 표기 '체력단련장업' 까지 나가야 한다
+    res = assess_fitness(store, {"age": 27, "sex": "M", "measures": {"grip_kg": 10}})
+    assert "헬스" in res["facility_filter_sports"]
+    assert "체력단련장업" in res["facility_filter_sports"]
 
 
 # ---------------------------------------------------------------------------

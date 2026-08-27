@@ -362,6 +362,40 @@ def filter_reply(reply: Any, store: Optional[Store] = None) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# reply/slot 정합 (결정 CQ5A · ⚠#14) — 후필터를 통과한 문장이라도 실제 슬롯 갱신과
+# 어긋나면 사용자를 속인다. 순수 함수 + 패턴 표로 두 경우만 바로잡는다.
+#   D-08: 반영된 슬롯이 없는데 "확인해 뒀어요" 류 → 중립 템플릿(사실·자격 단정 없음, P-2)
+#   D-10: 슬롯이 확정됐는데 "확인이 필요해요" 류 → 확정 템플릿
+# 그 밖은 원문 그대로. None 은 None.
+# ---------------------------------------------------------------------------
+# (규칙, 발화 패턴, 대체 템플릿) — D-10 만 "슬롯이 있을 때" 규칙이다.
+_RECONCILE_PATTERNS = (
+    (
+        "D-08",
+        re.compile(r"확인해|확인했|둘게|해\s*둘게|해\s*뒀|기록했|반영했|설정했|저장했"),
+        "말씀 감사해요. 아직 반영된 정보는 없어요 — 아래 선택지에서 골라 주시면 이어갈게요.",
+    ),
+    (
+        "D-10",
+        re.compile(r"확인이\s*필요|먼저\s*확인|확인해\s*주세요|확인이\s*안|확실하지\s*않|알\s*수\s*없"),
+        "확인했어요 — 입력해 주신 정보로 이어갈게요.",
+    ),
+)
+
+
+def _reconcile_reply(reply: Optional[str], updates: dict) -> Optional[str]:
+    """reply 와 slot_updates 의 불일치를 템플릿으로 바로잡는다(값은 되읊지 않는다)."""
+    if not isinstance(reply, str) or not reply.strip():
+        return reply
+    has_updates = bool(updates)
+    for rule, pattern, template in _RECONCILE_PATTERNS:
+        wants_updates = rule == "D-10"
+        if has_updates is wants_updates and pattern.search(reply):
+            return template
+    return reply
+
+
+# ---------------------------------------------------------------------------
 # answer fact-lock 후필터 (PRD FR-13 AC9) — 표현만 LLM, 사실은 재료(grounding) 원문
 #   ① 숫자 토큰 대조(콤마 제거 정규화) ② 제도명 대조 ③ 2인칭 자격 단정 차단
 #   ④ 길이 상한 ⑤ 하나라도 걸리면 None → 클라는 faq_key 카드 폴백.
@@ -930,7 +964,8 @@ def run_nlu(store: Store, payload: dict) -> tuple[dict, dict]:
         "intent": valid["intent"],
         "faq_key": faq_key,
         "region_candidates": [{"cd": e["cd"], "nm": e["label"]} for e in candidates],
-        "reply": filter_reply(valid.get("reply"), store),
+        # 후필터(사실 문장 폐기) → 정합(슬롯과 어긋난 확인/미확인 발화 교정) 순서(CQ5A)
+        "reply": _reconcile_reply(filter_reply(valid.get("reply"), store), updates),
         # fact-lock 통과분만 — 실패 시 null 이고 클라는 faq_key 카드로 폴백(AC9)
         "answer": filter_answer(valid.get("answer"), grounding, store),
         "provider": provider_used,

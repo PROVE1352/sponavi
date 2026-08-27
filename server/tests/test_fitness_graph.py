@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "server"))
 
 from app import store as store_mod  # noqa: E402
-from app.fitness import assess_fitness  # noqa: E402
+from app.fitness import SPORT_ALIAS, assess_fitness  # noqa: E402
 
 
 def _db_ready(path: str) -> bool:
@@ -84,7 +84,11 @@ def test_facility_filter_sports_from_graph_dedup(off_store):
     all_sport_names = {
         sp["name"] for r in res["recommendations"] for sp in r["sports"]
     }
-    assert set(fs) <= all_sport_names
+    assert all_sport_names <= set(fs)
+    # 추천 원문이 앞, 시설 표기 별칭(결정 2A)이 뒤 — 그 밖의 이름은 섞이지 않는다
+    assert set(fs[: len(all_sport_names)]) == all_sport_names
+    aliases = {a for n in all_sport_names for a in SPORT_ALIAS.get(n, ())}
+    assert set(fs) <= all_sport_names | aliases
 
 
 # --------------------------------------------------------------------------

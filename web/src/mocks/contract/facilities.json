@@ -1,0 +1,26 @@
+{
+  "_comment": "T2A 계약: 프로덕션 실DB 사실 중 목이 반드시 재현해야 하는 값들. dvoucher_row 는 OV13(등록강좌 수강료 결측) 행의 표준형 — fee_month/subsidy/copay 3셀 전부 null 이고 좌표는 구 중심 폴백이다.",
+  "dvoucher_row": {
+    "id": "D01",
+    "name": "서울장애인체육관",
+    "sports": [
+      "수영",
+      "재활운동",
+      "탁구"
+    ],
+    "lat": 37.6096,
+    "lon": 127.0257,
+    "coord_source": "centroid",
+    "dist_km": null,
+    "sigungu_nm": "성북구",
+    "fee_month": null,
+    "subsidy": null,
+    "copay": null,
+    "disability_support": true,
+    "source": "dvoucher"
+  },
+  "fee_null_count_P5": 6,
+  "supply_gap_seongbuk_voucher_count": 161,
+  "supply_gap_seongbuk_dvoucher_count": 41,
+  "_count_note": "실DB 실측(2026-08-27, engine.assess 성북구 11290): svoucher(P1·P2) voucher_count=161, dvoucher(P5) voucher_count=41. 실DB voucher 행 키 = coord_source·copay·disability_support·dist_km·fee_month·id·lat·lon·name·sigungu_nm·source·sports·subsidy (addr/course_name 없음)."
+}

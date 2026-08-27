@@ -155,9 +155,12 @@ const DEMO_RANGE: Record<string, { rule: string; ok: (v: number) => boolean }> =
 }
 
 // 데모 3등급 근사 컷(코드→컷값). 신체조성(hb=null)은 DEMO_RANGE 로 판정한다.
+// 이 표는 연령 구분 없는 데모 근사값이다(공식 기준표는 서버 fitness_norm).
+// crunch_cross 38 · sit_reach 6 만 25~29세 남 컷에 맞춰 뒀다 — 그래야 P2 프리필
+// (교차윗몸 35 · 앉아굽히기 6)이 프로덕션처럼 근지구력 한 건만 약점으로 잡힌다.
 const DEMO_CUT: Record<string, number> = {
-  grip_rel: 45, crunch_cross: 35, reaction_time: 0.35, shuttle_10m_run: 11,
-  air_time: 0.5, standing_jump: 190, shuttle_20m: 35, treadmill_step: 35, sit_reach: 8,
+  grip_rel: 45, crunch_cross: 38, reaction_time: 0.35, shuttle_10m_run: 11,
+  air_time: 0.5, standing_jump: 190, shuttle_20m: 35, treadmill_step: 35, sit_reach: 6,
   chair_stand: 18, walk_2min: 90, walk_6min: 500, agility_3m: 8, fig8_walk: 22,
   situp_roll: 30, side_step: 40, shuttle_15m: 50, eyehand_cnt: 15,
   repeat_jump: 30, illinois: 18, eyehand_sec: 12,
@@ -285,6 +288,22 @@ function rangeComparison(name: string, value: number, unit: string | null, rule:
 // 블록 후보(GraphNamed | string) → 이름. fitness_map 폴백은 문자열이라 근거가 없다.
 function nameOf(x: GraphNamed | string): string {
   return typeof x === 'string' ? x : x.name
+}
+
+// C-27/2A 종목 별칭: 그래프 추천 종목명("헬스")과 시설 데이터의 체육시설업 종목명
+// ("체력단련장업")이 달라, 별칭을 안 붙이면 공공·등록 시설 매칭이 0건이 된다.
+// 정본 표는 서버 데이터(sport_alias) — 목은 데모 경로에 걸리는 최소분만 흉내낸다.
+const SPORT_ALIASES: Record<string, string[]> = {
+  헬스: ['체력단련장업', '체력단련장'],
+  수영: ['수영장업'],
+}
+
+function withSportAliases(sports: string[]): string[] {
+  const out = [...sports]
+  for (const s of sports) {
+    for (const alias of SPORT_ALIASES[s] ?? []) if (!out.includes(alias)) out.push(alias)
+  }
+  return out
 }
 
 export function mockFitness(req: FitnessRequest): FitnessResponse {
@@ -418,7 +437,8 @@ export function mockFitness(req: FitnessRequest): FitnessResponse {
     recommendations,
     derived,
     videos,
-    facility_filter_sports: recSports,
+    // 시설 필터로 나가는 목록에만 별칭을 더한다(추천 카드는 사람이 읽는 종목명 그대로).
+    facility_filter_sports: withSportAliases(recSports),
   }
   if (g === 'gap') resp.message = '이 연령은 국민체력100 공식 기준이 없습니다. 유소년(11~12세) 기준을 참고로 제공합니다.'
   return resp

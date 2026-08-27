@@ -1,0 +1,28 @@
+{
+  "_comment": "3A 계약: GET /api/demo/personas 각 페르소나 최상위 demo:{fitness, parq_preset}. 값 근거 = 설계문서 '체력 프리필 값'(TestClient 실측 기준표). 항목 코드는 /api/fitness/items 카탈로그 기준(악력은 kg 가 아니라 grip_rel %). P5 는 crunch_cross 33(30~34 남 3등급 컷 35)만 약점이고 나머지는 정상 범위 '잠정값' — Lane S 가 기준표로 확정한다. 그래서 대조 테스트(test_mock_parity)는 P5 는 crunch_cross·parq_preset 만, P2 는 dict 전체를 강제한다.",
+  "P1": { "fitness": null, "parq_preset": false },
+  "P2": {
+    "fitness": {
+      "crunch_cross": 35,
+      "shuttle_20m": 42,
+      "sit_reach": 6,
+      "grip_rel": 58,
+      "height_cm": 175,
+      "weight_kg": 72
+    },
+    "parq_preset": true
+  },
+  "P3": { "fitness": null, "parq_preset": false },
+  "P4": { "fitness": null, "parq_preset": false },
+  "P5": {
+    "fitness": {
+      "crunch_cross": 33,
+      "shuttle_20m": 40,
+      "sit_reach": 9,
+      "grip_rel": 56,
+      "height_cm": 173,
+      "weight_kg": 70
+    },
+    "parq_preset": true
+  }
+}

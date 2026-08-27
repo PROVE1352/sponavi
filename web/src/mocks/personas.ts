@@ -4,7 +4,20 @@
 //   → dvoucher 연령 상한(만 69세)이 존재한다고 가정하고 "72세 청각장애(연령 초과)" 케이스를 채택.
 //     소득기준 의존이 없어 가장 방어적. dvoucher 규칙 verified:false 로 표기(SPEC §0-5).
 
-import type { AltEdge, AssessResponse, DemoPersona, Selection } from '../types'
+import type { AltEdge, AssessResponse, DemoPersona, Selection, VoucherFacility } from '../types'
+import ALT_EDGES_JSON from './contract/alt_edges.json'
+import FACILITIES_JSON from './contract/facilities.json'
+import PERSONAS_DEMO_JSON from './contract/personas_demo.json'
+
+// ---------- 계약 데이터(T2A) ----------
+// contract/*.json 은 목과 server/tests/test_mock_parity.py 가 공유하는 단일 본이다.
+// 여기서 손으로 한 벌 더 적으면 두 벌이 갈라지므로, 아래 세 상수 말고는 계약값을 쓰지 않는다.
+// (JSON 리터럴 타입은 string/number 로 넓어져 유니온에 안 맞으므로 좁히기만 한다.)
+const CONTRACT_ALT_EDGES = ALT_EDGES_JSON as unknown as Record<string, AltEdge[]>
+const CONTRACT_DEMO = PERSONAS_DEMO_JSON as unknown as Record<string, DemoPersona['demo']>
+const CONTRACT_DVOUCHER_ROW = FACILITIES_JSON.dvoucher_row as unknown as VoucherFacility
+const SEONGBUK_VOUCHER_COUNT = FACILITIES_JSON.supply_gap_seongbuk_voucher_count
+const SEONGBUK_DVOUCHER_COUNT = FACILITIES_JSON.supply_gap_seongbuk_dvoucher_count
 
 const SVOUCHER_APPLY = {
   how: '온라인 신청 → 이용권 카드 발급 → 가맹시설에서 결제 시 지원금 자동 차감',
@@ -49,18 +62,6 @@ const ALT_PROGRAMS = {
     benefit: '무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음',
     apply_url: 'https://www.kspo.or.kr',
   },
-  tteuntteun: {
-    id: 'tteuntteun',
-    name: '튼튼머니(스포츠활동 인센티브)',
-    benefit: '만 4세+ 누구나 · 소득 무관 · 스포츠활동/체력측정으로 연 최대 5만 포인트 적립',
-    apply_url: 'https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo',
-  },
-  culture_deduction: {
-    id: 'culture_deduction',
-    name: '체육시설 문화비 소득공제',
-    benefit: '헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)',
-    apply_url: 'https://www.culture.go.kr/deduction',
-  },
   senior_voucher: {
     id: 'senior_voucher',
     name: '어르신 스포츠 상품권',
@@ -104,11 +105,8 @@ const SELECTION_RANK5_ADULT: Selection = {
 }
 
 // P2: svoucher 소득·연령 미달 → 매칭 대체경로(상위 3 노출)
-const P2_ALT_EDGES: AltEdge[] = [
-  { to: 'public_program', note: '이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램', curated: PENDING, program: ALT_PROGRAMS.public_program },
-  { to: 'tteuntteun', note: '이용권 소득기준 미달 → 튼튼머니(만 4세+ 소득무관 포인트 적립)', curated: OFFICIAL, program: ALT_PROGRAMS.tteuntteun },
-  { to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 30% 소득공제', curated: OFFICIAL, program: ALT_PROGRAMS.culture_deduction },
-]
+// CQ2A: to 유일 + '공식 확인' 우선 정렬은 서버가 하고, 그 결과가 계약 JSON 이다.
+const P2_ALT_EDGES: AltEdge[] = CONTRACT_ALT_EDGES.P2
 
 // P4: dvoucher 연령 초과(72세) → 어르신 특화 대체경로
 const P4_ALT_EDGES: AltEdge[] = [
@@ -117,12 +115,20 @@ const P4_ALT_EDGES: AltEdge[] = [
   { to: 'senior_free_class', note: '65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)', curated: OFFICIAL, program: ALT_PROGRAMS.senior_free_class },
 ]
 
-// P5: dvoucher 자격 ✓ 이나 예상 5순위 → 대기 동안 '지금 바로 되는' 공식 확인 대안 3
-const P5_ALT_EDGES: AltEdge[] = [
-  { to: 'public_program', note: '장애인 접근성 지원 공공체육시설 — 지금 등록 가능', curated: OFFICIAL, program: ALT_PROGRAMS.public_program },
-  { to: 'tteuntteun', note: '만 4세+ 누구나 · 소득 무관 스포츠활동 포인트 적립', curated: OFFICIAL, program: ALT_PROGRAMS.tteuntteun },
-  { to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 이용료 30% 소득공제', curated: OFFICIAL, program: ALT_PROGRAMS.culture_deduction },
-]
+// P5: dvoucher 자격 ✓ 이나 예상 5순위 → 대기 동안 '지금 바로 되는' 대안.
+// 실DB 는 공식 확인 2 + 검증 대기 1 이라 '지금 바로 되는 것' 필터(공식 확인)는 2줄이다(P-1).
+const P5_ALT_EDGES: AltEdge[] = CONTRACT_ALT_EDGES.P5
+
+// P5 장애인 가맹 6곳(OV13): 등록강좌 수강료가 전부 결측이라 fee/subsidy/copay 3셀 모두 null.
+// 행 모양은 계약 JSON 의 dvoucher_row 한 벌에서 나오고, 여기선 식별자·이름만 갈아 끼운다.
+const P5_VOUCHER_FACILITIES: VoucherFacility[] = [
+  { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], addr: '서울 성북구 화랑로 100', course_name: '장애인 재활 수영' },
+  { id: 'D11', name: '성북장애인복지관 체육실', sports: ['재활운동', '요가'], addr: '서울 성북구 삼선교로 16', course_name: '재활 운동교실' },
+  { id: 'D12', name: '정릉생활체육관', sports: ['탁구', '배드민턴'], addr: '서울 성북구 정릉로 242', course_name: '장애인 탁구' },
+  { id: 'D13', name: '길음스포츠센터', sports: ['수영', '헬스'], addr: '서울 성북구 길음로 32', course_name: '장애인 수영 기초' },
+  { id: 'D14', name: '월곡재활체육센터', sports: ['재활운동', '수영'], addr: '서울 성북구 월곡로 87', course_name: '수중 재활' },
+  { id: 'D15', name: '석관동체력단련장', sports: ['헬스'], addr: '서울 성북구 화랑로13길 3', course_name: '장애인 근력 교실' },
+].map((row) => ({ ...CONTRACT_DVOUCHER_ROW, ...row }))
 
 // ---------- 요청 바디 (GET /api/demo/personas) ----------
 export const PERSONA_REQUESTS: DemoPersona[] = [
@@ -137,6 +143,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     income_class: '기초생활수급',
     disability: { has: false, type: null },
     location: { lat: 37.6057, lon: 127.017 },
+    demo: CONTRACT_DEMO.P1,
   },
   {
     id: 'P2',
@@ -149,6 +156,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     income_class: '그외',
     disability: { has: false, type: null },
     location: { lat: 37.6057, lon: 127.017 },
+    demo: CONTRACT_DEMO.P2,
   },
   {
     id: 'P3',
@@ -161,6 +169,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     income_class: '차상위',
     disability: { has: true, type: '지체' },
     location: { lat: 37.6057, lon: 127.017 },
+    demo: CONTRACT_DEMO.P3,
   },
   {
     id: 'P4',
@@ -176,6 +185,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     income_class: '그외',
     disability: { has: true, type: '청각' },
     location: { lat: 38.3502, lon: 128.4803 },
+    demo: CONTRACT_DEMO.P4,
   },
   {
     id: 'P5',
@@ -188,6 +198,7 @@ export const PERSONA_REQUESTS: DemoPersona[] = [
     income_class: '그외',
     disability: { has: true, type: '지체' },
     location: { lat: 37.6057, lon: 127.017 },
+    demo: CONTRACT_DEMO.P5,
   },
 ]
 
@@ -234,6 +245,8 @@ const P1: AssessResponse = {
     { from: 'person', to: 'svoucher', edge: '자격', result: 'ok', label: '만 5~18세·기초수급 충족' },
     { from: 'svoucher', to: 'facility:V01', edge: '적합·접근', result: 'ok', label: '성북스포츠클럽 · 0.3km' },
   ],
+  // 자격 ✓ · 실패 사유 없음 → 매칭 대체경로 없음(계약 JSON P1 = []).
+  alt_edges: CONTRACT_ALT_EDGES.P1,
   nearby: {
     voucher_facilities: [
       { id: 'V01', name: '성북스포츠클럽', sports: ['수영', '헬스'], lat: 37.6061, lon: 127.0242, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 95000, subsidy: 105000, copay: 0, disability_support: null, source: 'voucher', addr: '서울 성북구 오패산로 12', course_name: '유아·주니어 수영 기초' },
@@ -242,12 +255,14 @@ const P1: AssessResponse = {
       { id: 'V04', name: '종암필라테스랩', sports: ['필라테스', '요가'], lat: 37.596, lon: 127.033, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', fee_month: 160000, subsidy: 105000, copay: 55000, disability_support: null, source: 'voucher', addr: '서울 성북구 종암로 30', course_name: '성인 필라테스 입문' },
     ],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가(오전 3만원)·실버 수중걷기 무료 · 접근성 지원', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가(오전 3만원)·실버 수중걷기 무료 · 접근성 지원', disability_support: true, fee_month: 30000, source: 'public', faci_gb: '공공', addr: '서울 성북구 화랑로 189' },
     ],
+    // 1A: 이용권 카드가 적격 → 가맹시설이 1순위.
+    primary: 'voucher',
   },
   supply_gap: {
     radius_km: 3,
-    voucher_count: 4,
+    voucher_count: SEONGBUK_VOUCHER_COUNT, // 실DB 성북구 svoucher 161(P1도 같은 구)
     voucher_scope: 'sigungu',
     sigungu_nm: '성북구',
     alt_count: 3,
@@ -302,19 +317,24 @@ const P2: AssessResponse = {
   alt_edges: P2_ALT_EDGES,
   nearby: {
     voucher_facilities: [],
+    // OV1: 실좌표(api) 행이 먼저, 구 중심 폴백(centroid) 행이 뒤. OV6: faci_gb 배지(공공/신고).
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가 오전 월 3만원 · 실버 수중걷기 무료', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
-      { id: 'P03', name: '월곡스포츠문화센터', type: '공공체육시설', sports: ['필라테스', '요가', '스트레칭'], lat: 37.6022, lon: 127.0405, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '저녁 스트레칭·요가 월 4만원', disability_support: false, fee_month: 40000, source: 'public', addr: '서울 성북구 월곡로 21' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '구민 요가 오전 월 3만원 · 실버 수중걷기 무료', disability_support: true, fee_month: 30000, source: 'public', faci_gb: '공공', addr: '서울 성북구 화랑로 189' },
+      { id: 'P03', name: '월곡스포츠문화센터', type: '공공체육시설', sports: ['필라테스', '요가', '스트레칭'], lat: 37.6022, lon: 127.0405, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '저녁 스트레칭·요가 월 4만원', disability_support: false, fee_month: 40000, source: 'public', faci_gb: '공공', addr: '서울 성북구 월곡로 21' },
+      { id: 'P07', name: '돈암동체력단련장', type: '공공체육시설', sports: ['헬스'], lat: 37.6057, lon: 127.017, coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구', note: '신고 체육시설업 · 월 4만원대', disability_support: false, fee_month: 45000, source: 'public', faci_gb: '신고', addr: '서울 성북구 동소문로 47' },
     ],
+    // 1A: svoucher ✗ → 가맹시설이 아니라 대안이 1순위(⚠#10).
+    primary: 'alternatives',
   },
   supply_gap: {
     radius_km: 3,
-    voucher_count: 4,
+    // OV5: "가맹 N곳"은 잘린 목록 길이가 아니라 구 단위 가맹 수(계약 JSON).
+    voucher_count: SEONGBUK_VOUCHER_COUNT,
     voucher_scope: 'sigungu',
     sigungu_nm: '성북구',
     alt_count: 2,
     nearest: null,
-    message: '스포츠강좌이용권 · 성북구 가맹 4곳',
+    message: `스포츠강좌이용권 · 성북구 가맹 ${SEONGBUK_VOUCHER_COUNT}곳`,
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }
@@ -369,8 +389,9 @@ const P3: AssessResponse = {
       { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], lat: 37.6396, lon: 127.0257, coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구', fee_month: 0, subsidy: 110000, copay: 0, disability_support: true, source: 'dvoucher', addr: '서울 강북구 한천로 1000', course_name: '장애인 재활 수영(무료)' },
     ],
     alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 시설 · 저가/무료 프로그램', disability_support: true, fee_month: 30000, source: 'public', addr: '서울 성북구 화랑로 189' },
+      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 시설 · 저가/무료 프로그램', disability_support: true, fee_month: 30000, source: 'public', faci_gb: '공공', addr: '서울 성북구 화랑로 189' },
     ],
+    primary: 'voucher',
   },
   supply_gap: {
     radius_km: 3,
@@ -433,6 +454,8 @@ const P4: AssessResponse = {
   nearby: {
     voucher_facilities: [],
     alternatives: [],
+    // 1A: dvoucher ✗(연령 초과) → 대안이 1순위.
+    primary: 'alternatives',
   },
   supply_gap: {
     radius_km: 3,
@@ -494,21 +517,21 @@ const P5: AssessResponse = {
   ],
   alt_edges: P5_ALT_EDGES,
   nearby: {
-    voucher_facilities: [
-      { id: 'D01', name: '서울장애인체육관', sports: ['수영', '재활운동', '탁구'], lat: 37.6396, lon: 127.0257, coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구', fee_month: 0, subsidy: 110000, copay: 0, disability_support: true, source: 'dvoucher', addr: '서울 강북구 한천로 1000', course_name: '장애인 재활 수영(무료)' },
-    ],
-    alternatives: [
-      { id: 'P01', name: '성북구민체육센터', type: '공공체육시설(접근성 지원)', sports: ['요가', '수영', '헬스', '에어로빅'], lat: 37.6046, lon: 127.0413, coord_source: 'api', dist_km: 1.6, sigungu_nm: '성북구', note: '접근성 지원 · 저가/무료 프로그램', disability_support: true, fee_month: 0, source: 'public', addr: '서울 성북구 화랑로 189' },
-    ],
+    // OV13: 6곳 전부 수강료 미등록(3셀 null) — '무료'(0원)와 구분해야 한다.
+    voucher_facilities: P5_VOUCHER_FACILITIES,
+    // 실DB: 반경 안에 접근성 지원 공공시설이 잡히지 않는다(없는 시설을 만들지 않는다, P-1).
+    alternatives: [],
+    // 1A: dvoucher 자격 ✓ → 가맹시설이 1순위(선정 대기와 무관).
+    primary: 'voucher',
   },
   supply_gap: {
     radius_km: 3,
-    voucher_count: 0,
+    voucher_count: SEONGBUK_DVOUCHER_COUNT,
     voucher_scope: 'sigungu',
     sigungu_nm: '성북구',
-    alt_count: 1,
-    nearest: { name: '서울장애인체육관', coord_source: 'centroid', dist_km: null, sigungu_nm: '강북구' },
-    message: '성북구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
+    alt_count: 0,
+    nearest: { name: '서울장애인체육관', coord_source: 'centroid', dist_km: null, sigungu_nm: '성북구' },
+    message: `장애인스포츠강좌이용권 · 성북구 가맹 ${SEONGBUK_DVOUCHER_COUNT}곳`,
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }

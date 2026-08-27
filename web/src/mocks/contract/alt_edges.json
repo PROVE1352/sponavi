@@ -1,0 +1,74 @@
+{
+  "_comment": "T2A 계약 데이터 1본. 웹 목(mocks/personas.ts)과 server/tests/test_mock_parity.py 가 같은 파일을 읽는다. 순서 = 서버 _collect_alt_edges 의 dedupe 결과(CQ2A: to 유일 · '공식 확인' 우선).",
+  "P1": [],
+  "P2": [
+    {
+      "to": "tteuntteun",
+      "note": "이용권 소득기준 미달 → 튼튼머니(만 4세+ 소득무관 포인트 적립)",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "tteuntteun",
+        "name": "튼튼머니(스포츠활동 인센티브)",
+        "benefit": "만 4세+ 누구나 · 소득 무관 · 스포츠활동/체력측정으로 연 최대 5만 포인트 적립",
+        "apply_url": "https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo"
+      }
+    },
+    {
+      "to": "culture_deduction",
+      "note": "근로소득자면 헬스장·수영장 30% 소득공제",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "culture_deduction",
+        "name": "체육시설 문화비 소득공제",
+        "benefit": "헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)",
+        "apply_url": "https://www.culture.go.kr/deduction"
+      }
+    },
+    {
+      "to": "public_program",
+      "note": "이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램",
+      "curated": "검증 대기",
+      "program": {
+        "id": "public_program",
+        "name": "공공체육시설 프로그램(무료/저가)",
+        "benefit": "무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음",
+        "apply_url": "https://www.kspo.or.kr"
+      }
+    }
+  ],
+  "P5": [
+    {
+      "to": "tteuntteun",
+      "note": "만 4세+ 누구나 · 소득 무관 스포츠활동 포인트 적립",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "tteuntteun",
+        "name": "튼튼머니(스포츠활동 인센티브)",
+        "benefit": "만 4세+ 누구나 · 소득 무관 · 스포츠활동/체력측정으로 연 최대 5만 포인트 적립",
+        "apply_url": "https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo"
+      }
+    },
+    {
+      "to": "culture_deduction",
+      "note": "근로소득자면 헬스장·수영장 이용료 30% 소득공제",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "culture_deduction",
+        "name": "체육시설 문화비 소득공제",
+        "benefit": "헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)",
+        "apply_url": "https://www.culture.go.kr/deduction"
+      }
+    },
+    {
+      "to": "public_program",
+      "note": "장애인 접근성 지원 공공체육시설 — 공식 페이지 확인 전(검증 대기)",
+      "curated": "검증 대기",
+      "program": {
+        "id": "public_program",
+        "name": "공공체육시설 프로그램(무료/저가)",
+        "benefit": "무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음",
+        "apply_url": "https://www.kspo.or.kr"
+      }
+    }
+  ]
+}

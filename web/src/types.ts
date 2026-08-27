@@ -110,11 +110,14 @@ export interface VoucherFacility {
   dist_km: number | null
   coord_source?: CoordSource
   sigungu_nm?: string
-  fee_month: number
-  subsidy: number
-  copay: number
+  // CQ1A: 등록강좌 수강료 결측이면 3셀 전부 null → '미등록·시설 문의'. 0 은 '무료'(다른 뜻).
+  // 비적격 제도의 시설이면 subsidy=0, copay=fee_month (1A — 지원금 차감 금지).
+  fee_month: number | null
+  subsidy: number | null
+  copay: number | null
   disability_support: boolean | null
-  // 화면 표기용(가맹 voucher | 장애인 dvoucher). 계약 확장(옵셔널).
+  // 화면 표기용(가맹 voucher | 장애인 dvoucher). OV3 이후 서버가 항상 실어 보낸다 —
+  // 구버전 응답 호환 위해 타입만 옵셔널로 남긴다.
   source?: 'voucher' | 'dvoucher'
   addr?: string
   course_name?: string
@@ -135,11 +138,15 @@ export interface AlternativeFacility {
   fee_month?: number
   addr?: string
   source?: 'public' | 'dvoucher'
+  // OV6: 시설 구분(faci_cd 조인) — 공공/신고/등록. 미마이그레이션 행은 null.
+  faci_gb?: '공공' | '신고' | '등록' | null
 }
 
 export interface Nearby {
   voucher_facilities: VoucherFacility[]
   alternatives: AlternativeFacility[]
+  // 1A: 자격 인지 정렬 — 이용권 카드가 적격일 때만 'voucher'. 웹은 이 순서대로 덱·리스트를 그린다.
+  primary: 'voucher' | 'alternatives'
 }
 
 export interface CoverageStat {
@@ -384,6 +391,9 @@ export interface DemoPersona extends AssessRequest {
   id: string
   label: string // 데모 바 버튼용 짧은 설명
   summary: string // 기대 결과 한 줄
+  // 3A: 심사위원이 혼자 밟는 경로용 프리필. fitness 는 /api/fitness/items 코드→값,
+  // parq_preset 이면 PAR-Q 를 '전부 아니오'로 채운다. 프리필 없는 페르소나는 fitness=null.
+  demo: { fitness: Record<string, number> | null; parq_preset: boolean }
 }
 
 // ---- 에러 규약 ----

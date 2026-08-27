@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -14,5 +15,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  // 단위 테스트(T1A): `npm test` → vitest. 순수 함수(format/mocks 계약)만 다루므로 DOM 불필요.
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
   },
 })

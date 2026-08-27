@@ -162,6 +162,9 @@ function toAlt(f: RawFacility, from: { lat: number; lon: number }): AlternativeF
     disability_support: f.disability_support,
     fee_month: repFee(f.id),
     source: 'public',
+    // OV6: 시설 구분 배지. 목 fixtures 의 대안 풀은 전부 공공체육시설이다
+    // (신고/등록이 섞인 모습은 페르소나 canned 응답에서 본다).
+    faci_gb: '공공',
     addr: f.addr,
   }
 }
@@ -329,7 +332,12 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     eligibility,
     path,
     alt_edges: altEdges,
-    nearby: { voucher_facilities: voucherFacilities, alternatives },
+    nearby: {
+      voucher_facilities: voucherFacilities,
+      alternatives,
+      // 1A: 이용권 카드가 적격일 때만 가맹시설이 1순위(⚠#10 — ✗ 사용자에게 가맹 1순위 금지).
+      primary: (disabled ? dvoucherEligible : svoucherEligible) ? 'voucher' : 'alternatives',
+    },
     supply_gap: {
       radius_km: radius,
       voucher_count: voucherCount,

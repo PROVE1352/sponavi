@@ -1,0 +1,596 @@
+#!/usr/bin/env python3
+"""SQLite → 정적 `web/public/gap.html` (W3 "뒷면").
+
+앞면(챗 UI)이 시민에게 "지금 바로 되는 것"을 보여준다면, 뒷면은 공단·지자체가
+**다음에 할 수 있는 일**을 고르는 표 1장이다. 페이지 제목은 "가맹 유치 우선순위" —
+지역을 줄 세우는 순위표가 아니라 전환·확대 대상 후보 목록이다(3심 판사3: 공급공백은
+안내로 배치한다).
+
+## 무엇을 세나
+시군구(현행 코드) 1행당
+  · 장애인 가맹 = facilities(source='dvoucher')
+  · 일반 가맹   = facilities(source='voucher')
+  · 공공시설    = facilities(source='public' AND faci_gb='공공')   ← **신고·등록 제외**
+  · (접기) 신고 / 등록 = 같은 원천의 나머지 두 구분
+
+`source='public'` 을 통째로 "공공체육시설"이라 부르면 70%가 거짓이다
+(raw `faci_gb_nm` 기준 신고 73,544 · 공공 43,691 · 등록 628, OV6/E-17).
+그래서 이 표의 "공공시설" 열은 `faci_gb='공공'` 만 센다.
+
+## 왜 233행이 아니라 228행인가
+2026-07-01 인천 행정체제 개편으로 한 생활권이 옛/신 코드 여럿에 걸쳐 있고 원천이
+그 코드들을 섞어 쓴다(옛 서구 28260 은 voucher 383·dvoucher 0). 코드 하나만 세면
+"장애인 가맹 0곳"이라는 **거짓 공급공백**이 만들어진다(P-1 위반). 구 단위 카운트는
+`region.count_scope` 의 영역그룹대로 합산한다 — engine `_supply_gap` 과 같은 표,
+같은 함수. 233 - (3→1) - (4→1) = **228행**.
+
+## 제안 열 (첫 매칭 우선)
+  ① dvoucher == 0 ∧ 공공 ≥ 1  → "공공시설 N곳 가맹 전환 후보"
+  ② dvoucher == 0 ∧ 공공 == 0  → "—"
+  ③ dvoucher ≤ 2 ∧ 공공 ≥ T   → "가맹 확대 후보(공공시설 N곳)"
+  ④ 그 외                      → ""
+T 는 공공-only 재집계 뒤에야 정할 수 있다(Reviewer Concern 1) → **228행 공공 분포의
+75퍼센타일(선형보간, 반올림)** 을 쓴다. 실측 2026-08-27 적재본 기준 T=247.
+
+## 산출물
+`web/public/gap.html` (+ `web/public/gap.js`). CSP 가 `script-src 'self'` 라 인라인
+스크립트는 차단된다 → 정렬·검색 JS 는 같은 폴더의 외부 파일로 둔다. 스타일은
+`style-src 'unsafe-inline'` 이 허용되므로 인라인 `<style>` 로 자급한다(외부 CDN 0).
+Vite 가 `web/public/` 을 `web/dist/` 로 복사하므로 배포 파이프라인 변경은 없다.
+
+멱등: 같은 DB → 바이트 동일 출력(데이터 기준일 외에 시각을 찍지 않는다).
+
+Usage: python3 scripts/build_gap.py [--db PATH] [--out PATH] [--threshold N] [--quiet]
+"""
+from __future__ import annotations
+
+import argparse
+import html
+import math
+import sqlite3
+import sys
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Optional
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "server"))
+
+from app import region  # noqa: E402  (영역그룹·시도명 — engine 과 같은 표)
+from app import store as store_mod  # noqa: E402  (카운트 헬퍼를 재유도하지 않고 재사용)
+
+DEFAULT_OUT = REPO_ROOT / "web" / "public" / "gap.html"
+KST = timezone(timedelta(hours=9))
+
+PAGE_TITLE = (
+    "가맹 유치 우선순위 — 시군구별 장애인스포츠강좌이용권 가맹 현황과 공공체육시설 후보"
+)
+SHORT_TITLE = "가맹 유치 우선순위"
+
+# 제안 열 정렬 순위(= 행동 가능성 순). 규칙 평가 순서(첫 매칭)와는 별개다.
+RANK_CONVERT = 1   # 가맹 전환 후보
+RANK_EXPAND = 2    # 가맹 확대 후보
+RANK_NO_SEED = 3   # 전환할 공공시설이 없음("—")
+RANK_NONE = 4      # 해당 없음("")
+
+
+# ---------------------------------------------------------------------------
+# 제안 규칙
+# ---------------------------------------------------------------------------
+def suggest(dvoucher: int, public_cnt: int, threshold: int) -> tuple[str, int]:
+    """(문구, 정렬순위) — **첫 매칭 우선**.
+
+    평가 순서는 아래 그대로다. ①이 먼저이므로 dvoucher==0 이면 공공이 아무리 많아도
+    ③("확대")이 아니라 ①("전환")이 붙는다 — 가맹이 하나도 없는 곳에 "확대"는 말이
+    되지 않는다.
+    """
+    if dvoucher == 0 and public_cnt >= 1:
+        return f"공공시설 {public_cnt:,}곳 가맹 전환 후보", RANK_CONVERT
+    if dvoucher == 0 and public_cnt == 0:
+        return "—", RANK_NO_SEED
+    if dvoucher <= 2 and public_cnt >= threshold:
+        return f"가맹 확대 후보(공공시설 {public_cnt:,}곳)", RANK_EXPAND
+    return "", RANK_NONE
+
+
+def percentile(values: list[int], p: float) -> float:
+    """선형보간 백분위(numpy 기본과 같은 정의). 외부 의존 없이 결정론적으로."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    k = (len(ordered) - 1) * p
+    lo, hi = math.floor(k), math.ceil(k)
+    if lo == hi:
+        return float(ordered[int(k)])
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo)
+
+
+def threshold_from(public_counts: list[int]) -> int:
+    """T = 공공시설 수 분포의 75퍼센타일(반올림) = 상위 25% 기준."""
+    return int(round(percentile(public_counts, 0.75)))
+
+
+# ---------------------------------------------------------------------------
+# 집계
+# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class GapRow:
+    key: str                    # 그룹 id 또는 시군구코드(멱등 정렬용 안정 키)
+    codes: tuple[str, ...]      # 실제로 합산한 코드들
+    sido_cd: str
+    sido_nm: str
+    name: str                   # 표시명(그룹이면 '서해구·검단구 일대(옛 서구)')
+    group_id: Optional[str]
+    dvoucher: int
+    voucher: int
+    public: int                 # faci_gb='공공'
+    reported: int               # faci_gb='신고'
+    registered: int             # faci_gb='등록'
+
+
+def open_ro(db: Path) -> sqlite3.Connection:
+    """읽기 전용 연결 — 표를 뽑느라 서비스 DB 를 건드리지 않는다(9/17 동결 대비)."""
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _faci_gb_counts(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:
+    """{시군구코드: {'공공'|'신고'|'등록': n}} — source='public' 한 번의 GROUP BY."""
+    out: dict[str, dict[str, int]] = {}
+    cur = conn.execute(
+        "SELECT sigungu_cd AS cd, faci_gb AS gb, COUNT(*) AS n "
+        "FROM facilities WHERE source = 'public' GROUP BY sigungu_cd, faci_gb"
+    )
+    for r in cur.fetchall():
+        out.setdefault(r["cd"] or "", {})[r["gb"] or ""] = int(r["n"])
+    return out
+
+
+def load_rows(conn: sqlite3.Connection) -> list[GapRow]:
+    """시군구 마스터 → 영역그룹 합산까지 끝낸 행 목록(멱등 정렬).
+
+    마스터는 `Store.sigungu_all()`(= `/api/meta/sigungu` 와 같은 sigungu 테이블),
+    가맹 카운트는 `Store.count_facilities_in_sigungus()`(= engine `_supply_gap` 의
+    `voucher_count`) 를 그대로 쓴다. 여기서 SQL 을 다시 짜면 앞면·뒷면 숫자가
+    갈라진다.
+    """
+    store = store_mod.Store(conn, {}, {})
+    master = {r["cd"]: r["nm"] for r in store.sigungu_all() if r.get("cd")}
+    gb = _faci_gb_counts(conn)
+
+    rows: list[GapRow] = []
+    seen: set[str] = set()
+    for cd in sorted(master):
+        if cd in seen:
+            continue
+        scope, group = region.count_scope(cd)
+        codes = tuple(scope)
+        seen.update(codes)
+        # 표시명은 그룹 label 이 담당한다 — 잔재 코드(옛 서구)의 이름을 따로 노출하지
+        # 않는다. 카운트에는 그 코드도 포함된다(그래서 거짓 0 이 생기지 않는다).
+        pub = sum(gb.get(m, {}).get("공공", 0) for m in codes)
+        rep = sum(gb.get(m, {}).get("신고", 0) for m in codes)
+        reg = sum(gb.get(m, {}).get("등록", 0) for m in codes)
+        rows.append(GapRow(
+            key=(group["id"] if group else cd),
+            codes=codes,
+            sido_cd=region.canonical_sido(cd) or cd[:2],
+            sido_nm=region.sido_label(cd) or "",
+            name=(group["label"] if group else master[cd]),
+            group_id=(group["id"] if group else None),
+            dvoucher=store.count_facilities_in_sigungus("dvoucher", codes),
+            voucher=store.count_facilities_in_sigungus("voucher", codes),
+            public=pub,
+            reported=rep,
+            registered=reg,
+        ))
+
+    # 기본 정렬 = 장애인 가맹 asc → 공공 desc → 코드 asc(멱등 보장용 완전 순서)
+    rows.sort(key=lambda r: (r.dvoucher, -r.public, r.key))
+    return rows
+
+
+def data_date(conn: sqlite3.Connection, db: Path) -> tuple[str, str]:
+    """(표시용 'YYYY-MM-DD HH:MM KST', 근거 문구).
+
+    `GET /api/health` 의 `data_built` 와 같은 값 — DB meta 스탬프가 있으면 그것,
+    없으면 DB 파일 시각(store.db_mtime_iso 와 같은 규칙)."""
+    stamp = store_mod.Store(conn, {}, {}).build_stamp()
+    if stamp:
+        try:
+            dt = datetime.fromisoformat(stamp)
+        except ValueError:
+            return stamp, "DB 빌드 스탬프(meta.built_at)"
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M"), "DB 빌드 스탬프(meta.built_at)"
+    dt = datetime.fromtimestamp(db.stat().st_mtime, tz=timezone.utc)
+    return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M"), "DB 파일 시각(meta 스탬프 없음)"
+
+
+# ---------------------------------------------------------------------------
+# 렌더
+# ---------------------------------------------------------------------------
+CSS = """
+:root{
+  color-scheme:light;
+  --bg:#f8fafc; --card:#ffffff; --ink:#020617; --muted:#475569; --line:#e2e8f0;
+  --brand:#0369a1; --brand-800:#0c4a6e; --navy:#0f172a;
+  --dv:#7c3aed; --pub:#047857; --zebra:#f8fafc; --chip:#f1f5f9;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:'Atkinson Hyperlegible','Pretendard','Pretendard Variable',-apple-system,
+    BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',system-ui,sans-serif;
+  line-height:1.6;font-size:16px;
+}
+.page{max-width:1080px;margin:0 auto;padding:20px 16px 64px}
+a{color:var(--brand);text-underline-offset:3px}
+.back{display:inline-block;font-size:14px;font-weight:700;text-decoration:none;margin-bottom:14px}
+.back:hover{text-decoration:underline}
+h1{font-size:22px;line-height:1.35;margin:0 0 8px;letter-spacing:-.01em}
+h1 .sub{display:block;font-size:15px;font-weight:600;color:var(--muted);margin-top:4px}
+.lede{margin:0 0 14px;font-size:14px;color:var(--muted)}
+.summary{
+  margin:0 0 16px;padding:12px 14px;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;font-size:14px;
+}
+.summary b{font-variant-numeric:tabular-nums;font-size:17px;color:var(--brand-800)}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+#q{
+  flex:1 1 220px;min-width:0;padding:10px 12px;font:inherit;font-size:15px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;
+}
+#q:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+.vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.tnote{margin:0 0 10px;font-size:13px;color:var(--muted)}
+.tnote code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:12px}
+.toggle{
+  display:inline-flex;align-items:center;gap:6px;padding:9px 12px;font-size:14px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;
+  user-select:none;white-space:nowrap;
+}
+.toggle::before{content:"＋"}
+#det:checked ~ .controls .toggle{background:var(--brand);border-color:var(--brand);color:#fff}
+#det:checked ~ .controls .toggle::before{content:"−"}
+#det:focus-visible ~ .controls .toggle{outline:2px solid var(--brand);outline-offset:2px}
+.wrap{
+  overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;
+}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:600px;font-size:14px}
+th,td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+td{line-height:1.3}
+thead th{
+  position:sticky;top:0;z-index:2;background:var(--navy);color:#fff;font-size:13px;
+  font-weight:700;cursor:pointer;border-bottom:0;
+}
+thead th:hover{background:var(--brand-800)}
+thead th:focus-visible{outline:2px solid #7dd3fc;outline-offset:-2px}
+thead th::after{content:"";opacity:.55;font-size:11px;margin-left:5px}
+thead th[aria-sort="ascending"]::after{content:"▲";opacity:1}
+thead th[aria-sort="descending"]::after{content:"▼";opacity:1}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr:nth-child(even) td{background:var(--zebra)}
+tbody tr:hover td{background:#eff6ff}
+tbody td:first-child,thead th:first-child{position:sticky;left:0;z-index:1;background:var(--card)}
+thead th:first-child{z-index:3;background:var(--navy)}
+tbody tr:nth-child(even) td:first-child{background:var(--zebra)}
+tbody tr:hover td:first-child{background:#eff6ff}
+tbody tr[hidden]{display:none}
+.sido{display:block;font-size:11.5px;line-height:1.25;font-weight:600;color:var(--muted)}
+.nm{font-weight:700}
+.zero{color:#b91c1c;font-weight:800}
+.c-dv{color:var(--dv)}
+.c-pub{color:var(--pub)}
+.col-det{display:none}
+#det:checked ~ .wrap .col-det{display:table-cell}
+.pill{
+  display:inline-block;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:700;
+  white-space:nowrap;
+}
+.p1{background:#ede9fe;color:#5b21b6}
+.p2{background:#e0f2fe;color:#075985}
+.p3{background:var(--chip);color:var(--muted);font-weight:600}
+.notes{margin-top:22px;font-size:13px;color:var(--muted)}
+.notes h2{font-size:14px;color:var(--ink);margin:0 0 8px}
+.notes ol{margin:0;padding-left:20px}
+.notes li{margin-bottom:7px}
+.notes code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:12px}
+.empty{padding:18px 14px;font-size:14px;color:var(--muted)}
+@media (max-width:520px){
+  .page{padding:16px 12px 48px}
+  h1{font-size:19px}
+  th,td{padding:8px 10px}
+}
+"""
+
+
+def _esc(s: object) -> str:
+    return html.escape(str(s), quote=True)
+
+
+def _q_text(row: GapRow) -> str:
+    """검색 대조용 문자열(공백 제거). 시도 별칭·코드까지 넣어 '강원 고성'도 잡힌다.
+
+    이미 들어간 문자열의 부분열인 별칭('광주광역시' 안의 '광주')은 넣지 않는다 —
+    검색 결과는 같고 228행 × 별칭이라 파일 크기에만 영향을 준다."""
+    acc = ""
+    for part in (row.name, row.sido_nm, *region.SIDO_NAMES.get(row.sido_cd, ()), *row.codes):
+        p = region.norm(part)
+        if p and p not in acc:
+            acc += p
+    return acc
+
+
+def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: str) -> str:
+    total = len(rows)
+    zero_dv = sum(1 for r in rows if r.dvoucher == 0)
+    suggested = sum(
+        1 for r in rows if suggest(r.dvoucher, r.public, threshold)[1] != RANK_NONE
+    )
+    pubs = [r.public for r in rows]
+
+    body: list[str] = []
+    for i, r in enumerate(rows):
+        text, rank = suggest(r.dvoucher, r.public, threshold)
+        pill = ""
+        if rank == RANK_CONVERT:
+            pill = f'<span class="pill p1">{_esc(text)}</span>'
+        elif rank == RANK_EXPAND:
+            pill = f'<span class="pill p2">{_esc(text)}</span>'
+        elif rank == RANK_NO_SEED:
+            pill = f'<span class="pill p3">{_esc(text)}</span>'
+        dv_cls = ' class="zero"' if r.dvoucher == 0 else ' class="c-dv"'
+        body.append(
+            f'<tr data-i="{i}" data-q="{_esc(_q_text(r))}">'
+            f'<td data-v="{_esc(r.sido_nm + r.name)}">'
+            f'<span class="sido">{_esc(r.sido_nm)}</span>'
+            f'<span class="nm">{_esc(r.name)}</span></td>'
+            f'<td class="num" data-v="{r.dvoucher}"><span{dv_cls}>{r.dvoucher:,}</span></td>'
+            f'<td class="num" data-v="{r.voucher}">{r.voucher:,}</td>'
+            f'<td class="num" data-v="{r.public}"><span class="c-pub">{r.public:,}</span></td>'
+            f'<td class="num col-det" data-v="{r.reported}">{r.reported:,}</td>'
+            f'<td class="num col-det" data-v="{r.registered}">{r.registered:,}</td>'
+            f'<td data-v="{rank}">{pill}</td>'
+            "</tr>"
+        )
+
+    group_note = " · ".join(
+        f'{_esc(g["label"])} = <code>{"·".join(g["members"])}</code>'
+        for g in region.SIGUNGU_GROUPS
+    )
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#0f172a">
+<meta name="description" content="스포내비 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
+<meta name="robots" content="index,follow">
+<title>{_esc(PAGE_TITLE)} · 스포내비</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230369a1'/%3E%3Ctext x='32' y='46' font-family='sans-serif' font-size='42' font-weight='800' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+<style>
+@font-face{{font-family:'Atkinson Hyperlegible';font-style:normal;font-weight:400;font-display:swap;
+  src:url('/fonts/AtkinsonHyperlegible-Regular-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2212,U+FEFF,U+FFFD;}}
+@font-face{{font-family:'Atkinson Hyperlegible';font-style:normal;font-weight:700;font-display:swap;
+  src:url('/fonts/AtkinsonHyperlegible-Bold-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2212,U+FEFF,U+FFFD;}}
+{CSS}</style>
+</head>
+<body>
+<div class="page">
+<a class="back" href="/">← 스포내비로 돌아가기</a>
+<h1>{_esc(SHORT_TITLE)}<span class="sub">시군구별 장애인스포츠강좌이용권 가맹 현황과 공공체육시설 후보</span></h1>
+<p class="lede">
+  국민체육진흥공단 스포츠강좌이용권 <b>등록시설</b> 자료(일반·장애인 2종)와
+  공공데이터포털 <b>전국 공공체육시설</b> 자료를 시군구 단위로 맞춘 표입니다.
+  데이터 기준 <b>{_esc(date_label)}</b> (KST, {_esc(date_basis)}).
+  지역을 줄 세우려는 표가 아니라, <b>다음에 할 수 있는 일</b>(가맹 전환·확대 대상)을
+  고르기 위한 목록입니다. 열 제목을 누르면 정렬됩니다.
+</p>
+<p class="summary">
+  전국 <b>{total:,}</b>개 시군구 ·
+  장애인 가맹 0곳 <b>{zero_dv:,}</b>개 ·
+  제안이 붙은 곳 <b>{suggested:,}</b>개 ·
+  표시 중 <b id="shown">{total:,}</b>개
+</p>
+<input class="vh" type="checkbox" id="det">
+<div class="controls">
+  <label class="sr" for="q">시군구 검색</label>
+  <input id="q" type="search" placeholder="시군구 검색 (예: 고성, 강원, 서해구)" autocomplete="off">
+  <label class="toggle" for="det">신고·등록 시설 수 함께 보기</label>
+</div>
+<p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 <code>faci_gb_nm='공공'</code>만 셉니다(신고·등록 제외).</p>
+<div class="wrap">
+<table id="gap" aria-describedby="tnote">
+  <caption class="sr">시군구별 장애인 가맹·일반 가맹·공공체육시설 수와 가맹 유치 제안</caption>
+  <thead><tr>
+    <th scope="col" aria-sort="none">시군구</th>
+    <th scope="col" class="num" aria-sort="ascending">장애인 가맹</th>
+    <th scope="col" class="num" aria-sort="none">일반 가맹</th>
+    <th scope="col" class="num" aria-sort="none">공공시설</th>
+    <th scope="col" class="num col-det" aria-sort="none">신고</th>
+    <th scope="col" class="num col-det" aria-sort="none">등록</th>
+    <th scope="col" aria-sort="none">제안</th>
+  </tr></thead>
+  <tbody>
+{chr(10).join(body)}
+  </tbody>
+</table>
+</div>
+<p class="empty" id="none" hidden>검색어와 맞는 시군구가 없습니다.</p>
+<div class="notes">
+<h2>표 읽는 법 · 출처</h2>
+<ol>
+  <li><b>출처</b> — 장애인 가맹·일반 가맹: 국민체육진흥공단 스포츠강좌이용권 등록시설 자료 2종.
+      공공시설·신고·등록: 공공데이터포털 「전국 공공체육시설」(15113986)의 원천 구분값 <code>faci_gb_nm</code> 기준.
+      한 원천을 전부 “공공체육시설”이라 부르면 다수가 민간 신고 시설이라 사실과 어긋납니다 —
+      그래서 <b>공공 {sum(r.public for r in rows):,} / 신고 {sum(r.reported for r in rows):,} /
+      등록 {sum(r.registered for r in rows):,}</b> 을 나눠 셉니다.</li>
+  <li><b>카운트 단위</b> — 이용권 가맹시설은 공개 좌표가 없어 반경으로 셀 수 없습니다.
+      모든 숫자는 <b>구(시군구) 단위</b> 카운트이며, 앱 화면의 “○○구 가맹 N곳”과 같은 값입니다.</li>
+  <li><b>영역그룹 합산</b> — 2026-07-01 인천 행정체제 개편으로 한 생활권이 옛·신 코드에 걸쳐
+      있고 원천이 두 코드를 섞어 씁니다. 코드 하나만 세면 없는 공백이 생기므로 다음은 합쳐서
+      한 행으로 표시합니다: {group_note}. 그래서 표는 233행이 아니라 <b>{total}행</b>입니다.</li>
+  <li><b>제안 규칙</b>(위에서부터 처음 맞는 하나만 붙습니다) —
+      ① 장애인 가맹 0곳이고 공공시설이 1곳 이상 → “공공시설 N곳 가맹 전환 후보”,
+      ② 장애인 가맹 0곳이고 공공시설도 0곳 → “—”(전환할 공공시설이 없어 다른 수단이 필요),
+      ③ 장애인 가맹 2곳 이하이고 공공시설 ≥ <b>T={threshold:,}</b> → “가맹 확대 후보”,
+      ④ 그 외 빈칸. <b>T={threshold:,}</b> 은 이 표 {total}개 시군구 공공시설 수 분포의
+      <b>75퍼센타일</b>(상위 25% 기준, 최소 {min(pubs):,} · 중앙값 {percentile(pubs, 0.5):,.1f} ·
+      최대 {max(pubs):,})입니다.</li>
+  <li><b>한계</b> — 가맹 수는 등록시설 자료에 실린 시설 수일 뿐 실제 수강 가능 강좌 수·정원이
+      아닙니다. 공공시설이 있다고 곧바로 가맹이 되는 것도 아닙니다(시설 유형·운영 주체·
+      접근성 확인 필요). 이 표는 확인 대상을 좁히는 용도입니다.</li>
+</ol>
+<p style="margin-top:14px"><a class="back" href="/">← 스포내비로 돌아가기</a></p>
+</div>
+</div>
+<script src="gap.js" defer></script>
+</body>
+</html>
+"""
+
+
+GAP_JS = """/* gap.html 정렬·검색 — 순수 JS, 의존성 0.
+   서버 CSP 가 script-src 'self' 라 인라인 <script> 는 실행되지 않는다 → 외부 파일.
+   scripts/build_gap.py 가 함께 배치한다(수정은 그 스크립트에서). */
+(function () {
+  var t = document.getElementById('gap');
+  if (!t || !t.tHead || !t.tBodies.length) return;
+  var body = t.tBodies[0];
+  var rows = [].slice.call(body.rows);
+  var heads = [].slice.call(t.tHead.rows[0].cells);
+  var cur = 1, dir = 1; // 초기 상태 = 장애인 가맹 asc (HTML 이 이미 그 순서로 나온다)
+  function val(tr, i) {
+    var raw = tr.cells[i].getAttribute('data-v');
+    var n = Number(raw);
+    return raw !== null && raw !== '' && !isNaN(n) ? n : String(raw === null ? '' : raw);
+  }
+  function sort(i) {
+    dir = i === cur ? -dir : 1;
+    cur = i;
+    heads.forEach(function (h, j) {
+      h.setAttribute('aria-sort', j === i ? (dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+    rows.slice().sort(function (a, b) {
+      var x = val(a, i), y = val(b, i);
+      var c = x < y ? -1 : x > y ? 1 : 0;
+      return c ? c * dir : Number(a.dataset.i) - Number(b.dataset.i);
+    }).forEach(function (tr) { body.appendChild(tr); });
+  }
+  heads.forEach(function (h, i) {
+    h.tabIndex = 0;
+    h.addEventListener('click', function () { sort(i); });
+    h.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sort(i); }
+    });
+  });
+  var q = document.getElementById('q');
+  var shown = document.getElementById('shown');
+  var none = document.getElementById('none');
+  function filter() {
+    var s = q.value.replace(/\\s+/g, ''), n = 0;
+    rows.forEach(function (tr) {
+      var hit = !s || tr.dataset.q.indexOf(s) >= 0;
+      tr.hidden = !hit;
+      if (hit) n++;
+    });
+    shown.textContent = n.toLocaleString('ko-KR');
+    none.hidden = n > 0;
+  }
+  q.addEventListener('input', filter);
+  filter();
+})();
+"""
+
+
+# ---------------------------------------------------------------------------
+# 진입점
+# ---------------------------------------------------------------------------
+def build(db: Optional[Path] = None, out: Optional[Path] = None,
+          threshold: Optional[int] = None) -> dict:
+    """gap.html(+gap.js) 을 쓰고 요약 통계를 돌려준다. 테스트가 이 함수를 쓴다."""
+    db = Path(db) if db else store_mod.db_path()
+    out = Path(out) if out else DEFAULT_OUT
+    conn = open_ro(db)
+    try:
+        rows = load_rows(conn)
+        date_label, date_basis = data_date(conn, db)
+    finally:
+        conn.close()
+
+    pubs = [r.public for r in rows]
+    t = threshold if threshold is not None else threshold_from(pubs)
+    hits: dict[int, int] = {RANK_CONVERT: 0, RANK_EXPAND: 0, RANK_NO_SEED: 0, RANK_NONE: 0}
+    for r in rows:
+        hits[suggest(r.dvoucher, r.public, t)[1]] += 1
+
+    doc = render(rows, threshold=t, date_label=date_label, date_basis=date_basis)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(doc, encoding="utf-8")
+    (out.parent / "gap.js").write_text(GAP_JS, encoding="utf-8")
+
+    return {
+        "rows": rows,
+        "out": out,
+        "bytes": len(doc.encode("utf-8")),
+        "threshold": t,
+        "date_label": date_label,
+        "date_basis": date_basis,
+        "public_min": min(pubs) if pubs else 0,
+        "public_median": percentile(pubs, 0.5),
+        "public_p75": percentile(pubs, 0.75),
+        "public_max": max(pubs) if pubs else 0,
+        "hits": hits,
+    }
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    ap = argparse.ArgumentParser(description="SQLite → web/public/gap.html")
+    ap.add_argument("--db", type=Path, default=None, help="기본: data/sponavi.db")
+    ap.add_argument("--out", type=Path, default=None, help=f"기본: {DEFAULT_OUT}")
+    ap.add_argument("--threshold", type=int, default=None,
+                    help="제안 규칙 ③의 T. 기본: 공공시설 수 75퍼센타일(반올림)")
+    ap.add_argument("--quiet", action="store_true")
+    args = ap.parse_args(argv)
+
+    db = args.db or store_mod.db_path()
+    if not Path(db).exists():
+        print(f"[gap] DB 없음: {db}", file=sys.stderr)
+        return 2
+
+    s = build(db=db, out=args.out, threshold=args.threshold)
+    if args.quiet:
+        return 0
+
+    rows = s["rows"]
+    print(f"[gap] {s['out']}  ({s['bytes']:,} bytes)")
+    print(f"[gap] 행 {len(rows)}개 (영역그룹 {len(region.SIGUNGU_GROUPS)}개 합산 후) · "
+          f"데이터 기준 {s['date_label']} KST — {s['date_basis']}")
+    print(f"[gap] 공공시설 수 분포: min {s['public_min']:,} · "
+          f"median {s['public_median']:,.1f} · p75 {s['public_p75']:,.2f} · "
+          f"max {s['public_max']:,}  → T={s['threshold']:,} (상위 25% 기준)")
+    h = s["hits"]
+    print(f"[gap] 제안: ①전환 후보 {h[RANK_CONVERT]} · ③확대 후보 {h[RANK_EXPAND]} · "
+          f"②'—'(공공 0) {h[RANK_NO_SEED]} · ④빈칸 {h[RANK_NONE]} "
+          f"→ 문구가 붙는 행 {len(rows) - h[RANK_NONE]}/{len(rows)}")
+    for r in rows[:8]:
+        text, _ = suggest(r.dvoucher, r.public, s["threshold"])
+        print(f"       {r.sido_nm} {r.name}: 장애인 {r.dvoucher} · 일반 {r.voucher} · "
+              f"공공 {r.public} · {text or '-'}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

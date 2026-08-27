@@ -41,3 +41,17 @@
 **Effort:** M
 **Priority:** P4
 **Depends on:** W1 T6(페르소나 demo 계약) 완료
+
+## Infrastructure
+
+### refresh_data.sh의 DB rsync 함정 (quick-check 스킵 + FREEZE.sha 미갱신)
+
+**What:** `scripts/refresh_data.sh:79` 부근의 DB rsync가 `deploy.sh --with-db`와 같은 규약(`--ignore-times`, WAL 체크포인트, 본체만 전송, 전송 후 서버 지문→`data/FREEZE.sha` 갱신)을 따르게 하거나, 아예 `deploy.sh --with-db`를 호출하도록 바꿈.
+
+**Why:** 2026-08-27 Lane O 실측 — `rsync -az --inplace`는 크기+mtime(1초)만 비교해 같은 크기·같은 초의 DB를 내용이 달라도 조용히 건너뜀. 또 refresh가 DB를 밀어도 FREEZE.sha가 안 바뀌어 다음 기본 배포의 동결 대조가 거짓 경고를 냄.
+
+**Context:** deploy/README.md에 "refresh 후 `deploy.sh --with-db` 1회"로 문서화만 해 둔 상태. 월간 갱신(refresh_data.sh)은 9/17 동결 이후엔 금지이므로 10/2 제출 전에는 실행하지 않음. 시작점: refresh_data.sh의 rsync 블록을 deploy.sh의 2b/2c/5c 블록 호출로 대체.
+
+**Effort:** S
+**Priority:** P2
+**Depends on:** deploy.sh --with-db (W1 T11)

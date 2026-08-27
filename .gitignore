@@ -11,3 +11,6 @@ data/sponavi.db
 data/raw/
 data/sponavi.db-wal
 data/sponavi.db-shm
+
+# Claude Code 에이전트 워크트리(하네스 임시)
+.claude/worktrees/

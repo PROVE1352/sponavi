@@ -132,8 +132,10 @@ def test_p5_dvoucher_row_shape(db_store):
     row = rows[0]
     missing_keys = [k for k in template if not k.startswith("_") and k not in row]
     assert not missing_keys, f"실DB 행에 없는 계약 키: {missing_keys}\n  실제 키: {sorted(row)}"
-    for cell in ("fee_month", "subsidy", "copay"):
+    for cell in ("fee_month", "copay"):
         assert row[cell] is None, f"dvoucher 표준형은 {cell} 가 null 이어야 한다: {row[cell]!r}"
+    # 자격 ✓(P5)이라 subsidy 는 제도 지원금으로 채워진다(1A) — 계약 템플릿과 일치해야 한다
+    assert row["subsidy"] == template["subsidy"], f"subsidy 불일치: 계약 {template['subsidy']} · 실DB {row['subsidy']!r}"
     assert row["coord_source"] == template["coord_source"]
     assert row["disability_support"] is True
 

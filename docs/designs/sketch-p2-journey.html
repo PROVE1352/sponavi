@@ -1,0 +1,68 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>스포내비 — P2 한 스크롤 여정 (와이어프레임)</title>
+<style>
+/* 의도적으로 거친 스케치: 시스템 폰트, 회색 선, 색 없음. 결정 사항은 주석으로. */
+body{font-family:-apple-system,system-ui,sans-serif;background:#fafafa;color:#222;margin:0;padding:18px}
+h1{font-size:15px;margin:0 0 4px}.sub{font-size:12px;color:#666;margin:0 0 14px}
+.row{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.phone{width:300px;border:2px solid #999;border-radius:18px;padding:10px;background:#fff;box-sizing:border-box}
+.step{font-size:10px;color:#888;letter-spacing:.5px;margin-bottom:6px}
+.bubble{border:1px dashed #aaa;border-radius:10px;padding:7px 9px;font-size:12px;margin:6px 0;background:#f6f6f6}
+.me{border-style:solid;background:#fff;margin-left:40px}
+.card{border:1.5px solid #555;border-radius:8px;padding:8px;margin:8px 0;font-size:12px}
+.hero{border-width:3px;padding:12px}.hero h3{margin:0 0 6px;font-size:15px}
+.small{font-size:10px;color:#777}.chip{display:inline-block;border:1px solid #888;border-radius:99px;padding:1px 7px;font-size:10px;margin:2px 2px 0 0}
+.bar{height:8px;background:repeating-linear-gradient(90deg,#333 0 6px,#fff 6px 8px);width:60%;margin:4px 0}
+.btn{display:block;border:2px solid #333;border-radius:8px;text-align:center;padding:7px;font-size:12px;margin-top:6px}
+.badge{border:1px solid #333;font-size:9px;padding:0 4px;border-radius:3px}
+.table{width:100%;border-collapse:collapse;font-size:10px}.table td,.table th{border:1px solid #bbb;padding:3px 4px;text-align:left}
+.note{font-size:10px;color:#555;margin-top:6px;border-left:3px solid #bbb;padding-left:6px}
+</style></head><body>
+<h1>심사위원이 혼자 여는 URL — <code>/#/demo?p=P2&amp;auto=1</code> — 30초 한 스크롤 (5개 프레임 = 스크롤 위치)</h1>
+<p class="sub">P2: 27세 남 · 소득 그 외(낀 계층) · 성북구 · 비장애. 입력은 페르소나 칩 에코(LLM 0회), 카드는 순차 등장. 시설 수·건수는 자리표시(실측 아님). 위계 결정: ✗보다 "지금 바로 되는 것"이 먼저·크게.</p>
+<div class="row">
+
+<div class="phone"><div class="step">① 자동 입력 → 판정 (0~8초)</div>
+<div class="bubble">안녕하세요, 스포내비예요. 나이·지역·소득·장애 여부를 알려주시면 받을 수 있는 걸 찾아드릴게요.</div>
+<div class="bubble me">P2 · 27세 남 · 성북구 · 소득 그 외 <span class="small">(페르소나 칩 에코 — LLM 0회)</span></div>
+<div class="bubble">확인했어요. <span class="chip">20대·27세</span><span class="chip">성북구</span><span class="chip">소득 그 외</span><span class="chip">비장애</span></div>
+<div class="card"><b>스포츠강좌이용권 — 예상 자격 ✗</b><br><span class="small">연령 5~18세 — 27세는 범위 밖 · 소득 기초·차상위·한부모 — '그 외'는 대상 아님</span><br><span class="small">출처 svoucher.kspo.or.kr · 2026-07-20 확인</span></div>
+<div class="note">✗ 카드는 남기되 작게. "왜 안 되는지"는 정보라서 지우지 않음(FR-02 AC4).</div>
+</div>
+
+<div class="phone"><div class="step">② "지금 바로 되는 것" — 히어로 (8~15초)</div>
+<div class="card hero"><h3>이용권은 안 되지만, 지금 바로 되는 것 3가지</h3>
+<div class="card"><b>튼튼머니</b> · 만 4세+ 누구나 · 소득 무관<br><span class="small">체력측정·스포츠활동으로 연 최대 5만 포인트</span> <span class="badge">공식 확인 2026-07-21</span></div>
+<div class="card"><b>체육시설 문화비 소득공제</b> · 헬스장·수영장 30%<br><span class="small">총급여 7천만원 이하 근로소득자</span> <span class="badge">공식 확인</span></div>
+<div class="card"><b>성북구 공공체육시설 프로그램</b> · 무료~월 4만원대<br><span class="small">성북구 공공시설 91곳 · 실좌표</span> <span class="badge">큐레이션 · 검증 대기</span></div>
+<div class="btn">내 체력에 맞는 운동까지 보기 ↓</div>
+</div>
+<div class="note">여기가 사용자가 말한 "✗ 다음에 오는 문장". 버튼 하나로 C(체력)로 이어짐 — 화면 전환 아님, 같은 스크롤.</div>
+</div>
+
+<div class="phone"><div class="step">③ 체력 판정 — 프리필 (15~23초)</div>
+<div class="bubble">국민체력100 측정값이 있으면 넣어주세요. <span class="small">데모 페르소나 문진 프리셋 — 실사용은 직접 확인</span></div>
+<div class="bubble me">교차윗몸 35회 · 왕복오래달리기 42회 · 앉아윗몸앞으로굽히기 6cm · 상대악력 58% · 175cm/72kg</div>
+<div class="card"><b>판정 — 25~29세 남 공식 기준</b><br>
+근력 <span class="bar"></span> 2등급<br>근지구력 <span class="bar" style="width:38%"></span> <b>약점</b> — 교차윗몸 35회, 3등급 컷 38회 미달<br>심폐 <span class="bar" style="width:55%"></span> 3등급<br>유연성 <span class="bar" style="width:70%"></span> 2등급
+<br><span class="small">출처 nfa.kspo.or.kr 인증기준 · 1,052행 · 수기대조 23/23</span></div>
+<div class="note">약점 1개가 컷 근처에서 나오도록 페르소나 값을 고름 — 판정이 "전부 정상"이면 처방이 안 나와 여정이 끊김.</div>
+</div>
+
+<div class="phone"><div class="step">④ 왜 이 운동 → 근처 강좌 (23~30초)</div>
+<div class="card"><b>추천: 헬스 · 유도 · 주짓수 (근지구력)</b> <span class="badge">룰 기반</span><br>
+<details open><summary class="small">왜 이 운동? (근거 펼침)</summary><span class="small">근지구력 요인 → 공단 운동처방 영상 3건(코어·성인·초급) → 정부 지침 A급 · 티어 S</span></details></div>
+<div class="card"><b>성북구민체육센터 — 필라테스 기초</b><br><span class="small">화·목 19:00 · 실좌표 1.2km · 수강료 <b>미등록 · 시설 문의</b></span></div>
+<div class="card"><b>OO휘트니스 — 코어 클래스</b> <span class="badge">위치 근사(구 중심)</span><br><span class="small">성북구 가맹 161곳 · 거리 미표기 · 수강료 4만원 → 자부담 4만원(이용권 ✗)</span></div>
+<div class="note">⚠#8 수정 반영: null은 "무료"가 아니라 "미등록·시설 문의". 근사 좌표엔 km 없음(FR-04 AC2).</div>
+</div>
+
+<div class="phone" style="width:400px"><div class="step">⑤ 뒷면 gap.html — "가맹 유치 우선순위" (정책담당자용, 정적 표 1장)</div>
+<div class="small" style="margin-bottom:6px">제목·정렬이 전부: "0곳 순위표(못 한 일)"가 아니라 "다음에 유치할 곳(할 일)". 공급공백 엔진 → build_gap.py → 정적 HTML. 기본 정렬: 장애인 가맹 0 → 공공시설 많은 순.</div>
+<table class="table"><tr><th>시군구</th><th>장애인 가맹</th><th>일반 가맹</th><th>공공시설</th><th>제안</th></tr>
+<tr><td>강원 고성군</td><td><b>0</b></td><td>5</td><td>91</td><td>공공시설 91곳 가맹 전환 후보</td></tr>
+<tr><td>경북 울릉군</td><td><b>0</b></td><td>1</td><td>12</td><td>—</td></tr>
+<tr><td>인천 서해·검단(옛 서구)</td><td>114</td><td>445</td><td>—</td><td>영역그룹 합산 표기</td></tr>
+<tr><td>…</td><td></td><td></td><td></td><td></td></tr></table>
+<div class="note">3심 판사3 경고 회피: 결함 고발이 아니라 유치 우선순위. 인천 383:0 같은 코드 잔재는 영역그룹으로 봉합된 상태로만 노출.</div>
+</div>
+</div></body></html>

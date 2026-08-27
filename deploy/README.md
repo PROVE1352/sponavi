@@ -49,3 +49,9 @@ WAL 을 본체에 접어넣는다. 기본 배포의 `--exclude 'data/sponavi.db*
   않는다.** 프리즈 이후에 refresh 를 돌렸다면, 이어서 `deploy.sh --with-db` 를 한 번 돌려
   지문을 다시 찍어라. 안 그러면 다음 배포마다 불일치 프롬프트가 뜬다.
 - 지문만 따로 보고 싶을 때: `bash scripts/db_fingerprint.sh data/sponavi.db`
+
+## 업타임 프로브 (W3)
+
+- `scripts/uptime_probe.sh` — `https://sponavi.kro.kr/api/health`를 10초 타임아웃으로 찌르고 `~/Library/Logs/sponavi-uptime.log`에 1줄 기록. 연속 실패 3회째(≈15분)와 이후 1시간마다 macOS 알림, 복구 시 알림 1회.
+- 설치(도메인·HTTPS 살아난 뒤): `cp deploy/com.sponavi.uptime.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/com.sponavi.uptime.plist`
+- 한계: 맥이 잠들면 공백. 심사 기간(10월)엔 무료 외부 핑거(5분 HTTP 모니터) 1개를 추가로 두는 안이 Reviewer Concern 2로 남아 있음 — 도입 여부는 W3 말에 결정.

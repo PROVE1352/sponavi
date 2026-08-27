@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS facilities (
     lat                REAL,
     lon                REAL,
     coord_source       TEXT,            -- api(실좌표) | centroid(시군구 중심 폴백) | geocoded(M2 예약)
+    faci_gb            TEXT,            -- 공공 raw faci_gb_nm: 신고 | 공공 | 등록 (이용권 행은 NULL)
     sports             TEXT,            -- comma-joined
     disability_support INTEGER,         -- 0 | 1 | NULL(unknown)
     brno               TEXT,
@@ -281,6 +282,9 @@ class Store:
             coord_source = row["coord_source"]
         else:
             coord_source = "api" if row["source"] == "public" else "centroid"
+        # faci_gb: 공공 원천의 시설 구분(신고/공공/등록). source='public' 이라고 전부
+        # '공공체육시설'이 아니다(70%가 신고 시설). 컬럼이 없는 구 DB·데모 DB 는 None.
+        faci_gb = row["faci_gb"] if "faci_gb" in keys else None
         return {
             "id": row["id"],
             "source": row["source"],
@@ -291,6 +295,7 @@ class Store:
             "lat": row["lat"],
             "lon": row["lon"],
             "coord_source": coord_source,
+            "faci_gb": faci_gb,
             "sports": _split_sports(row["sports"]),
             "disability_support": None if ds is None else bool(ds),
             "phone": row["phone"],

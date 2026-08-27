@@ -117,7 +117,9 @@ _CSP = (
     "base-uri 'self'; "
     "object-src 'none'; "
     "frame-ancestors 'none'; "
-    "img-src 'self' data: blob: https://tiles.openfreemap.org; "
+    # openapi.kspo.or.kr = 운동영상 썸네일(<img src>, videos.img_url — CQ4A)
+    "img-src 'self' data: blob: https://tiles.openfreemap.org "
+    "https://openapi.kspo.or.kr; "
     "style-src 'self' 'unsafe-inline'; "
     "script-src 'self'; "
     "worker-src 'self' blob:; "

@@ -58,6 +58,7 @@ PF_STAT = ("faci_stat_nm", "FACI_STAT_NM")
 PF_TYPE = ("ftype_nm", "FTYPE_NM")
 PF_COB = ("fcob_nm", "FCOB_NM")
 PF_CD = ("faci_cd", "FACI_CD")
+PF_GB = ("faci_gb_nm", "FACI_GB_NM")   # 시설 구분: 신고 | 공공 | 등록 (OV6)
 # 시도 name sources (addr_ctpv_nm is often null → cp_nm/fmng_cp_nm always present)
 PF_SIDO = ("addr_ctpv_nm", "cp_nm", "fmng_cp_nm")
 # 시군구 name sources (cpb_nm is city-level like voucher & only ~1% null;
@@ -130,6 +131,43 @@ def _float(v):
 
 def _in_korea(lat, lon):
     return lat is not None and lon is not None and 32.5 <= lat <= 39.6 and 124.0 <= lon <= 132.5
+
+
+# ---------------------------------------------------------------------------
+# public 시설 행 규칙 한 벌 — 신규 빌드(이 파일)와 제자리 마이그레이션
+# (scripts/migrate_facility_gb.py)이 **같은 함수**를 써서 "재빌드 == 마이그레이션"을 보장한다.
+# ---------------------------------------------------------------------------
+CLOSED_MARKS = ("폐업", "폐쇄", "말소", "취소")
+
+
+def public_is_closed(row) -> bool:
+    """빌드에서 제외되는 행(폐업·폐쇄·말소·취소)."""
+    return any(bad in _clean(_first(row, PF_STAT)) for bad in CLOSED_MARKS)
+
+
+def public_base_id(row) -> str:
+    """public 시설 id = 'public-' + faci_cd 의 숫자만(faci_cd 없으면 'public-x').
+    같은 base 가 겹치면 삽입 순서대로 dedupe_id 가 -2, -3 … 을 붙인다."""
+    cd = _digits(_first(row, PF_CD))
+    return f"public-{cd}" if cd else "public-x"
+
+
+def public_faci_gb(row):
+    """공공 raw 시설 구분(faci_gb_nm): 신고 | 공공 | 등록. 없으면 None."""
+    return _clean(_first(row, PF_GB)) or None
+
+
+def dedupe_id(base: str, seen: set) -> str:
+    """id 충돌 회피: base, base-2, base-3 … (seen 을 제자리 갱신)."""
+    if base not in seen:
+        seen.add(base)
+        return base
+    i = 2
+    while f"{base}-{i}" in seen:
+        i += 1
+    fid = f"{base}-{i}"
+    seen.add(fid)
+    return fid
 
 
 def course_target(name, desc=None) -> str:
@@ -375,7 +413,7 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido, code2nm, alias):
     sole = region.sole_sigungu(nm2code_by_sido)
     for r in pf or []:
         status = _clean(_first(r, PF_STAT))
-        if any(bad in status for bad in ("폐업", "폐쇄", "말소", "취소")):
+        if public_is_closed(r):
             dropped_closed += 1
             continue
         cd, sido, how = map_public_code(r, nm2code_by_sido, sole)
@@ -395,8 +433,8 @@ def assemble(vf, vc, df, dc, pf, nm2code_by_sido, code2nm, alias):
                 sports.add(s)
         blob = " ".join(_clean(_first(r, k)) for k in (PF_NAME, PF_TYPE, PF_COB))
         pfac.append({
-            "id": None,  # assigned at insert (faci_cd, de-duped)
-            "_faci_cd": _digits(_first(r, PF_CD)),
+            "id": public_base_id(r),   # 중복 base 는 삽입 시 -2, -3 … (dedupe_id)
+            "faci_gb": public_faci_gb(r),
             "source": "public",
             "name": _clean(_first(r, PF_NAME)),
             "sido_cd": sido or ((cd or "")[:2] or None),
@@ -433,27 +471,18 @@ def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, alias, public_code_n
     # facilities: fill coords, join sports -> comma text, de-dupe ids
     seen_ids: set[str] = set()
 
-    def _fac_id(base):
-        if base not in seen_ids:
-            seen_ids.add(base)
-            return base
-        i = 2
-        while f"{base}-{i}" in seen_ids:
-            i += 1
-        fid = f"{base}-{i}"
-        seen_ids.add(fid)
-        return fid
-
     def _insert_fac(f, lat, lon, coord_source):
-        fid = _fac_id(f["id"])
+        fid = dedupe_id(f["id"], seen_ids)
         conn.execute(
             "INSERT INTO facilities "
             "(id, source, name, sido_cd, sigungu_cd, sigungu_nm, addr, lat, lon, "
-            " coord_source, sports, disability_support, brno, facil_sn, status, phone) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " coord_source, faci_gb, sports, disability_support, brno, facil_sn, "
+            " status, phone) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 fid, f["source"], f["name"], f["sido_cd"], f["sigungu_cd"],
                 f["sigungu_nm"], f["addr"], lat, lon, coord_source,
+                f.get("faci_gb"),   # public 만 채워진다(이용권 원천엔 없는 필드)
                 ",".join(sorted(s for s in f["sports"] if s)),
                 f["disability_support"], f["brno"], f["facil_sn"],
                 f["status"], f["phone"],
@@ -475,7 +504,6 @@ def write_db(out: Path, vfac, dfac, pfac, courses, code2nm, alias, public_code_n
             coord_source = "centroid"
         else:
             coord_source = "api"
-        f["id"] = f"public-{f['_faci_cd']}" if f["_faci_cd"] else "public-x"
         _insert_fac(f, la, lo, coord_source)
 
     # courses
@@ -594,6 +622,10 @@ def main() -> None:
         "SELECT source, coord_source, COUNT(*) FROM facilities "
         "GROUP BY source, coord_source ORDER BY source, coord_source"
     ).fetchall()
+    by_gb = conn.execute(
+        "SELECT COALESCE(faci_gb,'(NULL)'), COUNT(*) FROM facilities "
+        "WHERE source='public' GROUP BY faci_gb ORDER BY COUNT(*) DESC"
+    ).fetchall()
     sb = q("SELECT COUNT(*) FROM facilities WHERE sigungu_cd = '11290'")
     n_alias = q("SELECT COUNT(*) FROM sigungu_alias")
     n_null = q("SELECT COUNT(*) FROM facilities WHERE sigungu_cd IS NULL")
@@ -611,6 +643,7 @@ def main() -> None:
               + ", ".join(f"{o}→{n}={c}" for (o, n), c in top))
     print(f"  source 분포: {', '.join(f'{s}={c}' for s, c in by_src)}")
     print(f"  coord_source 분포: {', '.join(f'{s}/{cs}={c}' for s, cs, c in by_coord)}")
+    print(f"  public faci_gb 분포: {', '.join(f'{g}={c}' for g, c in by_gb) or '(없음)'}")
     print(f"  성북구(11290) 시설 {sb}개")
     print(f"  voucher_course 매칭: {rep.get('voucher_course_matched',0)}/"
           f"{rep.get('voucher_course',0)}")

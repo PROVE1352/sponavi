@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT / "server"))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import build_graph  # noqa: E402  (scripts/build_graph.py)
+import fetch_videos  # noqa: E402  (scripts/fetch_videos.py — 썸네일 URL 조립 규칙)
 from app import graph  # noqa: E402  (server/app/graph.py)
 
 # courses.sport DISTINCT 34종 실측 (2026-07)
@@ -70,6 +71,14 @@ VIDEO_ROWS += [
 ]
 
 
+def _raw_video(file_url: str) -> dict:
+    """raw(API) 행 모양 축약 — 썸네일은 폴더(img_file_url)+파일명(img_file_nm)이 따로 온다.
+    적재는 이 둘을 조립해야 살아있는 링크가 된다(CQ4A)."""
+    stem = file_url.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return {"img_file_url": f"http://openapi.kspo.or.kr/web/image/{stem}/",
+            "img_file_nm": f"{stem}_SC_00001.jpeg"}
+
+
 @pytest.fixture(scope="module")
 def gconn():
     conn = sqlite3.connect(":memory:")
@@ -81,8 +90,10 @@ def gconn():
         "trng_nm TEXT, title TEXT, file_url TEXT, img_url TEXT, len TEXT, descr TEXT, "
         "aggrp TEXT, factor TEXT, level TEXT, place TEXT, tool TEXT, aim TEXT)")
     conn.executemany(
-        "INSERT INTO videos (op, trng_nm, title, file_url, aggrp, factor, aim) "
-        "VALUES (?,?,?,?,?,?,?)", VIDEO_ROWS)
+        "INSERT INTO videos (op, trng_nm, title, file_url, img_url, aggrp, factor, aim) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        [(op, trng, title, url, fetch_videos.thumb_url(_raw_video(url)), aggrp, factor, aim)
+         for op, trng, title, url, aggrp, factor, aim in VIDEO_ROWS])
     conn.commit()
     build_graph.build(conn)
     yield conn
@@ -299,3 +310,57 @@ def test_fallback_no_graph():
 
 def test_empty_factors(gconn):
     assert graph.recommend_for_weakness([], 30, gconn) == {}
+
+
+# ---------------------------------------------------------------------------
+# 영상 썸네일 (CQ4A) — 조립 규칙 + 그래프 응답 통과
+# ---------------------------------------------------------------------------
+def test_thumb_url_assembly():
+    """img_file_url(폴더) + img_file_nm(파일명), 스킴은 https. 한쪽이라도 없으면 None."""
+    t = fetch_videos.thumb_url
+    base = "http://openapi.kspo.or.kr/web/image/0AUDLJ08S_00002"
+    want = "https://openapi.kspo.or.kr/web/image/0AUDLJ08S_00002/0AUDLJ08S_00002_SC_00004.jpeg"
+    nm = "0AUDLJ08S_00002_SC_00004.jpeg"
+    assert t({"img_file_url": base + "/", "img_file_nm": nm}) == want   # 폴더 끝 슬래시 O
+    assert t({"img_file_url": base, "img_file_nm": nm}) == want         # 끝 슬래시 X
+    assert t({"img_file_url": base + "/", "img_file_nm": "/" + nm}) == want  # 슬래시 중복 X
+    assert t({"img_file_url": base.replace("http://", "https://") + "/",
+              "img_file_nm": nm}) == want                              # 이미 https
+    assert t({"img_file_url": base + "/"}) is None                      # 파일명 없음
+    assert t({"img_file_nm": nm}) is None                               # 폴더 없음
+    assert t({"img_file_url": " ", "img_file_nm": " "}) is None
+    # 재생 URL(mp4)도 https 로 고정
+    assert fetch_videos._video_url(
+        {"file_url": "http://openapi.kspo.or.kr/web/video/", "file_nm": "x.mp4"}
+    ) == "https://openapi.kspo.or.kr/web/video/x.mp4"
+
+
+def test_video_payload_img_url_is_https_file(gconn):
+    """응답 영상 카드의 img_url 은 https + 파일명으로 끝나야 한다(폴더 URL = 죽은 링크)."""
+    vids = []
+    for factor, age in (("심폐지구력", 30), ("평형성", 70), ("유연성", 30)):
+        vids += graph.recommend_for_weakness([factor], age, gconn)[factor]["videos"]
+    assert vids, "영상 후보가 있어야 검증이 성립한다"
+    for v in vids:
+        img = v["img_url"]
+        assert img and img.startswith("https://"), v
+        assert img.rsplit("/", 1)[-1].endswith(".jpeg"), v   # 폴더가 아니라 파일
+
+
+def test_video_payload_keeps_missing_img_as_none():
+    """썸네일이 없는 행은 빈 문자열이 아니라 None 으로 나간다(정직 — 웹이 카드를 숨김)."""
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE courses (id TEXT, sport TEXT)")
+    conn.execute(
+        "CREATE TABLE videos (id INTEGER PRIMARY KEY AUTOINCREMENT, op TEXT, oper_nm TEXT, "
+        "trng_nm TEXT, title TEXT, file_url TEXT, img_url TEXT, len TEXT, descr TEXT, "
+        "aggrp TEXT, factor TEXT, level TEXT, place TEXT, tool TEXT, aim TEXT)")
+    conn.execute(
+        "INSERT INTO videos (op, trng_nm, title, file_url, img_url, aggrp, factor) "
+        "VALUES ('TODZ_VDO_TRNG_GUIDE_I','제자리 걷기','제자리 걷기',"
+        "'https://v/1.mp4', NULL, '공통', '심폐지구력')")
+    conn.commit()
+    build_graph.build(conn)
+    vids = graph.recommend_for_weakness(["심폐지구력"], 30, conn)["심폐지구력"]["videos"]
+    assert vids and all(v["img_url"] is None for v in vids)
+    conn.close()

@@ -15,8 +15,10 @@ FITNESS_GRAPH.md §1·§4-3 의 "영상 카탈로그 적재" 단계. 운동영�
   TODZ_VDO_VIEW_ALL_LIST_I    15,045   통합 = 위 6종의 합집합(oper_nm 태그, 공통필드만)
 
 공통 필드: trng_nm, vdo_ttl_nm, file_url, img_file_url, vdo_len, vdo_desc, aggrp_nm.
-※ file_url 은 베이스 디렉터리('http://openapi.kspo.or.kr/web/video/') 뿐이라
-  재생 URL = file_url + file_nm 로 조립해 저장한다(img_file_url 은 이미 폴더 포함).
+※ file_url·img_file_url 은 둘 다 '폴더'다. 재생 URL = file_url + file_nm,
+  썸네일 URL = img_file_url + img_file_nm 로 조립하고, 스킴은 https 로 고정한다
+  (CQ4A 반전: 조립·https 로 요청하면 200 image/jpeg·200 video/mp4 — 원본 http 폴더만
+  저장하던 이전 적재가 썸네일 전량 사망의 원인이었다).
 
 베이스: https://apis.data.go.kr/B551014/SRVC_TODZ_VDO_PKG/{op}
 파라미터: serviceKey(.env DATA_GO_KR_KEY, Decoding 89자 — urlencode 로 %인코딩),
@@ -30,6 +32,7 @@ Usage:
   DATA_GO_KR_KEY=... python scripts/fetch_videos.py               # 전량 수집+적재
   python scripts/fetch_videos.py --skip-existing                  # raw 있으면 재다운로드 생략
   python scripts/fetch_videos.py --load-only                      # 네트워크 없이 raw→DB 적재만
+  python scripts/fetch_videos.py --reload-from-raw                # 위와 동치(전 op 강제)·멱등
   python scripts/fetch_videos.py --only TODZ_VDO_ROUTINE_I        # 한 op 만
   python scripts/fetch_videos.py --rows 500                       # 페이지 크기(기본 300)
 """
@@ -150,17 +153,38 @@ def _clean(v) -> str:
     return str(v).strip() if v not in (None, "") else ""
 
 
+def to_https(url: str) -> str:
+    """openapi.kspo.or.kr 는 https 로도 같은 파일을 준다(실측 200) → 스킴 고정.
+    https 사이트에서 http 리소스는 브라우저가 혼합콘텐츠로 차단한다."""
+    if url.startswith("http://"):
+        return "https://" + url[len("http://"):]
+    return url
+
+
+def thumb_url(row: dict) -> Optional[str]:
+    """썸네일 URL = img_file_url(폴더) + img_file_nm(파일명), https.
+
+    img_file_url 은 파일명이 빠진 폴더(…/web/image/0AUDLJ08S_00002/)라 그대로 저장하면
+    전량 죽은 링크가 된다(CQ4A). 폴더/파일명 중 하나라도 없으면 None(정직: 빈 문자열 X).
+    """
+    folder = _clean(row.get("img_file_url"))
+    name = _clean(row.get("img_file_nm"))
+    if not folder or not name:
+        return None
+    return to_https(folder.rstrip("/") + "/" + name.lstrip("/"))
+
+
 def _video_url(row: dict) -> str:
     """재생 URL = file_url(베이스 디렉터리) + file_nm. file_url 이 이미 파일까지면 그대로."""
     fu = _clean(row.get("file_url"))
     fn = _clean(row.get("file_nm"))
     if fu and fn and fu.endswith("/"):
-        return fu + fn
+        return to_https(fu + fn)
     if fu and fn and not fu.lower().endswith((".mp4", ".mov", ".webm")):
-        return fu.rstrip("/") + "/" + fn
+        return to_https(fu.rstrip("/") + "/" + fn)
     if fu:
-        return fu
-    return (VIDEO_BASE + fn) if fn else ""
+        return to_https(fu)
+    return to_https(VIDEO_BASE + fn) if fn else ""
 
 
 VIDEOS_SCHEMA = """
@@ -171,8 +195,8 @@ CREATE TABLE videos (
     oper_nm  TEXT,    -- VIEW_ALL 통합목록의 원 오퍼레이션 한글명(있을 때)
     trng_nm  TEXT,    -- 운동/측정 명 (Exercise canonical)
     title    TEXT,    -- vdo_ttl_nm 영상 제목
-    file_url TEXT,    -- 재생 URL (file_url+file_nm 조립)
-    img_url  TEXT,    -- img_file_url (썸네일 폴더)
+    file_url TEXT,    -- 재생 URL (file_url+file_nm 조립, https)
+    img_url  TEXT,    -- 썸네일 URL (img_file_url+img_file_nm 조립, https; 없으면 NULL)
     len      TEXT,    -- vdo_len (초)
     descr    TEXT,    -- vdo_desc 설명
     aggrp    TEXT,    -- aggrp_nm 연령군 (유아/유소년/청소년/성인/어르신/공통)
@@ -207,7 +231,7 @@ def load_videos(conn: sqlite3.Connection, raw_by_op: dict[str, list[dict]]) -> d
                     _clean(row.get("trng_nm")),
                     _clean(row.get("vdo_ttl_nm")),
                     _video_url(row),
-                    _clean(row.get("img_file_url")),
+                    thumb_url(row),
                     _clean(row.get("vdo_len")),
                     _clean(row.get("vdo_desc")),
                     _clean(row.get("aggrp_nm")),
@@ -239,17 +263,23 @@ def main() -> None:
                     help="data/raw/videos_<op>.json 있으면 재다운로드 생략")
     ap.add_argument("--load-only", action="store_true",
                     help="네트워크 없이 기존 raw → DB 적재만")
+    ap.add_argument("--reload-from-raw", action="store_true",
+                    help="네트워크 없이 data/raw/videos_*.json 전량 → videos 테이블만 "
+                         "재적재(--only 무시, 멱등: DROP→CREATE→INSERT 후 커밋). "
+                         "다른 테이블은 건드리지 않는다.")
     ap.add_argument("--db", default=str(DB_PATH))
     args = ap.parse_args()
 
+    load_only = args.load_only or args.reload_from_raw
     RAW.mkdir(parents=True, exist_ok=True)
-    ops = [args.only] if args.only else list(OPS.keys())
+    # --reload-from-raw 는 항상 전 op 재적재(부분 적재로 테이블이 깎이지 않게)
+    ops = [args.only] if (args.only and not args.reload_from_raw) else list(OPS.keys())
     for op in ops:
         if op not in OPS:
             sys.exit(f"알 수 없는 오퍼레이션: {op} (가능: {', '.join(OPS)})")
 
     # ---- fetch phase ----
-    if not args.load_only:
+    if not load_only:
         key = _load_key()
         if not key:
             sys.exit(
@@ -283,7 +313,7 @@ def main() -> None:
         sys.exit("[fetch_videos] 적재할 raw 가 없습니다.")
 
     # --only 일 때는 그 op 만 갈아끼우면 다른 op 가 사라지므로, 전체 raw 를 함께 적재
-    if args.only:
+    if args.only and not args.reload_from_raw:
         for op in OPS:
             if op in raw_by_op:
                 continue

@@ -37,7 +37,7 @@ function Header({
               되나요
             </span>
             <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              스포츠 복지 내비게이터
+              스포츠 복지, 되는지 바로 확인
             </span>
           </span>
         </a>

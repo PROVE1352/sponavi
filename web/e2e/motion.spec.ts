@@ -207,7 +207,12 @@ test('⑧ 부팅 순차 등장 — 인사 타이핑 완료 → 타이핑 인디�
       const greet = document.querySelector('[data-testid="typewriter"]')
       seen('greet', greet)
       if (greet?.getAttribute('data-typing') === 'false') seen('greetDone', greet)
-      seen('indicator', document.querySelector('[data-testid="typing-indicator"]'))
+      const ind = document.querySelector('[data-testid="typing-indicator"]')
+      seen('indicator', ind)
+      if (ind && marks.indicatorAriaHidden == null) {
+        marks.indicatorAriaHidden = ind.getAttribute('aria-hidden') === 'true' ? 1 : 0
+        marks.indicatorDots = ind.querySelectorAll('.typing-dot').length
+      }
       seen('question', document.querySelector('[data-testid="question-age_band"]'))
       seen('chips', document.querySelector('[data-testid="inline-chips"]'))
       requestAnimationFrame(tick)
@@ -221,11 +226,8 @@ test('⑧ 부팅 순차 등장 — 인사 타이핑 완료 → 타이핑 인디�
   await expect(stream(page).getByText('몇 가지만 알려주시면 받으실 수 있는 제도와 근처 시설을 함께 찾아드릴게요.')).toBeVisible()
   await expect(stream(page).getByTestId('question-age_band')).toHaveCount(0)
 
-  // 인디케이터는 낭독 대상이 아니다(완성 문장만 1회 낭독 — AC8)
-  const dots = page.getByTestId('typing-indicator')
-  await expect(dots).toBeVisible()
-  await expect(dots).toHaveAttribute('aria-hidden', 'true')
-  await expect(dots.locator('.typing-dot')).toHaveCount(3)
+  // 인디케이터(320ms)는 expect 폴링 간격(100→250→500→1000ms)에 걸리지 않을 수 있어
+  // 여기서 toBeVisible 로 잡지 않는다 — 위 rAF 마크가 등장 시각·aria-hidden·점 개수를 기록한다.
 
   // 시퀀스가 끝나면 질문 버블과 그 아래 칩까지 도착해 있다
   await settleTypewriter(page)
@@ -239,6 +241,9 @@ test('⑧ 부팅 순차 등장 — 인사 타이핑 완료 → 타이핑 인디�
   // 순서: 인사 → (인사 타이핑 완료) → 인디케이터 → 질문 → 칩
   expect(marks.greet).toBeLessThan(marks.greetDone)
   expect(marks.greetDone).toBeLessThanOrEqual(marks.indicator)
+  // 인디케이터는 낭독 대상이 아니다(완성 문장만 1회 낭독 — AC8) + 점 3개
+  expect(marks.indicatorAriaHidden).toBe(1)
+  expect(marks.indicatorDots).toBe(3)
   expect(marks.indicator).toBeLessThan(marks.question)
   expect(marks.question).toBeLessThan(marks.chips)
   // 인사는 실제로 한 글자씩 찍혔고(즉시 완성 아님), 인디케이터는 300~600ms 머문다

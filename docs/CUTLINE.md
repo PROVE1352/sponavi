@@ -35,19 +35,19 @@
 | # | 항목 | 한 줄 |
 |---|---|---|
 | T0 | 0일차(사람) | `git push`(✅ 2026-08-27) · DNS A레코드(⏳ 사용자 결정으로 맨 마지막) · 중개자 메일 초안(⏳) |
-| T1 | 서버 engine 계약 | `_voucher_facilities(..., eligible)` 비적격 `subsidy=0/copay=fee` · `nearby.primary` · `_alternatives` 실좌표 우선 정렬 · voucher 행 `source` · `_collect_alt_edges` `to` dedupe(공식 확인 우선) · `_build_path` 정합 · API.md (EDGE #15·#16·#17·#20, 1A·CQ2A·OV1·OV3·OV4) |
-| T2 | 썸네일 복구 | `fetch_videos.py` 폴더+`img_file_nm` https 조립 · `main.py` CSP `img-src` · videos 재적재 · `FitnessResult` `<img onError>` (EDGE #9) |
-| T3 | `faci_gb` 마이그레이션 | `scripts/migrate_facility_gb.py`(ALTER+raw 조인, 재빌드 동치) · `build_db.py` · `store.py` (EDGE #21) |
-| T4 | 종목 별칭(C-27) | `data/sport_alias.json` + `fitness.py facility_filter_sports` 확장 · `web/src/lib/sports.ts` 1벌 (EDGE C-27) |
-| T5 | 챗 reply·slot 정합 | `chat.py _reconcile_reply` + D-08/D-10 패턴 표 — W2 이월 허용 (EDGE #14) |
-| T6 | 페르소나 `demo` 계약 | `personas.py demo:{fitness,parq_preset}` P2·P5 프리필 · API.md · `DemoPersona` · `normalizePersona` 보존 · `FitnessForm initialValues` · 목 (PRD ★FR-P2) |
-| T7 | 라우팅 | `serve.py` `/demo?…`→`/#/demo?…`(쿼리 보존)·`/gap`→`/gap.html` + TestClient · `route.ts` prefix+`p=` 파싱(`auto`는 W2) (EDGE F-09) |
-| T8 | 웹 금액·순서·배지 | 타입 nullable · `won(null)`→"미등록·시설 문의" 3셀 · 섹션 요약 1줄 · `FacilityCounts`/ContextPanel `supply_gap.voucher_count` 문구 · `AltRow` 공공/신고·등록 배지 · `nearby.primary` 순서 (EDGE #8·#10·#18·#19·#21) |
-| T9 | 히어로 위계 | `AltRoutesBlock` 덱 밖 전폭(`assess_result` 래퍼 안·CardDeck 앞) · 헤딩 `eligible` 분기·N=공식 확인 수·"확인 중 1건" · ✗ 사유 한 줄 전부 · CTA=기존 칩 · 인라인 강좌 3행 · e2e deck/p5/personas/shots 재정합 (PRD FR-02 AC5, FR-12 AC9) |
-| T10 | 테스트 인프라 | vitest(`npm test`) · 계약 JSON `web/src/mocks/contract/*.json` 웹 목 import · `server/tests/test_mock_parity.py` |
-| T11 | 배포 안전 | `deploy.sh` 기본 `--exclude 'data/sponavi.db*'` · `--with-db` · `scripts/db_fingerprint.sh`(캐시 제외) · FREEZE.sha 흐름 · 스모크 `data_built` 단언 (EDGE G-05·G-07) |
-| T12 | 문서 정합 | EDGE_CASES §0·A~G · 이 문서 · PRD v1.10 · REPORT_DRAFT §4 (`API.md`는 T1) |
-| T13 | HTTPS·관찰(사람) | DNS 후 `deploy.sh --with-db` 1회(T2·T3 반영) → https 200 · 낯선 사람 3명 QR 주소 60초 관찰 기록 — **맨 마지막** |
+| T1 | 서버 engine 계약 | `_voucher_facilities(..., eligible)` 비적격 `subsidy=0/copay=fee` · `nearby.primary` · `_alternatives` 실좌표 우선 정렬 · voucher 행 `source` · `_collect_alt_edges` `to` dedupe(공식 확인 우선) · `_build_path` 정합 · API.md (EDGE #15·#16·#17·#20, 1A·CQ2A·OV1·OV3·OV4) — ✅ 반영(2026-08-27, master d811430) |
+| T2 | 썸네일 복구 | `fetch_videos.py` 폴더+`img_file_nm` https 조립 · `main.py` CSP `img-src` · videos 재적재 · `FitnessResult` `<img onError>` (EDGE #9) — ✅ 반영(2026-08-27, master d811430) |
+| T3 | `faci_gb` 마이그레이션 | `scripts/migrate_facility_gb.py`(ALTER+raw 조인, 재빌드 동치) · `build_db.py` · `store.py` (EDGE #21) — ✅ 반영(2026-08-27, master d811430) |
+| T4 | 종목 별칭(C-27) | `data/sport_alias.json` + `fitness.py facility_filter_sports` 확장 · `web/src/lib/sports.ts` 1벌 (EDGE C-27) — ✅ 반영(2026-08-27, master d811430) |
+| T5 | 챗 reply·slot 정합 | `chat.py _reconcile_reply` + D-08/D-10 패턴 표 — W2 이월 허용 (EDGE #14) — ✅ 반영(2026-08-27, master d811430) |
+| T6 | 페르소나 `demo` 계약 | `personas.py demo:{fitness,parq_preset}` P2·P5 프리필 · API.md · `DemoPersona` · `normalizePersona` 보존 · `FitnessForm initialValues` · 목 (PRD ★FR-P2) — ✅ 반영(2026-08-27, master d811430) |
+| T7 | 라우팅 | `serve.py` `/demo?…`→`/#/demo?…`(쿼리 보존)·`/gap`→`/gap.html` + TestClient · `route.ts` prefix+`p=` 파싱(`auto`는 W2) (EDGE F-09) — ✅ 반영(2026-08-27, master d811430) |
+| T8 | 웹 금액·순서·배지 | 타입 nullable · `won(null)`→"미등록·시설 문의" 3셀 · 섹션 요약 1줄 · `FacilityCounts`/ContextPanel `supply_gap.voucher_count` 문구 · `AltRow` 공공/신고·등록 배지 · `nearby.primary` 순서 (EDGE #8·#10·#18·#19·#21) — ✅ 반영(2026-08-27, master d811430) |
+| T9 | 히어로 위계 | `AltRoutesBlock` 덱 밖 전폭(`assess_result` 래퍼 안·CardDeck 앞) · 헤딩 `eligible` 분기·N=공식 확인 수·"확인 중 1건" · ✗ 사유 한 줄 전부 · CTA=기존 칩 · 인라인 강좌 3행 · e2e deck/p5/personas/shots 재정합 (PRD FR-02 AC5, FR-12 AC9) — ✅ 반영(2026-08-27, master d811430) |
+| T10 | 테스트 인프라 | vitest(`npm test`) · 계약 JSON `web/src/mocks/contract/*.json` 웹 목 import · `server/tests/test_mock_parity.py` — ✅ 반영(2026-08-27, master d811430) |
+| T11 | 배포 안전 | `deploy.sh` 기본 `--exclude 'data/sponavi.db*'` · `--with-db` · `scripts/db_fingerprint.sh`(캐시 제외) · FREEZE.sha 흐름 · 스모크 `data_built` 단언 (EDGE G-05·G-07) — ✅ 반영(2026-08-27, master d811430) |
+| T12 | 문서 정합 | EDGE_CASES §0·A~G · 이 문서 · PRD v1.10 · REPORT_DRAFT §4 (`API.md`는 T1) — ✅ 반영(2026-08-27, master d811430) |
+| T13 | HTTPS·관찰(사람) — ⏳ 도메인은 맨 마지막(사용자 결정) | DNS 후 `deploy.sh --with-db` 1회(T2·T3 반영) → https 200 · 낯선 사람 3명 QR 주소 60초 관찰 기록 — **맨 마지막** |
 
 **자동재생(`auto=1`)은 W1이 아니다** — W2(9/6~9/10). W1에서 끝내는 것은 QR 주소가 동작하게 만드는 부분까지다:
 서버 리다이렉트(`/demo?…`→`/#/demo?…` 쿼리 보존, `/gap`→`/gap.html`) + `readDemo` 의 해시 내 `p=` 페르소나 선택 파싱.

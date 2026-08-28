@@ -108,6 +108,8 @@ def percentile(values: list[int], p: float) -> float:
 
 def threshold_from(public_counts: list[int]) -> int:
     """T = 공공시설 수 분포의 75퍼센타일(반올림) = 상위 25% 기준."""
+    # C-7 (보류): 심사단이 임계값 재검토를 제안했으나 9/17 코드·데이터 동결 전까지는
+    # 규칙·T·행수를 건드리지 않는다. 이번 변경은 레이아웃/문구 한정.
     return int(round(percentile(public_counts, 0.75)))
 
 
@@ -206,8 +208,10 @@ def data_date(conn: sqlite3.Connection, db: Path) -> tuple[str, str]:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M"), "DB 빌드 스탬프(meta.built_at)"
+    # 헤더 문구는 "무엇을 근거로 찍은 시각인가"만 말한다. 스탬프가 없다는 사실은
+    # 독자에게 쓸모없는 내부 사정이라 괄호 주석을 붙이지 않는다(C-8 헤더 정리).
     dt = datetime.fromtimestamp(db.stat().st_mtime, tz=timezone.utc)
-    return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M"), "DB 파일 시각(meta 스탬프 없음)"
+    return dt.astimezone(KST).strftime("%Y-%m-%d %H:%M"), "DB 파일 시각"
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +255,26 @@ h1 .sub{display:block;font-size:15px;font-weight:600;color:var(--muted);margin-t
   clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .tnote{margin:0 0 10px;font-size:13px;color:var(--muted)}
 .tnote code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:12px}
+/* 표 위 요약 — 규칙(임계값 공개)과 한계를 첫 화면에서 읽히게 한다.
+   각주에만 두면 228행 아래라 스크롤 없이는 보이지 않는다(심사단 지적). */
+.brief{
+  margin:0 0 10px;padding:12px 14px;background:var(--card);border:1px solid var(--line);
+  border-left:4px solid var(--brand);border-radius:12px;font-size:13.5px;color:var(--muted);
+}
+.brief p{margin:0}
+.brief p+p{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
+.brief b{color:var(--ink)}
+.brief .k{font-weight:800;color:var(--brand-800);font-variant-numeric:tabular-nums}
+/* 기본 정렬(장애인 가맹 오름차순)이 "최하위 목록"으로 읽히지 않게 헤더 바로 위에 둔다. */
+.disclaim{
+  margin:0 0 8px;padding:9px 12px;font-size:13px;line-height:1.5;color:var(--brand-800);
+  background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;
+}
+.disclaim b{color:var(--brand-800)}
+.hint{
+  margin:0 0 6px;text-align:center;font-size:12.5px;font-weight:700;color:var(--muted);
+}
+@media (min-width:768px){.hint{display:none}}
 .toggle{
   display:inline-flex;align-items:center;gap:6px;padding:9px 12px;font-size:14px;
   border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;
@@ -264,6 +288,8 @@ h1 .sub{display:block;font-size:15px;font-weight:600;color:var(--muted);margin-t
   overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);
   border:1px solid var(--line);border-radius:12px;
 }
+/* 가로 스크롤 영역은 키보드로도 밀 수 있어야 한다(tabindex="0" + 포커스 표시). */
+.wrap:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 table{border-collapse:separate;border-spacing:0;width:100%;min-width:600px;font-size:14px}
 th,td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
 td{line-height:1.3}
@@ -286,7 +312,11 @@ tbody tr:hover td:first-child{background:#eff6ff}
 tbody tr[hidden]{display:none}
 .sido{display:block;font-size:11.5px;line-height:1.25;font-weight:600;color:var(--muted)}
 .nm{font-weight:700}
-.zero{color:#b91c1c;font-weight:800}
+/* 0 은 "잘못"이 아니라 "다음에 할 수 있는 일"의 표시다 — 경고 빨강 대신 중립 강조. */
+.zero{
+  color:var(--navy);font-weight:800;background:var(--chip);
+  padding:1px 7px;border-radius:6px;
+}
 .c-dv{color:var(--dv)}
 .c-pub{color:var(--pub)}
 .col-det{display:none}
@@ -308,6 +338,14 @@ tbody tr[hidden]{display:none}
   .page{padding:16px 12px 48px}
   h1{font-size:19px}
   th,td{padding:8px 10px}
+  /* 표 위 안내가 길어져 표가 화면 밖으로 밀리지 않게 좁은 화면에서만 조인다. */
+  .lede{font-size:13px;margin-bottom:12px}
+  .summary{padding:10px 12px;margin-bottom:12px}
+  .controls{margin-bottom:10px}
+  .brief{font-size:12.5px;padding:10px 12px;line-height:1.55}
+  .brief p+p{margin-top:6px;padding-top:6px}
+  .tnote{margin-bottom:8px}
+  .disclaim{font-size:12.5px;padding:8px 10px;line-height:1.5}
 }
 """
 
@@ -335,6 +373,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
     suggested = sum(
         1 for r in rows if suggest(r.dvoucher, r.public, threshold)[1] != RANK_NONE
     )
+    blank = total - suggested   # 표 위 요약이 "빈칸도 규칙"이라고 말할 때 쓰는 수
     pubs = [r.public for r in rows]
 
     body: list[str] = []
@@ -395,8 +434,6 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
   국민체육진흥공단 스포츠강좌이용권 <b>등록시설</b> 자료(일반·장애인 2종)와
   공공데이터포털 <b>전국 공공체육시설</b> 자료를 시군구 단위로 맞춘 표입니다.
   데이터 기준 <b>{_esc(date_label)}</b> (KST, {_esc(date_basis)}).
-  지역을 줄 세우려는 표가 아니라, <b>다음에 할 수 있는 일</b>(가맹 전환·확대 대상)을
-  고르기 위한 목록입니다. 열 제목을 누르면 정렬됩니다.
 </p>
 <p class="summary">
   전국 <b>{total:,}</b>개 시군구 ·
@@ -410,8 +447,23 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
   <input id="q" type="search" placeholder="시군구 검색 (예: 고성, 강원, 서해구)" autocomplete="off">
   <label class="toggle" for="det">신고·등록 시설 수 함께 보기</label>
 </div>
+<div class="brief">
+  <p><b>제안 규칙</b>(임계값까지 공개합니다) — ① 장애인 가맹 <b>0곳</b>이고 공공시설 <b>1곳 이상</b>이면
+     <b>전환 후보</b>, ③ 장애인 가맹 <b>2곳 이하</b>이고 공공시설이
+     <span class="k">{threshold:,}곳 이상</span>(T = 이 표 {total}개 시군구 공공시설 수의 75퍼센타일)이면
+     <b>확대 후보</b>. 나머지 <b>{blank:,}행</b>이 빈칸인 것도 규칙입니다 —
+     근거가 없으면 제안을 만들지 않습니다.</p>
+  <p><b>한계</b> — 가맹 수는 등록시설 자료에 실린 <b>시설 수</b>일 뿐 실제 강좌 수·정원이 아니고,
+     공공시설이 있다고 곧바로 가맹이 되는 것도 아닙니다(시설 유형·운영 주체·접근성 확인 필요).
+     확인 대상을 좁히는 용도입니다 — 정의·출처·합산 규칙은
+     <a href="#notes">표 아래 “표 읽는 법 · 출처”</a>에 그대로 적어 두었습니다.</p>
+</div>
 <p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 <code>faci_gb_nm='공공'</code>만 셉니다(신고·등록 제외).</p>
-<div class="wrap">
+<p class="disclaim">지역을 줄 세우려는 표가 아니라, <b>다음에 할 수 있는 일</b>(가맹 전환·확대 대상)을
+  고르기 위한 목록입니다. 기본 정렬이 장애인 가맹 오름차순이라 <b>0곳</b>이 맨 위에 오지만
+  이는 순위가 아니라 <b>먼저 확인해 볼 곳</b>이라는 뜻입니다. 열 제목을 누르면 다시 정렬됩니다.</p>
+<p class="hint" aria-hidden="true">← 옆으로 넘겨보세요 →</p>
+<div class="wrap" tabindex="0" role="region" aria-label="시군구별 가맹·공공시설 표 (좌우로 스크롤됩니다)">
 <table id="gap" aria-describedby="tnote">
   <caption class="sr">시군구별 장애인 가맹·일반 가맹·공공체육시설 수와 가맹 유치 제안</caption>
   <thead><tr>
@@ -429,7 +481,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 </table>
 </div>
 <p class="empty" id="none" hidden>검색어와 맞는 시군구가 없습니다.</p>
-<div class="notes">
+<div class="notes" id="notes">
 <h2>표 읽는 법 · 출처</h2>
 <ol>
   <li><b>출처</b> — 장애인 가맹·일반 가맹: 국민체육진흥공단 스포츠강좌이용권 등록시설 자료 2종.

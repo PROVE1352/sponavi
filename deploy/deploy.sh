@@ -98,6 +98,7 @@ echo "== 2. rsync (코드) =="
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude '.venv' \
   --exclude data/raw --exclude web/e2e-shots --exclude '__pycache__' \
+  --exclude web/test-results --exclude web/playwright-report --exclude 'web/.playwright*' \
   --exclude 'data/sponavi.db*' \
   ./ "$HOST:$REMOTE_DIR/"
 

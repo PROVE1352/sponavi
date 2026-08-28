@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 스포내비 배포: 로컬 빌드 → rsync → 서버 docker build/up → 워치독 설치 → (DNS 있으면) Caddy → 스모크
+# 되나요 배포: 로컬 빌드 → rsync → 서버 docker build/up → 워치독 설치 → (DNS 있으면) Caddy → 스모크
 #
 # 사용:
 #   bash deploy/deploy.sh              # 코드만 배포 — 서버 DB 는 건드리지 않는다(기본)
@@ -14,7 +14,7 @@
 set -euo pipefail
 HOST=stockllm
 REMOTE_DIR='~/sponavi'
-DOMAIN=sponavi.kro.kr
+DOMAIN=doenayo.kro.kr
 DB_REL='data/sponavi.db'
 FREEZE_REL='data/FREEZE.sha'
 HEALTH_URL='http://127.0.0.1:8100/api/health'

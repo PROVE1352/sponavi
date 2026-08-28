@@ -1,5 +1,5 @@
 [Unit]
-Description=Run SpoNavi watchdog every 5 minutes
+Description=Run Doenayo watchdog every 5 minutes
 
 [Timer]
 # 부팅 2분 후 첫 실행, 이후 5분 주기(마지막 실행 종료 기준).

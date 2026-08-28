@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 스포내비 월간 데이터 갱신 — 원커맨드(로컬 실행 전용, 수동 트리거).
+# 되나요 월간 데이터 갱신 — 원커맨드(로컬 실행 전용, 수동 트리거).
 #
 # 파이프라인(순서 고정):
 #   bulk_fetch → build_db → load_accessibility → scrape_norms

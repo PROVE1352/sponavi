@@ -1,4 +1,4 @@
-"""SpoNavi FastAPI app. Endpoints per docs/API.md. Demo mode = fixtures only.
+"""Doenayo FastAPI app. Endpoints per docs/API.md. Demo mode = fixtures only.
 
 Run: cd server && uvicorn app.main:app --reload
 
@@ -27,7 +27,7 @@ from .models import AssessRequest, ChatNluRequest, FitnessRequest
 from .personas import PERSONAS
 from .store import REPO_ROOT, get_store
 
-app = FastAPI(title="SpoNavi API", version="1.0")
+app = FastAPI(title="Doenayo API", version="1.0")
 
 # ---------------------------------------------------------------------------
 # 프로세스 메타 (관측 가능성) — GET /api/health 확장 필드용

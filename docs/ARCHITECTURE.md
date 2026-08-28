@@ -1,4 +1,4 @@
-# 스포내비 아키텍처 v1
+# 되나요 아키텍처 v1
 
 > 작성 2026-07-20. 현 MVP(동작 중) 구조의 확정 기술문서 + M1(AI 처방)·M3(배포) 설계 계약.
 > 원칙: **틀리면 안 되는 것은 결정론, 섬세함이 값인 것만 AI. 데이터는 전량 로컬 적재 후 쿼리.**
@@ -168,7 +168,7 @@ RulesFallback       # LLM 실패/타임아웃 시 fitness_map 규칙 — 서비�
 ## 7. [M3] 배포 아키텍처 (기존 오라클 A1 재사용)
 
 ```
-사용자 ── HTTPS ──▶ Caddy(시스템) ──▶ sponavi.kro.kr → 127.0.0.1:8100 (FastAPI 컨테이너)
+사용자 ── HTTPS ──▶ Caddy(시스템) ──▶ doenayo.kro.kr → 127.0.0.1:8100 (FastAPI 컨테이너)
                         ├─ stockllm.kro.kr → :8765        ├─ 정적 web/dist 서빙(FastAPI StaticFiles)
                         └─ nodian.kro.kr  → :3000         └─ sponavi.db 볼륨 마운트(빌드 산출물)
 ```

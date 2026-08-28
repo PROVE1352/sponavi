@@ -101,7 +101,7 @@ def bench(base: str, name: str, path: str, body: dict | None, n: int) -> dict:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="SpoNavi API latency bench (p50/p95/p99)")
+    ap = argparse.ArgumentParser(description="Doenayo API latency bench (p50/p95/p99)")
     ap.add_argument("--base-url", default="http://127.0.0.1:8100")
     ap.add_argument("--n", type=int, default=100)
     args = ap.parse_args()
@@ -122,7 +122,7 @@ def main() -> int:
     rows = [bench(args.base_url, name, path, body, args.n) for name, path, body in targets]
 
     NFR_P95 = 500.0
-    print(f"\nSpoNavi API 벤치 — base={args.base_url}, n={args.n}/endpoint (ms)\n")
+    print(f"\nDoenayo API 벤치 — base={args.base_url}, n={args.n}/endpoint (ms)\n")
     header = f"{'endpoint':32} {'n':>4} {'ok':>4} {'p50':>8} {'p95':>8} {'p99':>8} {'max':>9}  status"
     print(header)
     print("-" * len(header))

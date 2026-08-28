@@ -1,4 +1,4 @@
-# SpoNavi server — minimal deps (SPEC §6). Python 3.11+
+# Doenayo server — minimal deps (SPEC §6). Python 3.11+
 fastapi>=0.110,<1.0
 uvicorn[standard]>=0.27,<1.0
 pydantic>=2.6,<3.0

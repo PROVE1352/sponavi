@@ -413,9 +413,9 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#0f172a">
-<meta name="description" content="스포내비 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
+<meta name="description" content="되나요 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
 <meta name="robots" content="index,follow">
-<title>{_esc(PAGE_TITLE)} · 스포내비</title>
+<title>{_esc(PAGE_TITLE)} · 되나요</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230369a1'/%3E%3Ctext x='32' y='46' font-family='sans-serif' font-size='42' font-weight='800' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
 <style>
 @font-face{{font-family:'Atkinson Hyperlegible';font-style:normal;font-weight:400;font-display:swap;
@@ -428,7 +428,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 </head>
 <body>
 <div class="page">
-<a class="back" href="/">← 스포내비로 돌아가기</a>
+<a class="back" href="/">← 되나요로 돌아가기</a>
 <h1>{_esc(SHORT_TITLE)}<span class="sub">시군구별 장애인스포츠강좌이용권 가맹 현황과 공공체육시설 후보</span></h1>
 <p class="lede">
   국민체육진흥공단 스포츠강좌이용권 <b>등록시설</b> 자료(일반·장애인 2종)와
@@ -505,7 +505,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
       아닙니다. 공공시설이 있다고 곧바로 가맹이 되는 것도 아닙니다(시설 유형·운영 주체·
       접근성 확인 필요). 이 표는 확인 대상을 좁히는 용도입니다.</li>
 </ol>
-<p style="margin-top:14px"><a class="back" href="/">← 스포내비로 돌아가기</a></p>
+<p style="margin-top:14px"><a class="back" href="/">← 되나요로 돌아가기</a></p>
 </div>
 </div>
 <script src="gap.js" defer></script>

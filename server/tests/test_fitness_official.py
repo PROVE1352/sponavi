@@ -279,3 +279,13 @@ def test_chair_stand_comparison_unit_not_mangled(off_store):
     assert res["weaknesses"] and res["weaknesses"][0]["comparison"] == cmp_line
     # 원본 값·단위 필드는 그대로(표기만 바뀜)
     assert res["items"][0]["value"] == 14 and res["items"][0]["unit"] == "30초/회"
+
+
+# --------------------------------------------------------------------------
+# ③ 출처 + 확인일 (P-1: 모든 안내에 공식 출처와 확인일) — 판정 카드 배지 옆 '확인일'
+# --------------------------------------------------------------------------
+def test_official_result_carries_basis_checked(off_store):
+    import re
+    from app.fitness import assess_fitness
+    res = assess_fitness(off_store, {"age": 22, "sex": "M", "measures": {"crunch_cross": 38}})
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", res["basis_checked"] or ""), res.get("basis_checked")

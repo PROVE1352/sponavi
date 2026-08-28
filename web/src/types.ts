@@ -335,6 +335,7 @@ export interface FitnessResponse {
   age_gap?: boolean
   sex?: Sex
   basis?: string
+  basis_checked?: string | null // 판정 기준(국민체력100 인증기준) 확인일 — 공식 경로에서만
   items?: FitnessItemResult[]
   weaknesses: Weakness[]
   reference_grade?: ReferenceGrade | null

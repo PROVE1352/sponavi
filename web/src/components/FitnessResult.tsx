@@ -102,6 +102,11 @@ export function FitnessResultCard({
         <Badge tone="ok" icon={<CheckIcon className="h-3.5 w-3.5" />}>
           국민체력100 공식 인증기준
         </Badge>
+        {result.basis_checked && (
+          <span data-testid="fitness-basis-checked" className="text-xs text-slate-600 dark:text-slate-400">
+            확인일 {result.basis_checked}
+          </span>
+        )}
         {result.age_group && (
           <span className="text-xs text-slate-600 dark:text-slate-400">{result.age_group}</span>
         )}

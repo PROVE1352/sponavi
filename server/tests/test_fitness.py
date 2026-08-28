@@ -115,3 +115,10 @@ def test_with_unit_plain_units_unchanged():
     assert _with_unit(45.2, "ml/kg/min") == "45.2ml/kg/min"
     assert _with_unit(28, None) == "28"
     assert _with_unit(28, "") == "28"
+
+
+def test_demo_fallback_has_no_basis_checked(store):
+    """데모 근사 컷에는 '확인일'이 없다 — 있는 척하지 않는다(P-1)."""
+    from app.fitness import assess_fitness
+    res = assess_fitness(store, {"age": 30, "sex": "F", "measures": {"sit_reach": 3}})
+    assert "basis_checked" in res and res["basis_checked"] is None

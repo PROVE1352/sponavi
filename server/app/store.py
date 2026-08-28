@@ -480,6 +480,15 @@ class Store:
             for r in rows
         ]
 
+    def fitness_norms_checked(self) -> Optional[str]:
+        """fitness_norm 적재분의 확인일(최댓값, 'YYYY-MM-DD'). 테이블 없음/빈 테이블이면 None.
+        판정 카드의 '출처 + 확인일' 표기(P-1: 모든 안내에 공식 출처와 확인일)에 쓴다."""
+        try:
+            row = self.conn.execute("SELECT MAX(checked) FROM fitness_norm").fetchone()
+        except sqlite3.Error:
+            return None
+        return row[0] if row and row[0] else None
+
     def fitness_norms(self, age: int, sex: str) -> dict:
         """{code: {"meta": {...}, "cuts": {grade: {"value","rule"}}}} for age/sex.
         테이블/행 없으면 {} (폴백 안전)."""

@@ -1,4 +1,6 @@
 """계약 형태 검증 (SPEC §7): uvicorn 대신 TestClient로 4페르소나 POST + 필드/형태 확인."""
+import re
+
 import pytest
 
 
@@ -80,7 +82,15 @@ def test_assess_contract_shape_for_personas(client, personas_by_id, db_store, pi
         assert isinstance(card["reasons"], list)
         for reason in card["reasons"]:
             assert set(reason) >= {"field", "ok", "message"}
-        assert card["source"]["checked"] == "2026-07-20"
+        # 출처는 (a) 확인일이 ISO 날짜여야 하고 (b) 이용권 카드는 주관기관(공단) 공식
+        # 도메인을 1차 출처로 물어야 한다 — 공단 주관 대회에서 culture.go.kr 이 대표
+        # 출처로 노출되던 회귀(모의심사 C-9)를 여기서 막는다.
+        assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", card["source"]["checked"] or "")
+        assert card["source"]["url"]
+        if card["program_id"] in ("svoucher", "dvoucher"):
+            assert card["source"]["url"].startswith(
+                f"https://{'s' if card['program_id'] == 'svoucher' else 'd'}voucher.kspo.or.kr"
+            ), f"{card['program_id']} 1차 출처가 공단 공식이 아니다: {card['source']['url']}"
 
     # path is a non-empty edge array with person origin
     assert data["path"] and data["path"][0]["from"] == "person"

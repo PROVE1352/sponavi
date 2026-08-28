@@ -4,8 +4,8 @@
   "verification_policy": "이용권/장애인이용권 자격은 공식/정부 출처에서 검증 후 인코딩. 확인일 2026-07-20.",
   "verified_on": "2026-07-20",
   "P4_decision": "dvoucher는 소득무관(소득기준 없음)이며 연령 상한 69세. 따라서 SPEC §5 규칙에 의해 P4='72세 청각장애(연령 초과)'로 확정. 근거: culture.go.kr 문화포털 통합 지원사업 안내(dvoucher 5~69세·소득무관), mnuri.kr(만5~69세, 저소득 '우선선정'=요건 아님).",
-  "sources_note": "복지로(bokjiro.go.kr) 상세 페이지는 JS 렌더링으로 정적 추출 불가 → 정부 문화포털(culture.go.kr)·국민체육진흥공단 위탁 안내(mnuri.kr)·언론 교차확인으로 대체. 모든 수치는 아래 sources에 근거.",
-  "checked": "2026-07-21"
+  "sources_note": "출처 우선순위: (장애인)스포츠강좌이용권은 주관기관인 국민체육진흥공단 공식 누리집(svoucher.kspo.or.kr·dvoucher.kspo.or.kr)이 1차 출처(tier=primary)이고, 정부 문화포털(culture.go.kr)·위탁 안내(mnuri.kr)·언론은 2차 교차확인(tier=secondary)으로 병기한다. 카드에 표시되는 출처는 sources[0]. 복지로(bokjiro.go.kr) 상세 페이지는 JS 렌더링으로 정적 추출 불가. 모든 수치는 아래 sources에 근거.",
+  "checked": "2026-08-28"
  },
  "programs": [
   {
@@ -35,19 +35,24 @@
    },
    "sources": [
     {
+     "url": "https://svoucher.kspo.or.kr",
+     "checked": "2026-08-28",
+     "label": "국민체육진흥공단 스포츠강좌이용권 누리집",
+     "tier": "primary",
+     "note": "주관기관(국민체육진흥공단) 공식 누리집 — 사업안내·신청 포털. 1차 출처."
+    },
+    {
      "url": "https://www.culture.go.kr/portal/cltBnf/cltSup/view.do?viewTp=2&rcrtSn=197398&menuNo=200104",
-     "checked": "2026-07-20",
-     "note": "정부 문화포털 '2026년 (장애인)스포츠강좌이용권 지원사업' — 5~18세, 기초·차상위·한부모, 월 10.5~11만원"
+     "checked": "2026-08-28",
+     "label": "정부 문화포털(문화비/지원사업 안내)",
+     "tier": "secondary",
+     "note": "정부 문화포털 '2026년 (장애인)스포츠강좌이용권 지원사업' — 5~18세, 기초·차상위·한부모, 월 10.5~11만원 (2차 교차확인)"
     },
     {
      "url": "https://www.wikitree.co.kr/articles/1093816",
-     "checked": "2026-07-20",
+     "checked": "2026-08-28",
+     "tier": "secondary",
      "note": "월 지원금 105,000원(유·청소년) 명시"
-    },
-    {
-     "url": "https://svoucher.kspo.or.kr",
-     "checked": "2026-07-20",
-     "note": "공식 신청 포털"
     }
    ],
    "verified": true
@@ -75,29 +80,37 @@
    },
    "sources": [
     {
+     "url": "https://dvoucher.kspo.or.kr",
+     "checked": "2026-08-28",
+     "label": "국민체육진흥공단 장애인스포츠강좌이용권 누리집",
+     "tier": "primary",
+     "note": "주관기관(국민체육진흥공단) 공식 누리집 — 사업안내·신청 포털. 1차 출처."
+    },
+    {
+     "url": "https://dvoucher.kspo.or.kr/dvoucher/main/contents.do?menuNo=800011&topMenuNo=800010",
+     "checked": "2026-08-28",
+     "label": "국민체육진흥공단 장애인스포츠강좌이용권 누리집 — 사업안내(선정순위)",
+     "tier": "primary",
+     "note": "공식 선정순위 5단계 원문 — 1순위 5~18 수급·차상위·한부모 ~ 5순위 19세+ 비저소득. '소득무관' 구문구는 HTML 주석으로 강등돼 있음(실사)"
+    },
+    {
      "url": "https://www.culture.go.kr/portal/cltBnf/cltSup/view.do?viewTp=2&rcrtSn=197398&menuNo=200104",
-     "checked": "2026-07-20",
-     "note": "정부 문화포털 — 장애인 5~69세(출생 1957.1.1~2021.12.31), 소득무관, 월 10.5~11만원"
+     "checked": "2026-08-28",
+     "label": "정부 문화포털(문화비/지원사업 안내)",
+     "tier": "secondary",
+     "note": "정부 문화포털 — 장애인 5~69세(출생 1957.1.1~2021.12.31), 소득무관, 월 10.5~11만원 (2차 교차확인)"
     },
     {
      "url": "https://www.mnuri.kr/munhwa/disabledVoucher.do",
-     "checked": "2026-07-20",
+     "checked": "2026-08-28",
+     "tier": "secondary",
      "note": "국민체육진흥공단 위탁 안내 — 만 5~69세 장애인, 월 11만원 범위, 저소득 우선선정"
     },
     {
      "url": "https://www.wikitree.co.kr/articles/1093816",
-     "checked": "2026-07-20",
+     "checked": "2026-08-28",
+     "tier": "secondary",
      "note": "월 지원금 110,000원(장애인) 명시"
-    },
-    {
-     "url": "https://dvoucher.kspo.or.kr",
-     "checked": "2026-07-20",
-     "note": "공식 신청 포털"
-    },
-    {
-     "url": "https://dvoucher.kspo.or.kr/dvoucher/main/contents.do?menuNo=800011&topMenuNo=800010",
-     "checked": "2026-07-21",
-     "note": "공식 선정순위 5단계 원문 — 1순위 5~18 수급·차상위·한부모 ~ 5순위 19세+ 비저소득. '소득무관' 구문구는 HTML 주석으로 강등돼 있음(실사)"
     }
    ],
    "verified": true,
@@ -128,7 +141,8 @@
     "tiebreak": "우선선정: 과거 누적 24개월 미만 이용자 → 동일 기준 내 기초생활수급 가구 → 기타 동일 자격은 시군구 자율 선정",
     "source": {
      "url": "https://dvoucher.kspo.or.kr/dvoucher/main/contents.do?menuNo=800011&topMenuNo=800010",
-     "checked": "2026-07-21",
+     "checked": "2026-08-28",
+     "label": "국민체육진흥공단 장애인스포츠강좌이용권 누리집 — 사업안내(선정순위)",
      "note": "공식 개인회원 가이드 LIVE 텍스트(주석 처리된 구버전 '만19~64 소득무관' 문구와 구분해 확인). tiebreak은 800004 페이지."
     }
    }
@@ -274,8 +288,10 @@
    "sources": [
     {
      "url": "https://www.culture.go.kr/deduction",
-     "checked": "2026-07-21",
-     "note": "공식 누리집 — 등록 사업자 검색 제공(벌크 데이터 미제공)"
+     "checked": "2026-08-28",
+     "label": "문화비 소득공제 누리집(문화체육관광부·한국문화정보원)",
+     "tier": "primary",
+     "note": "이 제도의 주관 공식 누리집 — 등록 사업자 검색 제공(벌크 데이터 미제공)"
     }
    ],
    "verified": true

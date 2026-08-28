@@ -457,7 +457,7 @@ def test_request_payload_shape_and_no_prompt_injection_into_system():
     assert payload["messages"][1]["content"] == text
     assert text not in payload["messages"][0]["content"], "발화는 시스템 프롬프트에 삽입 금지"
     assert "eligible" not in payload["messages"][0]["content"], "비화이트리스트 슬롯 미전송"
-    assert "다온" in payload["messages"][0]["content"], "봇 화자 페르소나 지시(PRD §2.5)"
+    assert "되나요" in payload["messages"][0]["content"] and "안내 화자" in payload["messages"][0]["content"], "봇 화자 페르소나 지시(PRD §2.5)"
     schema = payload["response_format"]["json_schema"]
     assert payload["response_format"]["type"] == "json_schema"
     assert schema["strict"] is True
@@ -497,7 +497,7 @@ def test_faq_shape_and_sources(client):
 def test_faq_answers_come_from_rules_json():
     """답변의 사실(수치·순위·문구)은 rules.json 필드에서만 — 문장 구성은 템플릿(§0-5).
 
-    v1.7에서 가독성 재조립(줄바꿈·다온 톤) — 원문 통짜 부분문자열 검증 대신
+    v1.7에서 가독성 재조립(줄바꿈·안내 톤) — 원문 통짜 부분문자열 검증 대신
     핵심 사실의 존재와 rules.json 원문 유래를 필드 단위로 검증한다."""
     st = _fresh_store()
     items = {i["key"]: i for i in chat.faq_list(st)}

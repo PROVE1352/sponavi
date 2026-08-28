@@ -254,7 +254,10 @@ function normalizePersona(
   const label =
     raw.label ?? `${id} · ${src.age}세 ${src.sex === 'F' ? '여' : '남'} · ${src.income_class}${disTxt}`
   const summary = raw.summary ?? raw.expected ?? `${src.sigungu_nm} 기준 예상 자격과 경로를 확인합니다`
-  return { ...src, id, label, summary }
+  // 3A: 최상위 demo:{fitness, parq_preset} 는 심사위원 프리필용 계약이다 —
+  // src 스프레드에 섞이지 않으므로 여기서 명시적으로 보존한다(없으면 프리필 없음).
+  const demo = { fitness: raw.demo?.fitness ?? null, parq_preset: raw.demo?.parq_preset ?? false }
+  return { ...src, id, label, summary, demo }
 }
 
 export async function getPersonas(): Promise<DemoPersona[]> {

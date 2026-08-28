@@ -267,7 +267,7 @@ const P1: AssessResponse = {
     sigungu_nm: '성북구',
     alt_count: 3,
     nearest: null,
-    message: '스포츠강좌이용권 · 성북구 가맹 4곳',
+    message: `스포츠강좌이용권 · 성북구 가맹 ${SEONGBUK_VOUCHER_COUNT}곳`,
     coverage: COVERAGE_SB_NEARPOOR,
   },
 }

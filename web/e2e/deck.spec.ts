@@ -14,7 +14,7 @@ import {
 } from './helpers'
 
 // 모바일 결과 덱 v1.7 계약(PRD FR-12 AC9) — 사용자 원문: "휴대폰일 경우 상하가 너무 많이 움직임".
-//   ① 390px 결과는 단일 덱 하나(판정 → 대체경로 → 공백·커버리지 → 시설)로 통합된다
+//   ① 390px 결과는 단일 덱 하나(판정 → 공백·커버리지 → 시설) + 덱 밖 히어로로 통합된다(v1.10 6A)
 //   ② 결과 세로 길이가 v1.6(개별 메시지 나열) 대비 크게 줄어든다
 //   ③ 오토스크롤은 덱 시작점으로 한 번만 — 결과 시퀀스가 바닥을 연쇄 추종하지 않는다
 //   ④ 데스크톱(lg+)은 기존 세로 블록 유지
@@ -22,8 +22,11 @@ import {
 
 // v1.6 실측(390px, 목 데이터): 결과 블록(판정 카드 최상단 ~ 시설 요약 최하단) 세로 길이
 //   P1 1502px · P5 2697px · 메인 칩 완주 1562px
-// 덱은 "가장 높은 슬라이드 1장 + 힌트/진행 표시"라 이 값들을 크게 밑돌아야 한다.
-const DECK_MAX_H = 1100
+// 덱은 "가장 높은 슬라이드 1장 + 힌트/진행 표시"라 이 값들을 밑돌아야 한다.
+// ★ v1.10 재측정: 히어로('지금 바로 되는 것' 전폭 블록)와 근처 강좌 3행이 덱 밖·앵커 안으로
+//   올라와 앵커 높이에 합산된다(설계 6A). 실측 P5 2279 · P2 1590 · P1 1391 · 메인 1429
+//   → 상한 2400(여전히 v1.6 나열 2697 아래). "덱 자체가 짧다"는 ① 의 슬라이드 구성이 본다.
+const DECK_MAX_H = 2400
 
 async function resultBlockHeight(page: import('@playwright/test').Page): Promise<number> {
   return page.evaluate(() => {
@@ -32,9 +35,7 @@ async function resultBlockHeight(page: import('@playwright/test').Page): Promise
   })
 }
 
-test('① 390px — 판정 결과가 단일 덱으로 통합된다(판정·대체경로·공백·시설 슬라이드)', async ({
-  page,
-}) => {
+test('① 390px — 판정 결과 = 덱 밖 히어로 + 단일 덱(6A)', async ({ page }) => {
   await openDemo(page)
   await startPersona(page, 'P5')
   await settleTypewriter(page)
@@ -44,19 +45,49 @@ test('① 390px — 판정 결과가 단일 덱으로 통합된다(판정·대�
   // 결과 영역의 가로 스냅 컨테이너는 이 덱 하나뿐이다
   expect(await snapContainerCount(page)).toBe(1)
 
-  // 슬라이드 구성: 판정 카드 → 지금 바로 되는 것 → 공급공백·커버리지 → 시설 요약 → 시설 카드
+  // ★ v1.10(6A): '지금 바로 되는 것'은 덱 슬라이드가 아니다 — 덱 밖, 그러나 같은 결과 메시지
+  //   (앵커 [data-result-anchor]) 안에서 덱보다 먼저 온다. 그래서 폰 첫 화면에 스와이프 없이 보인다.
+  const anchor = page.locator('[data-result-anchor]')
+  await expect(d.getByTestId('now-available-block')).toHaveCount(0)
+  await expect(anchor.getByTestId('now-available-block')).toBeVisible()
+  // 계약 JSON = 공식 확인 2 + 검증 대기 1 → 본문 2줄 + "확인 중 1건" 한 줄(헤딩의 N 은 공식 확인만)
+  await expect(anchor.getByTestId('now-available-item')).toHaveCount(2)
+  await expect(anchor.getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+
+  // 슬라이드 구성: 판정 카드 → 공급공백·커버리지 → 시설 요약 → 시설 카드
   await expect(d.getByRole('article', { name: /예상 자격 결과/ }).first()).toBeVisible()
   await expect(d.getByTestId('selection-block')).toBeVisible()
-  await expect(d.getByTestId('now-available-block')).toBeVisible()
-  await expect(d.getByTestId('now-available-item')).toHaveCount(3)
-  await expect(d.getByTestId('voucher-gap-block')).toBeVisible() // 공급공백
+  // 계약 갱신(T2A): 성북 장애인 가맹은 41곳 — 공급공백이 아니라 구 단위 공급 블록이 온다
+  await expect(d.getByTestId('voucher-supply-block')).toContainText('성북구 가맹 41곳')
   await expect(d.getByText(/수급률은/)).toBeVisible() // 커버리지(같은 슬라이드)
-  await expect(d.getByTestId('facility-summary')).toBeVisible()
   await expect(d.getByTestId('dvoucher-facility').first()).toBeVisible()
+  await expect(d.getByTestId('facility-summary')).toBeVisible()
+  // 슬라이드 수 = 판정 3 + 공백 1 + 시설머리 1 + 가맹 미리보기 3(대안 0) = 8 (대체경로 슬라이드 없음)
+  await expect(page.getByTestId('deck-progress')).toContainText('/ 8')
 
   // 결과가 세로 버블로 쌓이지 않는다 — 결과 메시지는 스트림에 딱 하나
-  await expect(page.locator('[data-result-anchor]')).toHaveCount(1)
+  await expect(anchor).toHaveCount(1)
   await assertNoHorizontalScroll(page)
+})
+
+test('①-b 390px — P2(✗) 첫 화면에서 스와이프 없이 히어로가 보인다(6A 성공기준)', async ({
+  page,
+}) => {
+  await openDemo(page)
+  await startPersona(page, 'P2')
+  await settleTypewriter(page)
+
+  const hero = stream(page).getByTestId('alt-routes-block')
+  await expect(hero).toBeVisible()
+  const box = await hero.boundingBox()
+  const vh = page.viewportSize()!.height
+  expect(box, '히어로 박스를 못 잡았다').not.toBeNull()
+  // 오토스크롤이 앵커를 화면 위쪽에 붙인 직후 = 히어로가 뷰포트 안(가로 스와이프 0회)
+  expect(box!.y, `히어로 top ${box!.y}`).toBeLessThan(vh)
+  expect(box!.y + box!.height, '히어로가 화면 위로 밀려 올라갔다').toBeGreaterThan(0)
+  // 결과 카드 하단 인라인 강좌는 3행까지만(전체 목록은 패널)
+  const rows = stream(page).getByTestId('inline-facilities').locator('> ul > li')
+  expect(await rows.count(), '인라인 강좌는 3행 이하').toBeLessThanOrEqual(3)
 })
 
 test('② 390px — 결과 세로 길이가 v1.6 개별 메시지 나열보다 크게 줄었다', async ({ page }) => {

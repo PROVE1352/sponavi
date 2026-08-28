@@ -96,6 +96,7 @@ function ChatShell({ demo }: { demo: boolean }) {
     setFilterSports,
     applyFilter,
     fitness,
+    fitnessPrefill,
   } = useChatController(demo)
   const panelRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
@@ -154,6 +155,8 @@ function ChatShell({ demo }: { demo: boolean }) {
     // 그래서 "열려 있는 질문"이 메시지 렌더러로 내려간다.
     activeQuestionId: state.activeQuestionId,
     fitness,
+    // 3A: 데모 페르소나를 골랐다면 체력 폼이 그 값으로 미리 채워진다(심사 1클릭 경로).
+    fitnessPrefill,
   }
 
   return (

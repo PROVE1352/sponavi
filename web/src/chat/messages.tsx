@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { AssessRequest, AssessResponse } from '../types'
+import type { AccessibilityMap } from '../types_accessibility'
 import type {
   Chip,
   ChatMessage,
@@ -288,13 +289,23 @@ const ELIGIBILITY_NOTE = (
 
 // 시설 요약의 머리(구 단위 카운트 배지)와 발(나머지 안내 + 패널 열기 버튼)은
 // 덱 슬라이드와 데스크톱 카드가 같은 것을 쓴다.
+// FR-04 AC6(OV5): 화면에 실제로 표시한 수(잘린 목록 길이)와 구 단위 가맹 수를 분리해 적는다.
+// 자격 ✗(primary='alternatives')이면 못 쓰는 가맹 숫자는 강조하지 않는다.
+export function facilityCountText(req: AssessRequest, data: AssessResponse): string {
+  const n = data.nearby.voucher_facilities.length
+  const count = data.supply_gap.voucher_count
+  if (data.nearby.primary === 'alternatives') {
+    return `근처 대안 ${data.nearby.alternatives.length}곳 표시`
+  }
+  if (count == null) return `근처 ${n}곳 표시`
+  return `근처 ${n}곳 표시 · ${req.sigungu_nm} 가맹 ${count}곳`
+}
+
 function FacilityCounts({ req, data }: { req: AssessRequest; data: AssessResponse }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {/* 이용권은 구 단위 카운트(반경 문구 금지, FR-04 AC2) */}
-      <Badge tone="brand">
-        {req.sigungu_nm} 이용권 가맹 {data.nearby.voucher_facilities.length}곳
-      </Badge>
+      <Badge tone="brand">{facilityCountText(req, data)}</Badge>
       <Badge tone="ok">공공·대안 {data.nearby.alternatives.length}곳</Badge>
     </div>
   )
@@ -362,34 +373,93 @@ function usePreviewAccessibility(data: AssessResponse) {
   return { vouchers, alternatives, access, error }
 }
 
+// ── 히어로(6A) ──────────────────────────────────────────────────────────
+// '지금 바로 되는 것' 블록은 덱 슬라이드가 아니라 `assess_result` 안 전폭 블록이다.
+// 위치는 CardDeck/세로 블록보다 **앞** — 폰 390px 첫 화면에서 스와이프 없이 보여야 한다.
+// 앵커(data-result-anchor)는 메시지 래퍼 그대로라 1회 오토스크롤 동작은 바뀌지 않는다.
+function ResultHero({
+  req,
+  data,
+  onStartFitness,
+}: {
+  req: AssessRequest
+  data: AssessResponse
+  onStartFitness: () => void
+}) {
+  const primary = data.eligibility.find((p) => p.program_id === primaryProgramId(req))
+  const altEdges = data.alt_edges ?? []
+  if (!primary || altRouteItems(primary, altEdges).items.length === 0) return null
+  return (
+    <div className="mb-3">
+      <AltRoutesBlock card={primary} altEdges={altEdges} onStartFitness={onStartFitness} />
+    </div>
+  )
+}
+
+// 결과 카드 하단 인라인 강좌 3행(W1) — 패널로 점프하지 않아도 "무엇을 하면 되는지"가 보인다.
+// 어느 목록을 쓰는지는 서버가 정한 nearby.primary 를 따른다(1A). 전체 목록은 패널 소관.
+const INLINE_LIMIT = 3
+
+function InlineFacilities({
+  data,
+  access,
+  accessError,
+}: {
+  data: AssessResponse
+  access: AccessibilityMap
+  accessError?: boolean
+}) {
+  const altsFirst = data.nearby.primary === 'alternatives'
+  const alts = data.nearby.alternatives.slice(0, INLINE_LIMIT)
+  const vouchers = data.nearby.voucher_facilities.slice(0, INLINE_LIMIT)
+  const rows = altsFirst ? alts : vouchers
+  if (rows.length === 0) return null
+  return (
+    <section data-testid="inline-facilities" aria-label="근처 강좌 미리보기" className="mt-3">
+      <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+        {altsFirst ? '근처 공공·대안 강좌' : '근처 이용권 가맹 강좌'} {rows.length}곳
+      </h3>
+      <ul className="space-y-2">
+        {altsFirst
+          ? alts.map((a) => <AltRow key={a.id} a={a} />)
+          : vouchers.map((v) => (
+              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={accessError} />
+            ))}
+      </ul>
+    </section>
+  )
+}
+
 // ── 모바일 결과 덱 ───────────────────────────────────────────────────────
 function ResultDeck({
   req,
   data,
   onOpenPanel,
+  onStartFitness,
 }: {
   req: AssessRequest
   data: AssessResponse
   onOpenPanel: (tab: 'map' | 'list') => void
+  onStartFitness: () => void
 }) {
   const { vouchers, alternatives, access, error } = usePreviewAccessibility(data)
   const primaryId = primaryProgramId(req)
-  const primary = data.eligibility.find((p) => p.program_id === primaryId)
   // 덱은 한 번에 한 장만 보이므로 "내 상황의 제도"가 첫 장이어야 한다
   // (비장애=스포츠강좌이용권 / 장애=장애인스포츠강좌이용권). 데스크톱은 전부 한눈에 보여 순서 유지.
   const cards = useMemo(
     () => [...data.eligibility].sort((a, b) => Number(b.program_id === primaryId) - Number(a.program_id === primaryId)),
     [data.eligibility, primaryId],
   )
-  const altEdges = data.alt_edges ?? []
-  const altItems = primary ? altRouteItems(primary, altEdges).items : []
-  const showAlt = primary != null && altItems.length > 0
 
-  const slides =
-    data.eligibility.length + (showAlt ? 1 : 0) + 1 + 1 + vouchers.length + alternatives.length
+  // 6A: 대체경로는 더 이상 덱 슬라이드가 아니다 — 슬라이드 수에서도 빠진다.
+  const slides = data.eligibility.length + 1 + 1 + vouchers.length + alternatives.length
 
   return (
     <section data-testid="assess-cards" aria-label="예상 자격 결과" className="space-y-2">
+      {/* ★ 히어로 + 근처 강좌 3행: 덱보다 앞 = 폰 첫 화면(스와이프 0회) */}
+      <ResultHero req={req} data={data} onStartFitness={onStartFitness} />
+      <InlineFacilities data={data} access={access} accessError={error} />
+
       <CardDeck
         testId="result-deck"
         ariaLabel={`판정 결과 카드 ${slides}장, 좌우로 이동`}
@@ -403,21 +473,12 @@ function ResultDeck({
           </li>
         ))}
 
-        {/* ② '지금 바로 되는 것' / 대체경로 */}
-        {showAlt && primary && (
-          <li key="alt-routes" className="min-w-0">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
-              <AltRoutesBlock card={primary} altEdges={altEdges} />
-            </div>
-          </li>
-        )}
-
-        {/* ③ 공급공백 · 커버리지 */}
+        {/* ② 공급공백 · 커버리지 (대체경로는 덱 밖 히어로로 승격 — 6A) */}
         <li key="supply-gap" className="min-w-0">
           <SupplyGapBanner gap={data.supply_gap} />
         </li>
 
-        {/* ④ 근처 자원 머리 슬라이드(카운트 + 패널 열기) */}
+        {/* ③ 근처 자원 머리 슬라이드(카운트 + 패널 열기) */}
         <li key="facility-head" className="min-w-0">
           <section
             data-testid="facility-summary"
@@ -436,13 +497,21 @@ function ResultDeck({
           </section>
         </li>
 
-        {/* ⑤ 시설 카드들(이용권 가맹 → 공공·대안). VoucherRow/AltRow 가 이미 <li> 다. */}
-        {vouchers.map((v) => (
-          <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-        ))}
-        {alternatives.map((a) => (
-          <AltRow key={a.id} a={a} />
-        ))}
+        {/* ④ 시설 카드들. 순서는 서버가 정한 nearby.primary 를 따른다(1A) —
+            이용권 ✗ 사용자에게 가맹시설을 먼저 보여 주지 않는다. */}
+        {data.nearby.primary === 'alternatives'
+          ? [
+              ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+              ...vouchers.map((v) => (
+                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+              )),
+            ]
+          : [
+              ...vouchers.map((v) => (
+                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+              )),
+              ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+            ]}
       </CardDeck>
 
       <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
@@ -455,17 +524,21 @@ function ResultBlocks({
   req,
   data,
   onOpenPanel,
+  onStartFitness,
 }: {
   req: AssessRequest
   data: AssessResponse
   onOpenPanel: (tab: 'map' | 'list') => void
+  onStartFitness: () => void
 }) {
   const { vouchers, alternatives, access, error } = usePreviewAccessibility(data)
-  const primaryId = primaryProgramId(req)
   const cards = vouchers.length + alternatives.length
 
   return (
     <div className="space-y-4">
+      {/* 6A: 히어로는 카드 그리드보다 앞(같은 메시지 안 전폭 블록) */}
+      <ResultHero req={req} data={data} onStartFitness={onStartFitness} />
+
       <section data-testid="assess-cards" aria-label="제도별 예상 자격" className="space-y-3">
         <CardCarousel
           testId="assess-carousel"
@@ -476,14 +549,13 @@ function ResultBlocks({
         >
           {data.eligibility.map((p) => (
             <li key={p.program_id} className="min-w-0">
-              <EligibilityCard
-                p={p}
-                altEdges={p.program_id === primaryId ? data.alt_edges : undefined}
-              />
+              <EligibilityCard p={p} />
             </li>
           ))}
         </CardCarousel>
         <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
+        {/* 결과 카드 하단 인라인 강좌 3행 — 전체 목록은 오른쪽 패널이 계속 소유한다 */}
+        <InlineFacilities data={data} access={access} accessError={error} />
       </section>
 
       <SupplyGapBanner gap={data.supply_gap} />
@@ -509,12 +581,20 @@ function ResultBlocks({
               layout="stack"
               fade="card"
             >
-              {vouchers.map((v) => (
-                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-              ))}
-              {alternatives.map((a) => (
-                <AltRow key={a.id} a={a} />
-              ))}
+              {/* 1A: 이용권 ✗ 면 대안이 먼저다(서버가 정한 nearby.primary) */}
+              {data.nearby.primary === 'alternatives'
+                ? [
+                    ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+                    ...vouchers.map((v) => (
+                      <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+                    )),
+                  ]
+                : [
+                    ...vouchers.map((v) => (
+                      <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+                    )),
+                    ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+                  ]}
             </CardCarousel>
           </div>
         ) : (
@@ -528,18 +608,30 @@ function ResultBlocks({
   )
 }
 
-function AssessResult({
-  msg,
-  onOpenPanel,
-}: {
-  msg: AssessResultMsg
-  onOpenPanel: (tab: 'map' | 'list') => void
-}) {
+// 히어로 CTA 는 후속 칩 "체력 처방 시작"과 **같은 액션**을 태운다(새 진입로 금지, FR-02 AC5).
+const HERO_FITNESS_CHIP: Chip = {
+  id: 'act-fitness-hero',
+  label: '체력 처방 시작',
+  action: { kind: 'start_fitness' },
+}
+
+function AssessResult({ msg, h }: { msg: AssessResultMsg; h: MessageHandlers }) {
   const wide = useIsWide()
+  const onStartFitness = useCallback(() => h.onChip(HERO_FITNESS_CHIP, msg.id), [h, msg.id])
   return wide ? (
-    <ResultBlocks req={msg.req} data={msg.data} onOpenPanel={onOpenPanel} />
+    <ResultBlocks
+      req={msg.req}
+      data={msg.data}
+      onOpenPanel={h.onOpenPanel}
+      onStartFitness={onStartFitness}
+    />
   ) : (
-    <ResultDeck req={msg.req} data={msg.data} onOpenPanel={onOpenPanel} />
+    <ResultDeck
+      req={msg.req}
+      data={msg.data}
+      onOpenPanel={h.onOpenPanel}
+      onStartFitness={onStartFitness}
+    />
   )
 }
 
@@ -685,6 +777,8 @@ export interface MessageHandlers {
   activeQuestionId: string | null
   // 체력 레인 3턴의 상태·액션(useFitness + 스토어 진행도).
   fitness: FitnessTurnApi
+  // 3A: 데모 페르소나 프리필(코드→값). 폼이 마운트될 때 씨앗으로만 쓴다.
+  fitnessPrefill?: Record<string, number> | null
 }
 
 export function MessageView({
@@ -721,7 +815,7 @@ export function MessageView({
     case 'assess_result':
       return (
         <BotLane showSender={showSender}>
-          <AssessResult msg={msg} onOpenPanel={h.onOpenPanel} />
+          <AssessResult msg={msg} h={h} />
         </BotLane>
       )
 
@@ -743,6 +837,7 @@ export function MessageView({
           <FitnessFormCard
             lane={h.fitness}
             locked={msg.laneId !== h.fitness.laneId}
+            initialValues={h.fitnessPrefill}
             onSubmit={h.fitness.onSubmit}
           />
         </BotLane>

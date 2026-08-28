@@ -28,6 +28,7 @@ import type {
 } from '../types_chat'
 import { EMPTY_SLOTS } from '../types_chat'
 import { toAppError } from '../components/ErrorPanel'
+import { readDemoRoute } from './route'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
 import {
@@ -114,17 +115,29 @@ export function useChatController(demo = false) {
   const lastAttempt = useRef<AssessRequest | null>(null)
   const booted = useRef(false)
 
+  // 3A: 데모 페르소나를 골랐다면 그 페르소나의 측정값이 체력 폼의 씨앗이 된다
+  // (심사위원이 혼자 밟는 경로 — 값을 손으로 넣지 않아도 처방까지 간다).
+  const activePersona = personas.find((p) => p.id === state.activePersonaId) ?? null
+
   // 체력 레인(FR-07~09)의 조회·제출·AI 상태. 판정 결과의 나이·성별을 그대로 따른다.
   const lane = useFitness({
     age: state.lastAssess?.req.age ?? null,
     sex: state.lastAssess?.req.sex ?? null,
     active: state.fitness.active,
+    prefill: activePersona?.demo?.fitness ?? null,
   })
 
   const push = useCallback(
     (...messages: ChatMessage[]) => dispatch({ type: 'push', messages }),
     [dispatch],
   )
+
+  // 후속 칩에 붙일 FAQ 사전의 "지금 값". 판정은 부팅 직후에도 일어날 수 있는데(딥링크 p=),
+  // 그때 클로저가 잡은 빈 배열을 쓰면 딥링크 결과에만 FAQ 칩이 빠진다 — 칩 경로와 어긋난다.
+  const faqRef = useRef(state.faq)
+  useEffect(() => {
+    faqRef.current = state.faq
+  }, [state.faq])
 
   // ── 질문 던지기 ──────────────────────────────────────────────
   const askQuestion = useCallback(
@@ -162,7 +175,7 @@ export function useChatController(demo = false) {
         const data = await assess(req)
         dispatch({ type: 'setAssess', req, data })
         dispatch({ type: 'setPhase', phase: 'assessed' })
-        const followUp = followUpChips(state.faq.map((f) => ({ key: f.key, q: f.q })))
+        const followUp = followUpChips(faqRef.current.map((f) => ({ key: f.key, q: f.q })))
         // 경로 시각화(FR-03 v1.4): 데모 결과에만 항시 펼침으로 넣는다.
         // 메인 결과에는 아예 렌더하지 않는다 — 실사용 화면은 판정 카드 중심으로 경량화.
         const pathCard: ChatMessage[] = demo
@@ -191,7 +204,7 @@ export function useChatController(demo = false) {
         dispatch({ type: 'setPending', pending: false })
       }
     },
-    [demo, dispatch, push, state.faq],
+    [demo, dispatch, push],
   )
 
   // 다음 미완 슬롯을 묻거나, 다 찼으면 판정으로 넘어간다(FR-12 AC6).
@@ -206,6 +219,20 @@ export function useChatController(demo = false) {
       if (req) void runAssess(req)
     },
     [askQuestion, personas, runAssess, sigungu],
+  )
+
+  // 퀵스타트 페르소나 확정 1벌 — 칩 클릭과 딥링크(`#/demo?p=P2`)가 같은 경로를 탄다(OV10).
+  // LLM 0회: 슬롯을 직접 채우고 곧바로 판정한다.
+  const selectPersona = useCallback(
+    (p: DemoPersona, msgId: string) => {
+      push(userText(`${p.id} · ${p.label}`))
+      dispatch({ type: 'answerQuestion', id: msgId, label: p.label })
+      dispatch({ type: 'setSlots', slots: slotsFromRequest(p) })
+      dispatch({ type: 'setPersona', id: p.id })
+      push(botText(personaEchoText(p)))
+      void runAssess(p)
+    },
+    [dispatch, push, runAssess],
   )
 
   // ── 부팅: 메타 로드 + 인사 ───────────────────────────────────
@@ -240,8 +267,9 @@ export function useChatController(demo = false) {
       dispatch({ type: 'setPhase', phase: 'collect' })
       // 퀵스타트(P1~P5)는 "인사 메시지의 칩"이다(FR-12 AC5) — 컴포저가 아니라 메시지 안에서 렌더.
       const spec = questionSpec('greet', { sigungu: sg, personas: ps })
+      const greetId = nextId('q')
       push({
-        id: nextId('q'),
+        id: greetId,
         role: 'bot',
         kind: 'chip_question',
         question: 'greet',
@@ -249,13 +277,19 @@ export function useChatController(demo = false) {
         chips: spec.chips,
         select: 'action',
       })
+
+      // OV10 딥링크: `#/demo?p=P2` 는 그 칩을 대신 눌러 준다(LLM 0회 · 칩 경로 그대로).
+      // `auto` 는 여기서 읽기만 하고 쓰지 않는다 — 자동재생은 W2 몫이다.
+      const { p: wanted } = readDemoRoute()
+      const picked = wanted ? ps.find((x) => x.id === wanted) : undefined
+      if (picked) selectPersona(picked, greetId)
     })()
 
     // FAQ 사전(정적). 실패해도 대화는 그대로 동작한다.
     chatFaq()
       .then((f) => dispatch({ type: 'setFaq', faq: f }))
       .catch(() => undefined)
-  }, [askQuestion, demo, dispatch, push])
+  }, [askQuestion, demo, dispatch, push, selectPersona])
 
   // ── 강등(FR-12 AC4) ─────────────────────────────────────────
   const degrade = useCallback(() => {
@@ -450,12 +484,7 @@ export function useChatController(demo = false) {
         case 'persona': {
           const p = personas.find((x) => x.id === a.personaId)
           if (!p) return
-          push(userText(`${p.id} · ${p.label}`))
-          dispatch({ type: 'answerQuestion', id: msgId, label: p.label })
-          dispatch({ type: 'setSlots', slots: slotsFromRequest(p) })
-          dispatch({ type: 'setPersona', id: p.id })
-          push(botText(personaEchoText(p)))
-          void runAssess(p)
+          selectPersona(p, msgId)
           return
         }
         case 'manual_start': {
@@ -519,7 +548,7 @@ export function useChatController(demo = false) {
       openPanel,
       personas,
       push,
-      runAssess,
+      selectPersona,
       sigungu,
       startFitness,
       state.slots,
@@ -789,6 +818,8 @@ export function useChatController(demo = false) {
     state,
     sigungu,
     personas,
+    // 3A: 체력 폼이 마운트될 때 쓸 데모 프리필(선택된 페르소나의 측정값).
+    fitnessPrefill: lane.initialValues,
     onChip,
     onSend,
     onRetry,

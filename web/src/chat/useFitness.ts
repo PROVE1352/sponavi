@@ -57,17 +57,22 @@ export function buildRows(items: FitnessItem[]): FitnessFormRow[] {
 export interface UseFitnessResult extends FitnessLaneApi {
   // 제출 성공 시 판정 결과(실패는 submitError 로 표면화하고 null 반환).
   submit: (measures: Record<string, number>) => Promise<FitnessResponse | null>
+  // 3A: 폼이 마운트될 때 씨앗으로 쓸 데모 프리필(코드→값). 레인이 꺼져 있으면 null.
+  initialValues: Record<string, number> | null
 }
 
 export function useFitness({
   age,
   sex,
   active,
+  prefill = null,
 }: {
   age: number | null
   sex: Sex | null
   // 레인이 시작되기 전(=PAR-Q 턴 이전)에는 카탈로그도 부르지 않는다.
   active: boolean
+  // 데모 페르소나가 들고 온 측정값(GET /api/demo/personas 의 demo.fitness). 없으면 null.
+  prefill?: Record<string, number> | null
 }): UseFitnessResult {
   const [items, setItems] = useState<FitnessItemsResponse | null>(null)
   const [itemsError, setItemsError] = useState(false)
@@ -221,5 +226,6 @@ export function useFitness({
     requestAi,
     cancelAi,
     submit,
+    initialValues: active ? prefill : null,
   }
 }

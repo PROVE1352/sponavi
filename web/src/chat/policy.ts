@@ -441,8 +441,18 @@ export function disabilityTypeChips(): Chip[] {
 
 // 퀵스타트 칩(FR-12 AC5) — 클릭 1회 완주 + 기대 결과 라벨.
 // ★ v1.4: 데모 페이지(/#/demo) 전용이다. 메인 랜딩에는 렌더하지 않는다.
+// 데모 칩 노출 순서(클라 상수) — 심사 동선 순: 낀 계층(P2) → 비저소득 장애(P5) → 나머지.
+// 서버 응답 순서는 건드리지 않는다(계약은 그대로, 화면 순서만 여기서 정한다).
+const PERSONA_ORDER = ['P2', 'P5', 'P1', 'P3', 'P4']
+
+function personaRank(id: string): number {
+  const i = PERSONA_ORDER.indexOf(id)
+  return i === -1 ? PERSONA_ORDER.length : i // 새 페르소나는 뒤에 붙인다
+}
+
 export function personaChips(personas: DemoPersona[]): Chip[] {
-  const chips: Chip[] = personas.map((p) => ({
+  const ordered = [...personas].sort((a, b) => personaRank(a.id) - personaRank(b.id))
+  const chips: Chip[] = ordered.map((p) => ({
     id: `persona-${p.id}`,
     label: `${p.id} · ${p.label}`,
     hint: p.summary,

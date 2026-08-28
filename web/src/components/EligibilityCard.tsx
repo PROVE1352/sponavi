@@ -1,8 +1,11 @@
 import type { AltEdge, ProgramEligibility, Selection } from '../types'
 import { Badge, CheckIcon, EligibilityMark, InfoIcon, WarnIcon, XIcon } from './ui'
 
-export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdges?: AltEdge[] }) {
+// ★ v1.10(6A): 대체경로 블록은 이 카드 안이 아니라 `assess_result` 메시지의 전폭 히어로다.
+// 카드는 판정·사유·신청법·출처만 맡는다.
+export function EligibilityCard({ p }: { p: ProgramEligibility }) {
   const eligible = p.eligible
+  const failed = p.reasons.filter((r) => !r.ok)
   return (
     <article
       className={`rounded-2xl border bg-white p-5 shadow-card dark:bg-slate-900 ${
@@ -28,19 +31,49 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
         </div>
       )}
 
-      {/* 사유 문장 — 각 항목 ✓/✗ 삼중 표기 */}
-      <ul className="mt-4 space-y-2">
-        {p.reasons.map((r, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm">
-            {r.ok ? (
-              <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-            ) : (
-              <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-            )}
-            <span className="text-slate-700 dark:text-slate-200">{r.message}</span>
-          </li>
-        ))}
-      </ul>
+      {/* 사유 문장 — 각 항목 ✓/✗ 삼중 표기.
+          ✗ 카드는 실패 사유를 첫 줄에 전부 이어 붙이고(FR-02 AC1 v1.10 — 27세 P2 는 연령·소득 둘 다),
+          전체 목록은 접어 두되 감추지 않는다(AC4: 줄이는 것은 면적이지 정보가 아니다). */}
+      {!eligible && failed.length > 0 ? (
+        <div className="mt-4">
+          <p data-testid="fail-reason-line" className="flex items-start gap-2 text-sm">
+            <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+            <span className="font-semibold text-slate-800 dark:text-slate-100">
+              {failed.map((r) => r.message).join(' · ')}
+            </span>
+          </p>
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-400">
+              조건별로 자세히 보기
+            </summary>
+            <ul className="mt-2 space-y-2">
+              {p.reasons.map((r, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  {r.ok ? (
+                    <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  )}
+                  <span className="text-slate-700 dark:text-slate-200">{r.message}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </div>
+      ) : (
+        <ul className="mt-4 space-y-2">
+          {p.reasons.map((r, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm">
+              {r.ok ? (
+                <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+              )}
+              <span className="text-slate-700 dark:text-slate-200">{r.message}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {/* 예상 선정순위 — 신청(소득무관) vs 선정(우선순위제) 구분 (FR-02 AC5, PRD §6) */}
       {p.selection && <SelectionBlock selection={p.selection} />}
@@ -79,9 +112,6 @@ export function EligibilityCard({ p, altEdges }: { p: ProgramEligibility; altEdg
           </a>
         </div>
       )}
-
-      {/* 복수 대체경로 / '지금 바로 되는 것' 블록 (FR-02 AC3) */}
-      {altEdges && altEdges.length > 0 && <AltRoutesBlock card={p} altEdges={altEdges} />}
 
       {/* 출처·확인일 각주 */}
       <footer className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
@@ -140,46 +170,71 @@ export function SelectionBlock({ selection }: { selection: Selection }) {
   )
 }
 
-// 대체경로 블록에 실제로 무엇이 들어가는지 — 블록을 카드 밖(모바일 결과 덱의 슬라이드)에서
-// 그릴 때 "빈 슬라이드"를 만들지 않으려면 렌더 전에 개수를 알아야 한다(FR-12 AC9 v1.7).
+// 대체경로 블록에 실제로 무엇이 들어가는지 — 블록을 카드 밖(전폭 히어로)에서 그릴 때
+// "빈 블록"을 만들지 않으려면 렌더 전에 개수를 알아야 한다(FR-12 AC9 v1.10).
+//
+// ★ 헤딩의 N 은 '공식 확인' 엣지 수만 센다(FR-02 AC5 v1.10 — 숫자가 곧 약속이다).
+//   '검증 대기' 엣지는 버리지 않고 "확인 중 N건"으로 따로 적는다. 그래서 상위 3 자르기는
+//   공식 확인 목록에만 걸고, 검증 대기는 잘려 사라지지 않는다.
+function isOfficial(a: AltEdge): boolean {
+  return a.curated.startsWith('공식 확인')
+}
+
 export function altRouteItems(
   card: ProgramEligibility,
   altEdges: AltEdge[],
-): { items: AltEdge[]; nowAvailable: boolean } {
+): { items: AltEdge[]; official: AltEdge[]; pending: AltEdge[]; nowAvailable: boolean } {
   const rank = card.selection?.expected_rank
   const lowOrUndetermined = rank === 4 || rank === 5 || rank == null
   const nowAvailable = card.eligible && card.selection != null && lowOrUndetermined
-  const items = nowAvailable
-    ? altEdges.filter((a) => a.curated.startsWith('공식 확인')).slice(0, 3)
-    : altEdges.slice(0, 3)
-  return { items, nowAvailable }
+  const official = altEdges.filter(isOfficial).slice(0, 3)
+  const pending = altEdges.filter((a) => !isOfficial(a))
+  return { items: [...official, ...pending], official, pending, nowAvailable }
 }
 
-// 대체경로 블록: 자격 충족·저순위(4·5/미정) dvoucher → '지금 바로 되는 것'(공식 확인 대안 상위 3),
-// 자격 미충족 제도 → 일반 대체경로 상위 3.
-export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; altEdges: AltEdge[] }) {
-  const { items, nowAvailable } = altRouteItems(card, altEdges)
-  if (items.length === 0) return null
+// 히어로(6A): 자격 충족·저순위(4·5/미정) → '지금 바로 되는 것',
+// 자격 미충족 → "이용권은 대상이 아니지만, 지금 바로 되는 것 N가지".
+// 두 경우 모두 본문 항목은 '공식 확인' 엣지뿐이고, 검증 대기는 아래 한 줄로 정직하게 남는다.
+export function AltRoutesBlock({
+  card,
+  altEdges,
+  // 히어로 안 CTA. 기존 "체력 처방 시작" 칩과 같은 액션을 재사용한다(새 진입로를 만들지 않는다).
+  onStartFitness,
+}: {
+  card: ProgramEligibility
+  altEdges: AltEdge[]
+  onStartFitness?: () => void
+}) {
+  const { official, pending, nowAvailable } = altRouteItems(card, altEdges)
+  if (official.length === 0 && pending.length === 0) return null
 
-  const heading = nowAvailable ? '지금 바로 되는 것' : '대체경로 · 지금 이용 가능한 대안'
-  const desc = nowAvailable
-    ? '선정을 기다리는 동안, 소득·자격과 무관하게 지금 바로 이용할 수 있는 공식 확인 대안입니다.'
-    : '자격이 안 되어도 지금 이용할 수 있는 대안을 우선순위로 안내합니다.'
+  // 공식 확인이 하나도 없으면 "지금 바로 된다"고 말하지 않는다(P-1).
+  const onlyPending = official.length === 0
+  const heading = onlyPending
+    ? `확인 중인 대안 ${pending.length}건`
+    : card.eligible
+      ? '지금 바로 되는 것'
+      : `이용권은 대상이 아니지만, 지금 바로 되는 것 ${official.length}가지`
+  const desc = onlyPending
+    ? '공식 페이지 확인 전이라 아직 "지금 된다"고 말씀드리지 않습니다.'
+    : card.eligible
+      ? '선정을 기다리는 동안, 소득·자격과 무관하게 지금 바로 이용할 수 있는 공식 확인 대안입니다.'
+      : '이용권 자격과 무관하게 지금 이용할 수 있는 공식 확인 대안입니다.'
 
   return (
     <div
       data-testid={nowAvailable ? 'now-available-block' : 'alt-routes-block'}
-      className="mt-4 rounded-xl border border-brand-200 bg-brand-50/60 p-4 dark:border-brand-500/30 dark:bg-brand-700/15"
+      className="rounded-2xl border-2 border-brand-300 bg-brand-50/70 p-4 shadow-card dark:border-brand-500/40 dark:bg-brand-700/20"
     >
-      <p className="flex items-center gap-1.5 text-sm font-bold text-brand-800 dark:text-brand-100">
-        <CheckIcon className="w-4 h-4" />
+      <p className="flex items-center gap-1.5 text-base font-bold text-brand-800 dark:text-brand-100">
+        <CheckIcon className="w-5 h-5 shrink-0" />
         {heading}
       </p>
       <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{desc}</p>
-      <ul className="mt-3 space-y-2">
-        {items.map((a, i) => {
-          const official = a.curated.startsWith('공식 확인')
-          return (
+
+      {official.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {official.map((a, i) => (
             <li
               key={`${a.to}-${i}`}
               data-testid={nowAvailable ? 'now-available-item' : 'alt-route-item'}
@@ -189,11 +244,8 @@ export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; a
                 <span className="text-sm font-semibold text-slate-900 dark:text-white">
                   {a.program?.name ?? a.note}
                 </span>
-                <Badge
-                  tone={official ? 'ok' : 'purple'}
-                  icon={official ? <CheckIcon className="w-3 h-3" /> : <WarnIcon className="w-3 h-3" />}
-                >
-                  {official ? '공식 확인' : `큐레이션 · ${a.curated}`}
+                <Badge tone="ok" icon={<CheckIcon className="w-3 h-3" />}>
+                  공식 확인
                 </Badge>
               </div>
               <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{a.program?.benefit ?? a.note}</p>
@@ -208,9 +260,48 @@ export function AltRoutesBlock({ card, altEdges }: { card: ProgramEligibility; a
                 </a>
               )}
             </li>
-          )
-        })}
-      </ul>
+          ))}
+        </ul>
+      )}
+
+      {/* 검증 대기 엣지: 헤딩의 N 에는 넣지 않되 존재는 숨기지 않는다(P-1) */}
+      {pending.length > 0 && !onlyPending && (
+        <p
+          data-testid="alt-route-pending"
+          className="mt-2 flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400"
+        >
+          <WarnIcon className="mt-0.5 w-3.5 h-3.5 shrink-0" />
+          확인 중 {pending.length}건 — {pending.map((a) => a.program?.name ?? a.note).join(' · ')}
+        </p>
+      )}
+      {onlyPending && (
+        <ul data-testid="alt-route-pending" className="mt-3 space-y-2">
+          {pending.map((a, i) => (
+            <li
+              key={`${a.to}-${i}`}
+              className="rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+            >
+              <span className="font-semibold text-slate-900 dark:text-white">
+                {a.program?.name ?? a.note}
+              </span>
+              <Badge tone="purple" icon={<WarnIcon className="w-3 h-3" />}>
+                큐레이션 · {a.curated}
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {onStartFitness && (
+        <button
+          type="button"
+          data-testid="hero-fitness-cta"
+          onClick={onStartFitness}
+          className="press mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+        >
+          내 체력에 맞는 운동까지 보기 ↓
+        </button>
+      )}
     </div>
   )
 }

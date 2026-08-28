@@ -66,16 +66,24 @@ test('P1 지도 — 캔버스 + 마커가 붙고, 마커는 색·텍스트·aria
   )
 })
 
-test('P5 지도 — 장애인 가맹은 보라, 공공은 초록으로 갈린다', async ({ page }) => {
+test('P5 지도 — 장애인 가맹은 보라 마커, 공공 대안은 없으면 만들지 않는다', async ({ page }) => {
   await openDemo(page)
   await startPersona(page, 'P5')
   await openPanel(page, 'map')
   await expectMapMounted(page)
 
-  await expect(markersOfKind(page, 'dvoucher')).toHaveCount(1)
+  // 계약: 성북 장애인 가맹 6곳(수강료 미등록) · 반경 안 접근성 공공시설 0곳(없는 시설을 만들지 않는다)
+  await expect(markersOfKind(page, 'dvoucher')).toHaveCount(6)
   const d = markersOfKind(page, 'dvoucher').first()
   expect(await d.getAttribute('aria-label')).toContain('장애인 가맹')
   expect(await bg(page, 'dvoucher')).toBe(COLOR.disability)
+  await expect(markersOfKind(page, 'public')).toHaveCount(0)
+
+  // 공공 마커 색 대조는 대안이 있는 페르소나(P1)에서 본다
+  await openDemo(page)
+  await startPersona(page, 'P1')
+  await openPanel(page, 'map')
+  await expectMapMounted(page)
   expect(await bg(page, 'public')).toBe(COLOR.public)
 })
 

@@ -1,6 +1,9 @@
 // 표기 헬퍼
 
-export function won(n: number): string {
+// CQ1A: 결측(null)과 0은 다른 뜻이다 — null 은 "값을 모른다"(미등록), 0 은 "무료".
+// 없는 값을 0원·무료로 채우지 않는다(P-1).
+export function won(n: number | null): string {
+  if (n == null) return '미등록·시설 문의'
   if (n <= 0) return '무료'
   return n.toLocaleString('ko-KR') + '원'
 }

@@ -13,12 +13,42 @@ import { useEffect, useState } from 'react'
 
 export const DEMO_HASH = '#/demo'
 
+export interface DemoRoute {
+  demo: boolean
+  // ?p=P2 — 퀵스타트 칩을 대신 눌러 줄 페르소나 id(QR·딥링크). 없으면 null.
+  p: string | null
+  // ?auto=1 — 자동재생. W1 은 파싱만 하고 무시한다(W2 구현).
+  auto: boolean
+}
+
+// OV10: `#/demo` 는 접두사다 — 뒤에 해시 쿼리(`#/demo?p=P2&auto=1`)가 붙어도 데모 페이지다.
+// URLSearchParams 만 쓰고 라우터는 들이지 않는다(의존성 0 유지).
+export function parseDemoHash(hash: string): DemoRoute {
+  const [path, query = ''] = hash.split('?')
+  const clean = path.endsWith('/') && path.length > 1 ? path.slice(0, -1) : path
+  if (clean !== DEMO_HASH) return { demo: false, p: null, auto: false }
+  const q = new URLSearchParams(query)
+  const p = q.get('p')
+  const auto = q.get('auto')
+  return {
+    demo: true,
+    p: p && p.trim() !== '' ? p.trim() : null,
+    auto: auto === '1' || auto === 'true',
+  }
+}
+
 export function readDemo(prev: boolean): boolean {
   if (typeof window === 'undefined') return prev
   const h = window.location.hash
-  if (h === DEMO_HASH || h === `${DEMO_HASH}/`) return true
+  if (parseDemoHash(h).demo) return true
   if (h === '' || h === '#' || h === '#/') return false
   return prev // 앵커 해시(#top 등) — 라우트 아님
+}
+
+// 지금 해시가 가리키는 데모 딥링크 옵션(페르소나 자동 선택용). 라우트가 아니면 전부 비어 있다.
+export function readDemoRoute(): DemoRoute {
+  if (typeof window === 'undefined') return { demo: false, p: null, auto: false }
+  return parseDemoHash(window.location.hash)
 }
 
 export function useIsDemo(): boolean {

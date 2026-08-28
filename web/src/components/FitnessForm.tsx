@@ -42,6 +42,16 @@ export function previewDerived(code: string, inputs: Record<string, number>): nu
   return null
 }
 
+// 프리필(3A): 숫자 값을 폼의 문자열 상태로 옮긴다. 값이 없으면 빈 폼 그대로.
+function seedValues(initial?: Record<string, number> | null): Record<string, string> {
+  if (!initial) return {}
+  const out: Record<string, string> = {}
+  for (const [code, v] of Object.entries(initial)) {
+    if (typeof v === 'number' && Number.isFinite(v)) out[code] = String(v)
+  }
+  return out
+}
+
 // 결과 카드와 함께 잔존해야 하는 하단 고정 고지(FR-07 AC4 · FR-08 AC5).
 export const FITNESS_DISCLAIMER =
   '운동 참고 정보이며 의료 조언이 아닙니다. 공식 체력 인증은 전국 체력인증센터(무료)에서 받을 수 있습니다.'
@@ -50,14 +60,19 @@ export function FitnessFormCard({
   lane,
   // 지난 회차(다른 상황)의 폼 턴이면 조작을 잠근다 — 기록으로만 남는다.
   locked = false,
+  // 3A: 데모 페르소나의 프리필 값(코드→값). 마운트 때 한 번만 씨앗으로 쓰고,
+  // 그 뒤 입력은 전부 사용자 것이다(값을 되돌리지 않는다).
+  initialValues,
   onSubmit,
 }: {
   lane: FitnessLaneApi
   locked?: boolean
+  initialValues?: Record<string, number> | null
   onSubmit: (measures: Record<string, number>) => void
 }) {
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(() => seedValues(initialValues))
   const [altChoice, setAltChoice] = useState<Record<string, string>>({})
+  const [prefilled] = useState(() => Object.keys(seedValues(initialValues)).length > 0)
 
   // 입력된 값만 모은다 — 빈 칸은 전송하지 않는다(전 항목 선택 입력).
   const measures = useMemo(() => {
@@ -92,6 +107,12 @@ export function FitnessFormCard({
         <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
           아는 항목만 넣으셔도 됩니다. 1개 이상 입력하면 판정할 수 있습니다.
         </p>
+        {/* 프리필이 있었다는 사실을 숨기지 않는다 — 심사위원이 값의 출처를 알아야 한다 */}
+        {!locked && prefilled && (
+          <p data-testid="fit-prefill-note" className="mt-1 text-xs text-brand-700 dark:text-brand-100">
+            데모 페르소나 값으로 미리 채움 — 고쳐서 넣으셔도 됩니다.
+          </p>
+        )}
       </div>
 
       {/* 만 7~10 공백 고지(FR-07 AC6). 지난 회차 카드는 현재 레인 상태를 비추지 않는다. */}

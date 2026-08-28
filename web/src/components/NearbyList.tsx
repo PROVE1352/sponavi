@@ -4,13 +4,9 @@ import type { AccessibilityMap, FacilityAccessibility } from '../types_accessibi
 import { accessibilitySourceLine } from '../types_accessibility'
 import { getAccessibility } from '../api/client'
 import { km, walkMinutes, won, wonPlain } from '../lib/format'
+import { matchesFilter } from '../lib/sports'
 import { ApproxLocationBadge, Badge, CheckIcon, WarnIcon } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
-
-function matchesFilter(sports: string[], filter?: string[]): boolean {
-  if (!filter || filter.length === 0) return true
-  return sports.some((s) => filter.includes(s))
-}
 
 // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
 // 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
@@ -117,6 +113,20 @@ export function NearbyList({
   const amenityActive = selectedAmenities.length > 0
 
   const checkedDate = Object.values(access).find((a) => a.checked)?.checked ?? null
+  // OV13: 수강료 미등록 행 수(요약 1줄의 근거).
+  const feeMissing = vouchers.filter((v) => v.fee_month == null).length
+  const altsFirst = nearby.primary === 'alternatives'
+
+  const alternatives = alts.length > 0 && (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">공공·대안 시설</h3>
+      <ul className="space-y-2">
+        {alts.map((a) => (
+          <AltRow key={a.id} a={a} />
+        ))}
+      </ul>
+    </div>
+  )
 
   function toggleAmenity(code: string) {
     setSelectedAmenities((prev) =>
@@ -181,9 +191,22 @@ export function NearbyList({
         </div>
       )}
 
+      {/* 1A/OV3: 이용권 카드가 비적격이면(primary='alternatives') 대안이 먼저 온다 —
+          못 쓰는 가맹시설을 1순위로 보여 주지 않는다. 순서 판단은 서버가 내린다(P-2). */}
+      {altsFirst && alternatives}
+
       {vouchers.length > 0 && (
         <div data-testid="voucher-section">
           <h3 className="mb-2 text-sm font-semibold text-brand-700 dark:text-brand-100">이용권 가맹시설</h3>
+          {/* OV13: 결측을 행마다 반복하지 않고 섹션 상단에서 한 번에 밝힌다 */}
+          {feeMissing > 0 && (
+            <p
+              data-testid="voucher-fee-summary"
+              className="mb-2 text-xs text-slate-600 dark:text-slate-400"
+            >
+              총 {vouchers.length}곳 · 수강료 미등록 {feeMissing}곳 — 시설 문의
+            </p>
+          )}
           <ul className="space-y-2">
             {vouchers.map((v) => (
               <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={accessError} />
@@ -214,16 +237,7 @@ export function NearbyList({
         </p>
       )}
 
-      {alts.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">공공·대안 시설</h3>
-          <ul className="space-y-2">
-            {alts.map((a) => (
-              <AltRow key={a.id} a={a} />
-            ))}
-          </ul>
-        </div>
-      )}
+      {!altsFirst && alternatives}
 
       {vouchers.length === 0 && alts.length === 0 && !amenityActive && (
         <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
@@ -339,21 +353,43 @@ export function VoucherRow({
       </div>
       {v.addr && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{v.addr}</p>}
 
-      {/* 자부담 계산 */}
-      <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center dark:bg-slate-800/60">
-        <div>
-          <dt className="text-[11px] text-slate-600 dark:text-slate-400">월 수강료</dt>
-          <dd className="text-sm font-semibold text-slate-800 dark:text-slate-100">{won(v.fee_month)}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] text-slate-600 dark:text-slate-400">이용권 지원</dt>
-          <dd className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">−{wonPlain(Math.min(v.subsidy, v.fee_month))}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] text-slate-600 dark:text-slate-400">내 부담</dt>
-          <dd className="text-sm font-bold text-brand-700 dark:text-brand-100">{won(v.copay)}</dd>
-        </div>
-      </dl>
+      {/* 자부담 계산. CQ1A: 수강료가 결측이면 3셀을 만들지 않고 한 줄로 사실만 말한다
+          — 0원·'무료'·'−0원' 으로 빈칸을 채우지 않는다(P-1). */}
+      {v.fee_month == null ? (
+        <p
+          data-testid="fee-unknown"
+          className="mt-3 rounded-lg bg-slate-50 p-3 text-center text-sm font-semibold text-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+        >
+          수강료 미등록 · 시설 문의
+        </p>
+      ) : (
+        <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center dark:bg-slate-800/60">
+          <div>
+            <dt className="text-[11px] text-slate-600 dark:text-slate-400">월 수강료</dt>
+            <dd className="text-sm font-semibold text-slate-800 dark:text-slate-100">{won(v.fee_month)}</dd>
+          </div>
+          <div>
+            <dt className="text-[11px] text-slate-600 dark:text-slate-400">이용권 지원</dt>
+            {/* 1A: 비적격이면 서버가 subsidy=0 으로 내려보낸다 — '−0원' 대신 못 받는다고 적는다 */}
+            {v.subsidy === 0 ? (
+              <dd className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                지원 없음(예상 자격 ✗)
+              </dd>
+            ) : (
+              <dd className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                −{wonPlain(Math.min(v.subsidy ?? 0, v.fee_month))}
+              </dd>
+            )}
+          </div>
+          <div>
+            <dt className="text-[11px] text-slate-600 dark:text-slate-400">내 부담</dt>
+            {/* 자부담 0 은 '무료'가 아니라 '0원'(수강료가 0인 것과 다른 사실) */}
+            <dd className="text-sm font-bold text-brand-700 dark:text-brand-100">
+              {v.copay == null ? won(null) : wonPlain(v.copay)}
+            </dd>
+          </div>
+        </dl>
+      )}
 
       {/* FR-10: 장애인 가맹시설엔 접근성 태그(지원유형·편의시설) */}
       {isDvoucher && <AccessibilityTags data={accessibility} error={accessError} />}
@@ -365,18 +401,39 @@ export function VoucherRow({
   )
 }
 
+// OV6/FR-04 AC7: 시설 구분 라벨은 원천(faci_gb) 그대로 — 신고·등록 시설을 "공공체육시설"이라
+// 부르지 않는다(실측 신고 107,407 · 공공 44,747 · 등록 634). 미마이그레이션(null)이면 중립어.
+export function faciGbLabel(gb?: '공공' | '신고' | '등록' | null): {
+  label: string
+  tone: 'ok' | 'neutral'
+} {
+  switch (gb) {
+    case '공공':
+      return { label: '공공체육시설', tone: 'ok' }
+    case '등록':
+      return { label: '등록 체육시설', tone: 'neutral' }
+    case '신고':
+      return { label: '신고 체육시설', tone: 'neutral' }
+    default:
+      return { label: '체육시설', tone: 'neutral' }
+  }
+}
+
 export function AltRow({ a }: { a: AlternativeFacility }) {
+  const gb = faciGbLabel(a.faci_gb)
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-slate-900 dark:text-white">{a.name}</p>
           <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
-            {a.type} · {a.sports.join(' · ')}
+            {/* 서버 type 은 대안 풀 전체가 "공공체육시설"이라 신고·등록 시설도 그렇게 불린다 —
+                faci_gb 를 아는 행은 원천 라벨을 쓴다(FR-04 AC7). */}
+            {a.faci_gb ? gb.label : a.type} · {a.sports.join(' · ')}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <Badge tone="ok">공공·대안</Badge>
+          <Badge tone={gb.tone}>{gb.label}</Badge>
           {a.coord_source === 'centroid' && <ApproxLocationBadge />}
           <DisabilityTag support={a.disability_support} />
         </div>

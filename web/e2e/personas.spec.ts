@@ -20,8 +20,10 @@ test('P1 · 10세 여아 기초수급 → 스포츠강좌이용권 예상 자격
   await expect(page.getByTestId('facility-summary')).toBeVisible()
   await expect(stream(page).getByText('성북스포츠클럽').first()).toBeVisible()
   await expect(stream(page).getByText('내 부담').first()).toBeVisible()
-  // 이용권 공급은 구 단위 카운트로 표기(FR-04 AC2)
-  await expect(stream(page).getByTestId('voucher-supply-block')).toContainText('성북구 가맹 4곳')
+  // 이용권 공급은 구 단위 카운트로 표기(FR-04 AC2). 목록 길이(4곳)가 아니라 구 카운트(161곳)다.
+  await expect(stream(page).getByTestId('voucher-supply-block')).toContainText('성북구 가맹 161곳')
+  // FR-04 AC6(OV5): 근처 요약도 "표시한 수 · 구 가맹 수"를 분리해 적는다(같은 화면 모순 봉합)
+  await expect(page.getByTestId('facility-summary')).toContainText('근처 4곳 표시 · 성북구 가맹 161곳')
 
   await shot(page, 'e2e-shots/P1-svoucher-eligible.png')
 })
@@ -40,11 +42,67 @@ test('P2 · 27세 낀 계층 → 대체경로 스텝 다이어그램(전문가 �
   await expect(path.getByText(/전문가 큐레이션/)).toBeVisible()
   await expect(path.getByText('공공 프로그램')).toBeVisible()
 
-  // 복수 대체경로 블록(FR-02 AC5) — 상위 3개
+  // 복수 대체경로 히어로(FR-02 AC5 v1.10) — 항목은 '공식 확인' 2개, 검증 대기는 "확인 중 1건"
   await expect(stream(page).getByTestId('alt-routes-block')).toBeVisible()
-  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
+  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(2)
+  await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+
+  // 이용권 ✗ → 근처 요약도 가맹 숫자를 앞세우지 않는다(FR-04 AC6: 못 쓰는 수를 강조하지 않음)
+  const summary = page.getByTestId('facility-summary')
+  await expect(summary).toContainText('근처 대안 3곳 표시')
+  await expect(summary).not.toContainText('가맹 161곳')
 
   await shot(page, 'e2e-shots/P2-alt-path.png')
+})
+
+test('P2 · 시설 출처 라벨은 원천(faci_gb) 그대로 — 신고 시설을 "공공체육시설"이라 부르지 않는다 (FR-04 AC7)', async ({
+  page,
+}) => {
+  await startPersona(page, 'P2')
+  await openPanel(page, 'list')
+
+  const list = panel(page).getByTestId('panel-body')
+  // 목 계약: P01·P03 = 공공, P07 돈암동체력단련장 = 신고(실DB 성북 대안의 62%가 신고 시설)
+  const row = list.locator('li').filter({ hasText: '돈암동체력단련장' }).first()
+  await expect(row).toContainText('신고 체육시설')
+  await expect(row).not.toContainText('공공체육시설')
+  await expect(list.getByText('공공체육시설').first()).toBeVisible() // 공공 행은 그대로 공공
+})
+
+test('딥링크 /#/demo?p=P2 — 칩을 누르지 않아도 P2 로 판정까지 간다 (OV10, LLM 0회)', async ({
+  page,
+}) => {
+  const chatCalls: string[] = []
+  page.on('request', (r) => {
+    if (r.url().includes('/api/chat/')) chatCalls.push(r.url())
+  })
+
+  await page.goto('/#/demo?p=P2')
+  // beforeEach 가 이미 /#/demo 에 있어 위 goto 는 해시만 바꾼다(문서 재로드 없음).
+  // 실제 QR·리다이렉트 진입은 "새로 로드"이므로 그 상황을 그대로 만든다 — p= 는 부팅 때 읽는다.
+  await page.reload()
+  // 페르소나 칩을 클릭하지 않았는데 판정 결과가 온다(칩 경로와 같은 코드)
+  await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
+  // 사용자 버블 = 칩을 누른 것과 같은 에코(칩 라벨과 문구가 같아 마지막 것을 본다)
+  await expect(stream(page).getByText('P2 · 낀 계층 청년').last()).toBeVisible()
+  await expect(stream(page).getByTestId('alt-routes-block')).toBeVisible()
+  // 후속 칩 묶음도 칩 경로와 같다(FAQ 칩 포함) — 딥링크만 다른 화면이 되지 않는다
+  await expect(page.getByTestId('chip-act-fitness')).toBeVisible()
+  await expect(page.getByTestId('chip-faq-dvoucher_income')).toBeVisible()
+  expect(chatCalls, '딥링크가 챗 엔드포인트를 호출했다').toHaveLength(0)
+
+  // 데모 칩 노출 순서는 클라 고정 상수(P2 → P5 → P1 → P3 → P4)
+  const ids = await page
+    .getByTestId('chat-stream')
+    .locator('[data-testid^="chip-persona-"]')
+    .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')))
+  expect(ids).toEqual([
+    'chip-persona-P2',
+    'chip-persona-P5',
+    'chip-persona-P1',
+    'chip-persona-P3',
+    'chip-persona-P4',
+  ])
 })
 
 test('P3 · 14세 지체장애 → 장애인스포츠강좌이용권 예상 자격 ✓ + 미검증 경고', async ({ page }) => {
@@ -70,8 +128,9 @@ test('P4 · 72세 청각장애(인천 서구) → 공급공백 배너 + 최근�
   await expect(stream(page).getByText(/가장 가까운 곳은/)).toBeVisible()
   // 커버리지(수급률)는 서울 15구 실측분뿐 — 인천은 데이터가 없으므로 그 줄을 만들지 않는다(P-1).
   await expect(stream(page).getByText(/수급률은/)).toHaveCount(0)
-  // 연령 초과 → 어르신 특화 대체경로 3개
-  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
+  // 연령 초과 → 어르신 특화 대체경로(공식 확인 2 = 상품권·무료강좌, 공공프로그램 1은 검증 대기)
+  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(2)
+  await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
 
   await shot(page, 'e2e-shots/P4-supply-gap.png')
 })

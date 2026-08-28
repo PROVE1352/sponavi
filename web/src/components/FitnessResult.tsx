@@ -2,7 +2,7 @@
 // 영상 카드·"이 운동 되는 근처 강좌" 필터·AI 처방(정직 라벨 + 항목별 "왜 이 운동?" 펼침).
 // 사실은 전부 엔진 출력이다 — 이 컴포넌트는 서버가 준 문장을 그대로 표시만 한다(P-2).
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   AiPrescription,
   FitnessAiResponse,
@@ -14,6 +14,7 @@ import type {
   Provenance,
 } from '../types'
 import type { AppError } from './ErrorPanel'
+import { matchesFilter } from '../lib/sports'
 import { FITNESS_DISCLAIMER } from './FitnessForm'
 import { Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
 
@@ -84,9 +85,9 @@ export function FitnessResultCard({
   const sports = result.facility_filter_sports ?? []
   const matchCount = useMemo(() => {
     if (sports.length === 0) return 0
-    const set = new Set(sports)
+    // 종목 매칭은 lib/sports 1벌(2A) — 별칭 확장은 서버가 이미 끝냈다.
     return [...nearby.voucher_facilities, ...nearby.alternatives].filter((f) =>
-      f.sports.some((s) => set.has(s)),
+      matchesFilter(f.sports, sports),
     ).length
   }, [sports, nearby])
 
@@ -331,17 +332,7 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
           {videos.slice(0, 3).map((v, i) => (
             <li key={i} data-testid="video-card" className="w-32">
               <a href={v.url ?? '#'} target="_blank" rel="noreferrer noopener" className="block">
-                {v.img_url ? (
-                  <img
-                    src={v.img_url}
-                    alt={v.title}
-                    className="h-[72px] w-32 rounded-md object-cover ring-1 ring-slate-200 dark:ring-slate-700"
-                  />
-                ) : (
-                  <div className="grid h-[72px] w-32 place-items-center rounded-md bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    영상
-                  </div>
-                )}
+                <VideoThumb src={v.img_url} title={v.title} />
                 <span className="mt-1 block truncate text-xs text-brand-700 underline underline-offset-2 dark:text-brand-100">
                   {v.title}
                 </span>
@@ -351,6 +342,30 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
         </ul>
       )}
     </div>
+  )
+}
+
+// 썸네일(CQ4A): 조립된 https URL 이 죽어 있어도 깨진 아이콘을 보여 주지 않는다 —
+// onError 면 자리표시 블록으로 바꾸고 제목 링크는 그대로 살린다.
+function VideoThumb({ src, title }: { src?: string | null; title: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return (
+      <div
+        data-testid="video-thumb-fallback"
+        className="grid h-[72px] w-32 place-items-center rounded-md bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+      >
+        영상
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={title}
+      onError={() => setFailed(true)}
+      className="h-[72px] w-32 rounded-md object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+    />
   )
 }
 

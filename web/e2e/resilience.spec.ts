@@ -124,8 +124,11 @@ const ASSESS_OK = {
         disability_support: true,
         fee_month: 30000,
         source: 'public',
+        faci_gb: '공공',
       },
     ],
+    // 1A: 자격 인지 정렬(이 픽스처는 dvoucher ✓ 이므로 가맹시설이 1순위)
+    primary: 'voucher',
   },
   supply_gap: {
     radius_km: 3,
@@ -210,7 +213,8 @@ test('② accessibility 실패 격리 → 시설 카드는 렌더, 접근성만 
 
   // 결과와 시설 카드는 완전히 렌더된다(부분 실패가 전체를 무너뜨리지 않는다)
   await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
-  await expect(stream(page).getByTestId('dvoucher-facility')).toHaveCount(1)
+  // v1.10: 같은 시설 행이 결과 카드 하단 인라인(3행)과 덱 시설 슬라이드에 각각 렌더된다 → 2
+  await expect(stream(page).getByTestId('dvoucher-facility')).toHaveCount(2)
 
   // 접근성 조회만 실패 → 행별 인라인 표기("정보 없음"과 구분)
   await expect(stream(page).getByTestId('access-error-inline').first()).toBeVisible()

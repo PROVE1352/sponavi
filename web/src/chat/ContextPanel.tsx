@@ -9,6 +9,7 @@ import type { PanelTab } from '../types_chat'
 import { NearbyMap } from '../components/NearbyMap'
 import { NearbyList } from '../components/NearbyList'
 import { Badge } from '../components/ui'
+import { facilityCountText } from './messages'
 import { personLocOf } from './policy'
 
 export function ContextPanel({
@@ -36,7 +37,6 @@ export function ContextPanel({
   const baseId = useId()
   const mapPanelId = `${baseId}-map`
   const listPanelId = `${baseId}-list`
-  const vCount = data.nearby.voucher_facilities.length
   const aCount = data.nearby.alternatives.length
 
   return (
@@ -53,9 +53,8 @@ export function ContextPanel({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
             <span className="text-sm font-bold text-slate-900 dark:text-white">근처 자원</span>
-            <Badge tone="brand">
-              {req.sigungu_nm} 가맹 {vCount}곳
-            </Badge>
+            {/* FR-04 AC6: 잘린 목록 길이를 구 단위 카운트인 척 쓰지 않는다(요약 바도 같은 문구) */}
+            <Badge tone="brand">{facilityCountText(req, data)}</Badge>
             <Badge tone="ok">공공·대안 {aCount}곳</Badge>
           </div>
           <button

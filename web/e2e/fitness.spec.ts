@@ -1,7 +1,9 @@
 import { test, expect, type Page } from '@playwright/test'
 import {
   assertNoHorizontalScroll,
+  fillMainSlots,
   openDemo,
+  openMain,
   shot,
   startFitnessThroughParq,
   startPersona,
@@ -253,10 +255,14 @@ test('P1 만10세 → 측정 폼에 만7~10 공백 고지 배너 (FR-07 AC6)', a
 })
 
 test('BMI 는 직접 입력칸 없이 키·몸무게로 자동 계산되고, 결과에 계산 출처가 남는다 (FR-07 AC8)', async ({ page }) => {
-  await startPersona(page, 'P2') // 27세 성인 — 신체조성(BMI) 항목이 있는 연령군
+  // ★ v1.10(3A): 데모 페르소나로 들어오면 측정값이 프리필된다 — "빈 폼에서 한 칸만 채운다"가
+  //   전제인 이 검사는 프리필이 없는 메인(실사용) 경로로 간다. 27세 성인 = BMI 항목이 있는 연령군.
+  await openMain(page)
+  await fillMainSlots(page)
   await startFitnessThroughParq(page)
   const form = page.getByTestId('fitness-form')
   await expect(form).toBeVisible()
+  await expect(page.getByTestId('fit-prefill-note')).toHaveCount(0)         // 메인은 프리필 없음
   await expect(page.getByTestId('fit-input-bmi')).toHaveCount(0)            // 직접 입력칸 없음
   await expect(page.getByTestId('fit-derived-field-bmi')).toBeVisible()
   // 하나만 넣으면 계산 안 됨(+ 제출도 이 항목만으론 불가)

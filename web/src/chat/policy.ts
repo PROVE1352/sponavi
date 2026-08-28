@@ -228,7 +228,9 @@ export const T = {
   fitnessIntro: '체력 처방을 함께 해볼게요. 먼저 아래 문진만 확인해 주세요.',
   fitnessFormIntro: '이제 측정값을 넣어 주세요. 아는 항목만 넣으셔도 괜찮아요.',
   fitnessResultIntro: '아래 카드에 판정과 추천을 정리해 두었어요.',
-  fitnessAlready: '체력 처방은 위 카드에서 이어서 하실 수 있어요.',
+  // 이미 진행 중일 때. 카드가 이 발화보다 위에 있을 수도, 아래에 있을 수도 있어
+  // 방향을 말하지 않는다("위 카드"는 히어로 CTA 로 들어온 사용자에게 반대 방향이었다).
+  fitnessAlready: '체력 처방 카드로 이동할게요 — 거기서 이어서 하실 수 있어요.',
   fitnessNeedsResult: '체력 처방은 예상 자격을 먼저 확인한 뒤에 이어서 하실 수 있어요.',
   fitnessFilterApplied: '고르신 종목만 남겨서 시설 목록을 옆 패널에 열어 두었어요.',
 

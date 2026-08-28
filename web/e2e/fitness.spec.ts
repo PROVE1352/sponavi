@@ -335,3 +335,74 @@ test('BMI 는 직접 입력칸 없이 키·몸무게로 자동 계산되고, 결
   await expect(result.getByTestId('derived-note-bmi')).toContainText('키 170cm')
   await expect(result.getByTestId('derived-note-bmi')).toContainText('24.2')
 })
+
+// ── 히어로 CTA → 문진 카드로 데려가기 (v1.10 실기기 제보) ────────────────────────
+// ✗ 결과의 히어로 CTA 는 스트림 맨 끝(약 1,500px 아래)에 문진 카드를 붙인다. 덱 도착 뒤로는
+// 바닥 추종이 꺼져 있어(FR-12 AC9) 예전에는 window.scrollY 가 1px 도 움직이지 않았다 —
+// 사용자에게는 "눌러도 아무 일 없는 버튼"이었고, 다시 누르면 "위 카드에서"라는 반대 방향 안내가 나왔다.
+
+// 요소가 지금 뷰포트 안에 온전히 들어와 있는가(getBoundingClientRect = 뷰포트 기준).
+async function viewportBox(page: Page, testId: string) {
+  return page.evaluate((id) => {
+    const el = document.querySelector(`[data-testid="${id}"]`)
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), vh: window.innerHeight }
+  }, testId)
+}
+
+const VIEWPORT_TOL_PX = 4
+
+async function expectInViewport(page: Page, testId: string, message: string) {
+  await expect
+    .poll(
+      async () => {
+        const b = await viewportBox(page, testId)
+        if (!b) return 'not-attached'
+        const fits = b.top >= -VIEWPORT_TOL_PX && b.bottom <= b.vh + VIEWPORT_TOL_PX
+        return fits ? 'in-viewport' : `top=${b.top} bottom=${b.bottom} vh=${b.vh}`
+      },
+      { message, timeout: 8_000 },
+    )
+    .toBe('in-viewport')
+}
+
+test('✗ 히어로 CTA → PAR-Q 게이트가 화면 안으로 들어온다 (390×844)', async ({ page }) => {
+  await openMain(page)
+  // 27세·성북구·소득 그외 → 이용권 ✗ + "지금 바로 되는 것" 히어로(제보와 같은 조합)
+  await fillMainSlots(page, { income: '그외' })
+  const hero = page.getByTestId('hero-fitness-cta')
+  await expect(hero).toBeVisible()
+
+  const before = await page.evaluate(() => Math.round(window.scrollY))
+  await hero.click()
+
+  await expect(page.getByTestId('parq-gate')).toBeVisible()
+  await expectInViewport(page, 'parq-gate', '문진 카드가 화면 밖에 남았다(스크롤 안 함)')
+  // 화면이 실제로 움직였다 — 예전 버그의 증상은 scrollY 불변(2208 → 2208)이었다
+  const after = await page.evaluate(() => Math.round(window.scrollY))
+  expect(after, `scrollY ${before} → ${after}`).not.toBe(before)
+
+  // 게이트를 그 자리에서 바로 통과할 수 있다(카드가 손 닿는 곳에 있다)
+  await page.getByTestId('parq-check').check()
+  await page.getByTestId('parq-continue').click()
+  await expect(page.getByTestId('fitness-form-card')).toBeVisible()
+})
+
+test('✗ 히어로 CTA 재클릭 → 새 턴 없이 진행 중인 카드로 다시 데려간다', async ({ page }) => {
+  await openMain(page)
+  await fillMainSlots(page, { income: '그외' })
+  const hero = page.getByTestId('hero-fitness-cta')
+  await hero.click()
+  await expect(page.getByTestId('parq-gate')).toBeVisible()
+  await expectInViewport(page, 'parq-gate', '첫 클릭에서 문진 카드가 화면 밖에 남았다')
+
+  // 두 번째 클릭 — 히어로는 화면 위쪽이라 클릭 자체가 뷰포트를 다시 위로 끌어올린다
+  await hero.click()
+  // 방향을 말하지 않는 안내(옛 문구 "위 카드에서"는 히어로 CTA 사용자에게 반대 방향이었다)
+  await expect(stream(page).getByText(/체력 처방 카드로 이동할게요/)).toBeVisible()
+  await expect(stream(page).getByText(/위 카드에서 이어서/)).toHaveCount(0)
+  // 문진 턴이 하나 더 생기지 않는다
+  await expect(page.getByTestId('parq-gate')).toHaveCount(1)
+  await expectInViewport(page, 'parq-gate', '재클릭에서 진행 중인 카드로 돌아오지 않았다')
+})

@@ -99,6 +99,7 @@ function ChatShell({ demo }: { demo: boolean }) {
     fitnessPrefill,
     autoplayRunning,
     parqPreset,
+    streamFocus,
   } = useChatController(demo)
   const panelRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
@@ -199,6 +200,8 @@ function ChatShell({ demo }: { demo: boolean }) {
             messages={state.messages}
             pending={state.pending}
             panelFocus={state.panelFocus}
+            // "체력 처방 시작"처럼 사용자가 스스로 연 카드로 데려가는 요청(v1.10).
+            focus={streamFocus}
             handlers={handlers}
           />
           <Composer

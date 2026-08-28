@@ -146,6 +146,7 @@ export function ChatStream({
   messages,
   pending,
   panelFocus,
+  focus,
   handlers,
 }: {
   messages: ChatMessage[]
@@ -153,6 +154,9 @@ export function ChatStream({
   // "패널을 봐 달라"는 요청 횟수. 셸이 패널로 스크롤하는 동안 스트림은 바닥 추종을 멈춘다 —
   // 안 그러면 같은 프레임에 두 스크롤이 다투다 패널이 다시 화면 밖으로 밀린다.
   panelFocus: number
+  // "이 메시지를 화면 안으로" 요청(id + 요청 횟수). 사용자가 스스로 연 카드(체력 처방)를
+  // 데려가는 데만 쓴다 — 같은 id 를 다시 눌러도 seq 가 오르면 다시 데려간다.
+  focus?: { id: string; seq: number } | null
   handlers: MessageHandlers
 }) {
   const { visible, indicator, revealed, settled } = useRevealQueue(messages)
@@ -207,6 +211,24 @@ export function ChatStream({
     const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX
     window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [visible])
+
+  // ★ 지목 스크롤(v1.10): 사용자가 스스로 연 카드로 데려간다 — 덱과 **같은 기계**(앵커 측정 →
+  //   1회 scrollTo)를 쓰고, 덱 규칙은 그대로다: 바닥 추종을 켜지 않고, 후속 칩·버블은
+  //   여전히 강제로 끌어내리지 않는다. 요청 1건당 정확히 한 번만 움직인다.
+  //   등장 큐가 아직 그 메시지를 열지 않았으면 앵커가 없다 → 열리는 커밋에서 다시 돈다
+  //   (문진 카드는 앞 버블의 타이핑이 끝난 뒤에야 마운트된다).
+  //   ※ 아래 바닥 추종 훅보다 먼저 선언돼야 같은 커밋에서 stick 이 먼저 꺼진다.
+  const focusDone = useRef(0)
+  useEffect(() => {
+    if (!focus || focus.seq === focusDone.current) return
+    const el = boxRef.current?.querySelector<HTMLElement>(`[data-focus-anchor="${focus.id}"]`)
+    if (!el) return
+    focusDone.current = focus.seq
+    stick.current = false
+    autoUntil.current = Date.now() + 1400
+    const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX
+    window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
+  }, [focus, visible])
 
   // 패널 열기 요청 → 이번 턴의 바닥 추종은 포기한다(셸이 패널로 데려간다).
   // ※ 아래 바닥 추종 훅보다 먼저 선언돼야 같은 커밋에서 stick 이 먼저 꺼진다.
@@ -264,6 +286,8 @@ export function ChatStream({
           className="msg-in min-w-0"
           // 결과 덱의 시작점 — 도착 시 여기로 한 번만 스크롤한다.
           data-result-anchor={m.kind === 'assess_result' ? m.id : undefined}
+          // 지목 스크롤의 착지점(메시지 래퍼 그대로).
+          data-focus-anchor={m.id}
         >
           <MessageView
             msg={m}

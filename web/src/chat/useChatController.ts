@@ -100,6 +100,21 @@ function userText(text: string): ChatMessage {
   return { id: nextId('u'), role: 'user', kind: 'user_text', text }
 }
 
+// 진행 중인 체력 레인의 "지금 카드" = 이번 회차(laneId) 메시지 중 마지막 것.
+// 레인은 문진 → 폼 → 결과 순으로 자라므로 마지막 것이 곧 사용자가 이어서 할 카드다.
+function laneAnchorId(messages: ChatMessage[], laneId: number): string | null {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const m = messages[i]
+    if (
+      (m.kind === 'fitness_parq' || m.kind === 'fitness_form' || m.kind === 'fitness_result') &&
+      m.laneId === laneId
+    ) {
+      return m.id
+    }
+  }
+  return null
+}
+
 function nluPhaseOf(phase: string): NluPhase {
   if (phase === 'fitness') return 'fitness'
   if (phase === 'assessed' || phase === 'qa') return 'qa'
@@ -131,6 +146,14 @@ export function useChatController(demo = false) {
   const [autoFallback, setAutoFallback] = useState<DemoPersona | null>(null)
   // 자동재생이 PAR-Q 를 프리셋으로 통과시켰는가(카드 위 라벨의 근거).
   const [autoParqUsed, setAutoParqUsed] = useState(false)
+
+  // "이 메시지를 화면 안으로 데려가 달라"는 요청(id + 요청 횟수). panelFocus 와 같은 형태다 —
+  // 스크롤 자체는 ChatStream 이 한다: 등장 큐가 그 메시지를 연 뒤여야 하고, 같은 커밋에서
+  // 바닥 추종을 먼저 꺼야 두 스크롤이 다투지 않는다(FR-12 AC9 덱 정책은 그대로 둔다).
+  const [streamFocus, setStreamFocus] = useState<{ id: string; seq: number } | null>(null)
+  const focusMessage = useCallback((id: string) => {
+    setStreamFocus((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
+  }, [])
 
   // 3A: 데모 페르소나를 골랐다면 그 페르소나의 측정값이 체력 폼의 씨앗이 된다
   // (심사위원이 혼자 밟는 경로 — 값을 손으로 넣지 않아도 처방까지 간다).
@@ -338,24 +361,46 @@ export function useChatController(demo = false) {
 
   // ── 체력 레인 3턴(PAR-Q → 측정 폼 → 결과) ──────────────────────
   // 화자는 안내만 한다. 문진 내용·측정 항목·판정·처방은 전부 카드가 말한다(FR-12 AC2).
-  const startFitness = useCallback(() => {
-    if (!state.lastAssess) {
-      push(botText(T.fitnessNeedsResult))
-      return
-    }
-    if (state.fitness.active) {
-      push(botText(T.fitnessAlready))
-      return
-    }
-    dispatch({ type: 'fitnessStart' })
-    dispatch({ type: 'setPhase', phase: 'fitness' })
-    push(botText(T.fitnessIntro), {
-      id: nextId('fitq'),
-      role: 'bot',
-      kind: 'fitness_parq',
-      laneId: state.fitness.laneId + 1,
-    })
-  }, [dispatch, push, state.fitness.active, state.fitness.laneId, state.lastAssess])
+  //
+  // ★ v1.10: 시작은 곧 "새 카드로 데려가기"까지다. 문진 카드는 스트림 맨 끝 —
+  //   결과 덱보다 한 화면 이상 아래 — 에 붙는데, 덱 도착 뒤로는 바닥 추종이 꺼져 있어
+  //   (FR-12 AC9) 말만 얹으면 화면이 1px 도 움직이지 않는다. 히어로 CTA 로 들어온
+  //   사용자에게는 "눌러도 아무 일 없는 버튼"이 된다(실기기 제보).
+  //   focus=false 는 자동재생 전용 — 자동재생은 단계 앵커 스크롤을 스스로 갖고 있다.
+  const startFitness = useCallback(
+    ({ focus = true }: { focus?: boolean } = {}) => {
+      if (!state.lastAssess) {
+        push(botText(T.fitnessNeedsResult))
+        return
+      }
+      if (state.fitness.active) {
+        // 이미 진행 중이면 새 턴을 만들지 않는다 — 진행 중인 레인의 마지막 카드로 데려간다.
+        push(botText(T.fitnessAlready))
+        const anchor = laneAnchorId(state.messages, state.fitness.laneId)
+        if (focus && anchor) focusMessage(anchor)
+        return
+      }
+      dispatch({ type: 'fitnessStart' })
+      dispatch({ type: 'setPhase', phase: 'fitness' })
+      const parqId = nextId('fitq')
+      push(botText(T.fitnessIntro), {
+        id: parqId,
+        role: 'bot',
+        kind: 'fitness_parq',
+        laneId: state.fitness.laneId + 1,
+      })
+      if (focus) focusMessage(parqId)
+    },
+    [
+      dispatch,
+      focusMessage,
+      push,
+      state.fitness.active,
+      state.fitness.laneId,
+      state.lastAssess,
+      state.messages,
+    ],
+  )
 
   // 턴1 통과 → 턴2(측정 폼). 게이트를 통과해야만 폼이 나온다(FR-07 AC5).
   const onParqContinue = useCallback(() => {
@@ -550,7 +595,8 @@ export function useChatController(demo = false) {
         }
         case 'start_fitness': {
           push(userText(chip.label))
-          startFitness()
+          // 자동재생이 대신 누른 칩이면 스크롤은 자동재생이 갖는다(단계 앵커) — 둘이 다투지 않게.
+          startFitness({ focus: chip.id !== AUTOPLAY_FITNESS_CHIP.id })
           return
         }
         case 'restart': {
@@ -898,6 +944,8 @@ export function useChatController(demo = false) {
     state,
     sigungu,
     personas,
+    // "이 메시지를 화면 안으로" 요청(체력 처방 시작·재진입). 스크롤은 ChatStream 이 한다.
+    streamFocus,
     // 3A: 체력 폼이 마운트될 때 쓸 데모 프리필(선택된 페르소나의 측정값).
     fitnessPrefill: lane.initialValues,
     // W2: 자동재생 진행 여부(상태 필) + PAR-Q 프리셋 표기.

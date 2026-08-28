@@ -21,7 +21,6 @@ services:
         required: false
     ports:
       - "8100:8100"
-      - "8000:8100"   # 2026-08-28 사용자 요청: 8000 으로도 접속(도메인 전 임시)
     volumes:
       # DB는 이미지에도 들어가지만, 월간 갱신 시 rsync만으로 교체 가능하게 볼륨 우선
       - ../data/sponavi.db:/srv/data/sponavi.db:ro

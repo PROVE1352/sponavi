@@ -35,6 +35,11 @@ fi
 
 [ -f "$DB" ] || die 2 "DB 파일 없음: $DB"
 
+# 무결성 게이트(2026-08-28 사고): 남의 WAL 을 되감은 DB 도 .dump 는 그럴듯하게 나와 지문이 '일치'로
+# 보일 수 있다. 지문 전에 quick_check 가 ok 가 아니면 손상으로 보고 실패시킨다.
+QC="$(sqlite3 "$DB" 'PRAGMA quick_check;' 2>&1 | head -1)"
+[ "$QC" = "ok" ] || die 4 "DB 손상(quick_check): $QC — -wal/-shm 잔존 여부 확인 후 --with-db 로 다시 밀어라"
+
 # 대상 테이블: sqlite 내부 테이블 제외 + 이름에 cache 가 든 테이블 제외, 이름 오름차순 고정.
 # (정렬을 고정해야 맥/우분투·로컬/서버가 같은 순서로 덤프한다.)
 TABLES="$(sqlite3 "$DB" \

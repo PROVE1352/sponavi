@@ -126,13 +126,27 @@ if [ "$WITH_DB" -eq 1 ]; then
   #   · -wal/-shm 은 '그 순간의 본체 파일'과 짝(솔트·체크섬)이다. 따로 복사해 붙이면 서버
   #     SQLite 가 남의 WAL 을 되감아 DB 를 깨뜨리거나 유령 데이터를 읽는다.
   #   · 위에서 체크포인트로 다 접어넣었으니 본체만으로 완전하다.
-  #   · 서버 컨테이너는 이 파일을 :ro 로 물고 있어 -wal 을 만들지도 않는다(compose 참고).
+  #   · 서버 쪽 -wal/-shm 은 아래에서 컨테이너를 멈춘 뒤 지운다(남의 WAL 되감기 방지).
   # --inplace: '단일 파일 바인드마운트' 라 inode 가 바뀌면 컨테이너가 새 내용을 못 본다
   #            (refresh_data.sh:79 와 같은 이유).
   # --ignore-times: rsync 기본 판정은 '크기 + mtime(1초 단위)' 이라, 크기가 같고 같은 초에
   #            만들어진 DB 는 내용이 달라도 조용히 건너뛴다(로컬 실측). --with-db 는 사람이
   #            일부러 미는 것이므로 판정을 건너뛰고 무조건 보낸다(전송량은 델타로 줄어든다).
+  # ★ 2026-08-28 사고 재발 방지: 서버에 '이전 DB 의 -wal/-shm' 이 남아 있으면 새 본체를 올려도
+  #   SQLite 가 그 남의 WAL 을 새 본체에 되감아 'database disk image is malformed' 가 난다
+  #   (8/22 DB 의 28KB -wal 이 남은 채 8/27 본체를 덮어써 /api/assess 전부 500).
+  #   또 컨테이너가 파일을 물고 있는 동안 본체를 바꾸면 안 되므로 먼저 멈춘다(3 에서 다시 띄운다).
+  ssh "$HOST" "cd $REMOTE_DIR && docker compose -f deploy/compose.sponavi.yaml stop >/dev/null 2>&1 || true; rm -f $DB_REL-wal $DB_REL-shm"
+  echo "서버 컨테이너 정지 + 잔존 -wal/-shm 제거"
   rsync -az --inplace --ignore-times "$DB_REL" "$HOST:$REMOTE_DIR/$DB_REL"
+  # 올라간 본체 무결성 게이트 — 깨진 DB 로는 컨테이너를 띄우지 않는다.
+  QC="$(ssh "$HOST" "sqlite3 $REMOTE_DIR/$DB_REL 'PRAGMA quick_check;' 2>&1 | head -1")"
+  if [ "$QC" != "ok" ]; then
+    echo "[X] 서버 DB quick_check 실패: $QC" >&2
+    echo "    컨테이너는 정지 상태다. 로컬 DB 도 확인(sqlite3 $DB_REL 'PRAGMA quick_check;')하고 다시 --with-db." >&2
+    exit 1
+  fi
+  echo "서버 DB quick_check: ok"
 fi
 
 echo "== 3. 서버 빌드·기동 =="

@@ -13,3 +13,6 @@ scripts
 docs
 **/__pycache__
 **/.pytest_cache
+# WAL/공유메모리는 '그 순간의 본체'와 짝이라 이미지에 절대 굽지 않는다(2026-08-28 malformed 사고)
+data/sponavi.db-wal
+data/sponavi.db-shm

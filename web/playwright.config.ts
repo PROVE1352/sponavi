@@ -19,7 +19,9 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } } }],
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173 --strictPort',
+    // 산출물은 dist-e2e/ 로 분리 — 배포(deploy.sh)가 같은 시각에 web/dist 를 다시 빌드해도
+    // 프리뷰가 서빙 중인 파일이 바뀌지 않는다(2026-08-28: 겹쳐서 48개 헛실패).
+    command: 'npm run build -- --outDir dist-e2e && npx vite preview --outDir dist-e2e --port 4173 --strictPort',
     url: 'http://localhost:4173',
     reuseExistingServer: true,
     timeout: 120_000,

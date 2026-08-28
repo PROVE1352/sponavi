@@ -485,7 +485,6 @@ def _assess_demo(store: Store, age: int, sex: str, measures: dict) -> dict:
                 "value": value,
                 "band": band,
                 "basis": BASIS_DEMO,
-                "basis_checked": None,
             })
     weak_factors = [w["item"] for w in weaknesses]
     recommendations, videos, filter_sports = _recommend_tail(store, weak_factors)
@@ -494,6 +493,7 @@ def _assess_demo(store: Store, age: int, sex: str, measures: dict) -> dict:
         "recommendations": recommendations,
         "videos": videos,
         # 결정 2A: 추천 종목 + 시설 데이터 표기(별칭) — 그래프/데모 두 경로 공통.
+        "basis_checked": None,  # 데모 근사 컷 — 확인일 없음(있는 척하지 않는다)
         "facility_filter_sports": expand_sports(filter_sports),
     }
 

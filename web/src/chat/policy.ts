@@ -170,7 +170,7 @@ export function sigunguOfSido(list: Sigungu[], prefix: string | null): Sigungu[]
 export const BOT_NAME = '되나요'
 
 export const T = {
-  greet: '안녕하세요, 되나요예요.',
+  greet: '안녕하세요.',
   greetSub: '몇 가지만 알려주시면 받으실 수 있는 제도와 근처 시설을 함께 찾아드릴게요.',
   // 비저장 고지 + 외부 AI 전송 고지를 한 구절로 통합(FR-12 AC7 v1.4 · P-3).
   // 컴포저 하단 상시 고지는 삭제되었고, 이 문장이 그 역할을 대신한다 — 인사 버블의 보조 텍스트.

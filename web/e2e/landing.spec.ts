@@ -17,7 +17,7 @@ test('① 메인 랜딩은 실사용 전용 — 데모 문구·퀵스타트 칩�
   await openMain(page)
 
   // 인사는 버블 1개: 자기소개 + 안내 + 보조 한 줄 고지(비저장 + 외부 AI 전송)
-  await expect(stream(page).getByText('안녕하세요, 되나요예요.')).toBeVisible()
+  await expect(stream(page).getByText('몇 가지만 알려주시면 받으실 수 있는 제도와 근처 시설을 함께 찾아드릴게요.')).toBeVisible()
   const sub = stream(page).getByTestId('bot-sub')
   await expect(sub).toHaveCount(1)
   await expect(sub).toContainText('저장하지 않고')

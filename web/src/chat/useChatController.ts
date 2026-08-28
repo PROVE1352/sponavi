@@ -32,6 +32,7 @@ import { toAppError } from '../components/ErrorPanel'
 import { pickAutoplayPersona, prefillMeasures, type AutoplayCommand } from './autoplay'
 import { useAutoplay } from './useAutoplay'
 import { readDemoRoute } from './route'
+import type { StreamFocus } from './ChatStream'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
 import {
@@ -150,10 +151,14 @@ export function useChatController(demo = false) {
   // "이 메시지를 화면 안으로 데려가 달라"는 요청(id + 요청 횟수). panelFocus 와 같은 형태다 —
   // 스크롤 자체는 ChatStream 이 한다: 등장 큐가 그 메시지를 연 뒤여야 하고, 같은 커밋에서
   // 바닥 추종을 먼저 꺼야 두 스크롤이 다투지 않는다(FR-12 AC9 덱 정책은 그대로 둔다).
-  const [streamFocus, setStreamFocus] = useState<{ id: string; seq: number } | null>(null)
-  const focusMessage = useCallback((id: string) => {
-    setStreamFocus((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
+  const [streamFocus, setStreamFocus] = useState<StreamFocus | null>(null)
+  const focusMessage = useCallback((id: string, mode: StreamFocus['mode'] = 'anchor') => {
+    setStreamFocus((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, mode }))
   }, [])
+
+  // 자동재생이 화면을 소유하는 구간(딥링크 arm ~ 재생 종료). 이 동안의 바닥 이동은 건너뛴다 —
+  // 자동재생은 단계마다 자기 앵커(PAR-Q → 폼 → 결과)로 데려가므로 바닥 추종이 켜지면 다툰다.
+  const autoOwnsView = useRef(false)
 
   // 3A: 데모 페르소나를 골랐다면 그 페르소나의 측정값이 체력 폼의 씨앗이 된다
   // (심사위원이 혼자 밟는 경로 — 값을 손으로 넣지 않아도 처방까지 간다).
@@ -172,6 +177,17 @@ export function useChatController(demo = false) {
   const push = useCallback(
     (...messages: ChatMessage[]) => dispatch({ type: 'push', messages }),
     [dispatch],
+  )
+
+  // 후속 안내("더 필요하신 게 있으면…" + 액션 칩)가 등장하면 화면을 바닥까지 데려가고
+  // 바닥 추종을 재개한다(2026-08-28 사용자 결정 · PRD FR-12 AC9). 덱 시작점 1회 이동은 그대로다 —
+  // 덱을 먼저 보여 준 다음 내려간다. 자동재생 중에는 자동재생의 앵커 스크롤이 우선이다.
+  const focusFollowUp = useCallback(
+    (id: string) => {
+      if (autoOwnsView.current) return
+      focusMessage(id, 'bottom')
+    },
+    [focusMessage],
   )
 
   // 후속 칩에 붙일 FAQ 사전의 "지금 값". 판정은 부팅 직후에도 일어날 수 있는데(딥링크 p=),
@@ -226,12 +242,13 @@ export function useChatController(demo = false) {
         // ★ v1.7: 판정 카드·공급공백·시설 요약을 메시지 하나로 합친다(FR-12 AC9).
         //   결과가 버블 여러 개로 세로로 쌓이면 모바일에서 화면이 위아래로 크게 흔들린다.
         //   합친 뒤의 렌더 형태(모바일 덱 / 데스크톱 블록)는 메시지 렌더러가 정한다.
+        const followUpId = nextId('q')
         push(
           botText(verdictText(req, data)),
           ...pathCard,
           { id: nextId('e'), role: 'bot', kind: 'assess_result', req, data },
           {
-            id: nextId('q'),
+            id: followUpId,
             role: 'bot',
             kind: 'chip_question',
             question: 'greet',
@@ -240,13 +257,15 @@ export function useChatController(demo = false) {
             select: 'action',
           },
         )
+        // 덱 시작점 1회 이동으로 결과를 먼저 보여 주고, 이 안내가 열리면 액션 칩까지 내려간다.
+        focusFollowUp(followUpId)
       } catch (e) {
         push({ id: nextId('err'), role: 'bot', kind: 'error', error: toAppError(e) })
       } finally {
         dispatch({ type: 'setPending', pending: false })
       }
     },
-    [demo, dispatch, push],
+    [demo, dispatch, focusFollowUp, push],
   )
 
   // 다음 미완 슬롯을 묻거나, 다 찼으면 판정으로 넘어간다(FR-12 AC6).
@@ -329,7 +348,11 @@ export function useChatController(demo = false) {
       if (!picked) return
       if (fallback) setAutoFallback(picked)
       selectPersona(picked, greetId)
-      if (auto) setAutoArmed(true)
+      if (auto) {
+        // 판정 push 가 이 렌더보다 먼저 끝날 수 있어(목 응답은 즉시) 상태가 아니라 ref 로 즉시 넘긴다.
+        autoOwnsView.current = true
+        setAutoArmed(true)
+      }
     })()
 
     // FAQ 사전(정적). 실패해도 대화는 그대로 동작한다.
@@ -436,8 +459,9 @@ export function useChatController(demo = false) {
         // 레인을 마치면 질의응답 단계로 복귀 + 후속 칩(지도·목록·FAQ·처음부터).
         dispatch({ type: 'setPhase', phase: 'qa' })
         if (first) {
+          const followUpId = nextId('q')
           push({
-            id: nextId('q'),
+            id: followUpId,
             role: 'bot',
             kind: 'chip_question',
             question: 'greet',
@@ -448,10 +472,20 @@ export function useChatController(demo = false) {
             ),
             select: 'action',
           })
+          focusFollowUp(followUpId)
         }
       })()
     },
-    [dispatch, lane, push, state.faq, state.fitness.laneId, state.fitness.resultMsgId, state.lastAssess],
+    [
+      dispatch,
+      focusFollowUp,
+      lane,
+      push,
+      state.faq,
+      state.fitness.laneId,
+      state.fitness.resultMsgId,
+      state.lastAssess,
+    ],
   )
 
   // 처방 → 강좌 연결(FR-09 AC1): 종목 필터 + 목록 탭 전환 + 한 줄 안내.
@@ -929,6 +963,19 @@ export function useChatController(demo = false) {
     },
     onCommand: onAutoCommand,
   })
+
+  // 자동재생이 끝나면(완주·중단·사용자 취소) 화면 소유권을 대화로 돌려준다 —
+  // 그 뒤의 후속 안내부터는 다시 바닥까지 데려간다.
+  const autoWasRunning = useRef(false)
+  useEffect(() => {
+    if (autoplay.running) {
+      autoWasRunning.current = true
+      return
+    }
+    if (!autoWasRunning.current) return
+    autoWasRunning.current = false
+    autoOwnsView.current = false
+  }, [autoplay.running])
 
   // 메시지 렌더러가 받는 체력 턴 계약 = 레인 훅 + 스토어 진행도 + 턴 진행 액션.
   const fitness: FitnessTurnApi = {

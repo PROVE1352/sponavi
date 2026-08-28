@@ -7,7 +7,7 @@
 //   사용자 입력(칩·전송)이 들어오면 남은 시퀀스를 그 자리에서 전부 완료한다(대기 강제 금지).
 //   prefers-reduced-motion 이면 인디케이터·지연·타이프라이터 전부 생략하고 즉시 표시.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage } from '../types_chat'
 import { MessageView, NabiAvatar, type MessageHandlers } from './messages'
 import { BOT_NAME, T } from './policy'
@@ -17,12 +17,19 @@ import { prefersReducedMotion, typingDurationMs } from './Typewriter'
 const STICK_THRESHOLD_PX = 160
 // 결과 덱이 도착했을 때 화면 위쪽에 남겨 둘 여백(sticky 헤더가 덱 머리를 덮지 않도록).
 const DECK_TOP_OFFSET_PX = 72
+// 결과 덱이 도착한 뒤 "덱 시작점"에 머무는 최소 시간. 후속 안내가 바닥으로 데려가기 전에
+// 덱 머리(히어로)를 실제로 보여 주기 위한 것 — 이게 없으면 덱 이동이 끝나기도 전에
+// 바닥 이동이 겹쳐 두 스크롤이 다투고, 사용자는 덱을 스쳐 지나가기만 한다(FR-12 AC9 v1.11).
+const DECK_HOLD_MS = 1000
 // 타이핑 인디케이터 노출 시간(계약 범위 300~600ms 의 짧은 쪽 — 대화가 굼떠지지 않게).
 const INDICATOR_MS = 320
 // 앞 버블의 마지막 글자가 실제로 화면에 박히는 시점은 타이프라이터의 rAF 프레임 경계다.
 // 계산상 종료 시각에 프레임 두어 개를 얹어야 "완료 → 다음" 순서가 눈으로도 어긋나지 않는다.
 const TYPING_TAIL_MS = 60
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+// 예약해 둔 바닥 이동을 취소시키는 사용자 개입(자동재생 취소 트리거와 같은 목록).
+// 덱을 보는 동안 사용자가 먼저 움직였다면 화면 주도권은 사용자 것이다.
+const TAKEOVER_EVENTS = ['wheel', 'touchmove', 'pointerdown', 'keydown'] as const
 
 // 타이프라이터가 붙는 메시지 = 화자가 "말하는" 버블(발화·질문).
 // 카드·고지 블록·사용자 버블은 여기 해당하지 않는다 — 순서만 지켜 등장한다.
@@ -31,6 +38,17 @@ function spokenTextOf(m: ChatMessage): string | null {
   if (m.kind === 'bot_text') return m.text
   if (m.kind === 'chip_question') return m.text
   return null
+}
+
+// 스트림에게 보내는 "화면을 여기로" 요청. 스크롤을 컨트롤러가 직접 하지 않는 이유는
+// 두 가지다: ① 등장 큐가 그 메시지를 연 뒤여야 앵커가 존재하고, ② 같은 커밋에서
+// 바닥 추종(stick)을 먼저 손봐야 두 스크롤이 다투지 않는다.
+//   anchor = 그 메시지 머리를 화면 위쪽에(체력 처방 카드 등) · 바닥 추종은 끈 채로
+//   bottom = 문서 맨 아래로 + 바닥 추종 재개(결과 뒤 후속 안내 — 여기서부터 다시 일반 대화)
+export interface StreamFocus {
+  id: string
+  seq: number
+  mode: 'anchor' | 'bottom'
 }
 
 function scrollToBottom(behavior: ScrollBehavior) {
@@ -154,9 +172,8 @@ export function ChatStream({
   // "패널을 봐 달라"는 요청 횟수. 셸이 패널로 스크롤하는 동안 스트림은 바닥 추종을 멈춘다 —
   // 안 그러면 같은 프레임에 두 스크롤이 다투다 패널이 다시 화면 밖으로 밀린다.
   panelFocus: number
-  // "이 메시지를 화면 안으로" 요청(id + 요청 횟수). 사용자가 스스로 연 카드(체력 처방)를
-  // 데려가는 데만 쓴다 — 같은 id 를 다시 눌러도 seq 가 오르면 다시 데려간다.
-  focus?: { id: string; seq: number } | null
+  // "화면을 이 메시지로" 요청. 같은 id 를 다시 눌러도 seq 가 오르면 다시 데려간다.
+  focus?: StreamFocus | null
   handlers: MessageHandlers
 }) {
   const { visible, indicator, revealed, settled } = useRevealQueue(messages)
@@ -200,35 +217,72 @@ export function ChatStream({
   //   스크롤 리스너가 stick 을 다시 켜고 평소의 대화 추종으로 돌아간다.
   //   ※ 이 훅은 아래 바닥 추종 훅보다 먼저 선언돼야 한다(같은 커밋에서 stick 을 먼저 끈다).
   const deckShown = useRef<string | null>(null)
+  // 덱 시작점으로 이동한 시각 — 후속 안내의 바닥 이동이 이 이동을 덮치지 않게 하는 기준점.
+  const deckScrollAt = useRef(0)
   useEffect(() => {
     const deck = [...visible].reverse().find((m) => m.kind === 'assess_result')
     if (!deck || deckShown.current === deck.id) return
     deckShown.current = deck.id
     stick.current = false
     autoUntil.current = Date.now() + 1400
+    deckScrollAt.current = Date.now()
     const el = boxRef.current?.querySelector<HTMLElement>(`[data-result-anchor="${deck.id}"]`)
     if (!el) return
     const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX
     window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
   }, [visible])
 
-  // ★ 지목 스크롤(v1.10): 사용자가 스스로 연 카드로 데려간다 — 덱과 **같은 기계**(앵커 측정 →
-  //   1회 scrollTo)를 쓰고, 덱 규칙은 그대로다: 바닥 추종을 켜지 않고, 후속 칩·버블은
-  //   여전히 강제로 끌어내리지 않는다. 요청 1건당 정확히 한 번만 움직인다.
-  //   등장 큐가 아직 그 메시지를 열지 않았으면 앵커가 없다 → 열리는 커밋에서 다시 돈다
-  //   (문진 카드는 앞 버블의 타이핑이 끝난 뒤에야 마운트된다).
-  //   ※ 아래 바닥 추종 훅보다 먼저 선언돼야 같은 커밋에서 stick 이 먼저 꺼진다.
+  // ★ 지목 스크롤(v1.10~v1.11): 요청 1건당 정확히 한 번 움직인다. 등장 큐가 아직 그 메시지를
+  //   열지 않았으면 앵커가 없다 → 열리는 커밋에서 다시 돈다(문진 카드는 앞 버블의 타이핑이
+  //   끝난 뒤에야 마운트된다).
+  //     anchor : 카드 머리를 화면 위쪽에 — 바닥 추종은 끈 채로(덱 규칙 그대로)
+  //     bottom : 결과 뒤 후속 안내가 도착했다 = "이제부터 다시 평범한 대화"
+  //              → 문서 맨 아래(액션 칩)로 한 번 내려가고 바닥 추종을 **재개**한다.
+  //              덱 시작점 이동 직후라면 DECK_HOLD_MS 만큼 기다린다 — 덱을 먼저 보여 준 뒤
+  //              내려가야 하고, 진행 중인 덱 스크롤과 겹치면 서로를 끊어먹는다.
+  //   ※ 덱 훅보다 **뒤에**, 바닥 추종 훅보다 **앞에** 선언돼야 한다(같은 커밋 순서).
   const focusDone = useRef(0)
+  // 예약된 바닥 이동. 취소는 이 한 곳으로 모은다 — 사용자가 먼저 움직였거나(개입),
+  // 다른 이동 요청(카드 지목·패널 열기)이 들어오면 예약은 없던 일이 된다.
+  const bottomTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bottomOff = useRef<(() => void) | null>(null)
+  const stopBottom = useCallback(() => {
+    if (bottomTimer.current) clearTimeout(bottomTimer.current)
+    bottomTimer.current = null
+    bottomOff.current?.()
+    bottomOff.current = null
+  }, [])
+  useEffect(() => stopBottom, [stopBottom])
   useEffect(() => {
     if (!focus || focus.seq === focusDone.current) return
     const el = boxRef.current?.querySelector<HTMLElement>(`[data-focus-anchor="${focus.id}"]`)
     if (!el) return
     focusDone.current = focus.seq
+    stopBottom()
+    if (focus.mode === 'bottom') {
+      const wait = Math.max(0, deckScrollAt.current + DECK_HOLD_MS - Date.now())
+      const onTakeover = () => stopBottom()
+      for (const type of TAKEOVER_EVENTS) {
+        window.addEventListener(type, onTakeover, { capture: true, passive: true })
+      }
+      bottomOff.current = () => {
+        for (const type of TAKEOVER_EVENTS) {
+          window.removeEventListener(type, onTakeover, { capture: true })
+        }
+      }
+      bottomTimer.current = setTimeout(() => {
+        stopBottom()
+        stick.current = true
+        autoUntil.current = Date.now() + 1400
+        scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
+      }, wait)
+      return
+    }
     stick.current = false
     autoUntil.current = Date.now() + 1400
     const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX
     window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
-  }, [focus, visible])
+  }, [focus, stopBottom, visible])
 
   // 패널 열기 요청 → 이번 턴의 바닥 추종은 포기한다(셸이 패널로 데려간다).
   // ※ 아래 바닥 추종 훅보다 먼저 선언돼야 같은 커밋에서 stick 이 먼저 꺼진다.
@@ -236,9 +290,10 @@ export function ChatStream({
   useEffect(() => {
     if (panelFocus === panelFocusSeen.current) return
     panelFocusSeen.current = panelFocus
+    stopBottom()
     stick.current = false
     autoUntil.current = Date.now() + 1400
-  }, [panelFocus])
+  }, [panelFocus, stopBottom])
 
   // 새 메시지가 열리면 바닥으로. 부드럽게 따라간다(AC11) —
   // 모션 최소화 선호면 즉시 이동(CSS 로는 못 막는 JS 스크롤이다).

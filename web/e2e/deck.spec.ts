@@ -2,8 +2,10 @@ import { test, expect } from '@playwright/test'
 import {
   assertNoHorizontalScroll,
   deck,
+  expectAtBottom,
   expectMapMounted,
   fillMainSlots,
+  longestRun,
   openDemo,
   openMain,
   panel,
@@ -11,12 +13,15 @@ import {
   snapContainerCount,
   startPersona,
   stream,
+  traceViewport,
+  viewportTrace,
 } from './helpers'
 
 // 모바일 결과 덱 v1.7 계약(PRD FR-12 AC9) — 사용자 원문: "휴대폰일 경우 상하가 너무 많이 움직임".
 //   ① 390px 결과는 단일 덱 하나(판정 → 공백·커버리지 → 시설) + 덱 밖 히어로로 통합된다(v1.10 6A)
 //   ② 결과 세로 길이가 v1.6(개별 메시지 나열) 대비 크게 줄어든다
-//   ③ 오토스크롤은 덱 시작점으로 한 번만 — 결과 시퀀스가 바닥을 연쇄 추종하지 않는다
+//   ③ 오토스크롤: 덱 시작점으로 먼저 한 번 → 후속 안내가 등장하면 바닥(액션 칩)으로 내려가고
+//      거기서부터 바닥 추종을 재개한다(2026-08-28 사용자 결정 · v1.11)
 //   ④ 데스크톱(lg+)은 기존 세로 블록 유지
 //   ⑤ "지도에서 보기"·"시설 목록 보기"는 패널을 열고 실제로 화면에 데려온다(실기기 피드백)
 
@@ -74,17 +79,21 @@ test('①-b 390px — P2(✗) 첫 화면에서 스와이프 없이 히어로가 
   page,
 }) => {
   await openDemo(page)
+  // v1.11: 후속 안내가 화면을 바닥으로 데려가므로 "첫 화면"은 최종 상태가 아니라 **구간**이다.
+  // 덱 시작점에 머무는 동안 히어로가 실제로 보였는지를 궤적으로 본다(스쳐 지나감과 구별).
+  await traceViewport(page, { hero: '[data-testid="alt-routes-block"]' })
   await startPersona(page, 'P2')
   await settleTypewriter(page)
 
   const hero = stream(page).getByTestId('alt-routes-block')
   await expect(hero).toBeVisible()
-  const box = await hero.boundingBox()
   const vh = page.viewportSize()!.height
-  expect(box, '히어로 박스를 못 잡았다').not.toBeNull()
-  // 오토스크롤이 앵커를 화면 위쪽에 붙인 직후 = 히어로가 뷰포트 안(가로 스와이프 0회)
-  expect(box!.y, `히어로 top ${box!.y}`).toBeLessThan(vh)
-  expect(box!.y + box!.height, '히어로가 화면 위로 밀려 올라갔다').toBeGreaterThan(0)
+  const held = longestRun(
+    await viewportTrace(page),
+    (sp) => sp.boxes.hero != null && sp.boxes.hero.top < vh && sp.boxes.hero.bottom > 0,
+  )
+  // 오토스크롤이 앵커를 화면 위쪽에 붙인 뒤 히어로가 최소 0.4초는 화면에 머문다(가로 스와이프 0회)
+  expect(held, `히어로가 화면에 머문 연속 샘플 ${held}개(50ms 간격)`).toBeGreaterThanOrEqual(8)
   // 결과 카드 하단 인라인 강좌는 3행까지만(전체 목록은 패널)
   const rows = stream(page).getByTestId('inline-facilities').locator('> ul > li')
   expect(await rows.count(), '인라인 강좌는 3행 이하').toBeLessThanOrEqual(3)
@@ -105,38 +114,65 @@ test('② 390px — 결과 세로 길이가 v1.6 개별 메시지 나열보다 �
   expect(main, `메인 결과 메시지 높이 ${main}px`).toBeLessThan(DECK_MAX_H)
 })
 
-test('③ 오토스크롤 — 결과 도착 시 덱 시작점으로 한 번만 이동한다(바닥 연쇄 추종 금지)', async ({
+test('③ 오토스크롤 — 덱 시작점에 먼저 머문 뒤, 후속 안내가 오면 바닥(액션 칩)으로 내려간다', async ({
   page,
 }) => {
   await openDemo(page)
+  await traceViewport(page, { anchor: '[data-result-anchor]', chip: '[data-testid="chip-act-restart"]' })
   await startPersona(page, 'P1')
   await settleTypewriter(page)
 
-  // 덱 시작점이 화면 위쪽(헤더 아래)에 와 있다
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(() => {
-          const el = document.querySelector('[data-result-anchor]') as HTMLElement | null
-          return el ? Math.round(el.getBoundingClientRect().top) : 99999
-        }),
-      { message: '결과 덱 시작점이 화면 위쪽에 오지 않았다' },
-    )
-    .toBeLessThan(220)
+  // ② 후속 안내("더 필요하신 게 있으면…")가 열리면 액션 칩까지 내려간다(2026-08-28 결정)
+  await expectAtBottom(page, '후속 안내가 왔는데 바닥(액션 칩)까지 내려가지 않았다')
+  const chip = await page.getByTestId('chip-act-restart').boundingBox()
+  const vh = page.viewportSize()!.height
+  expect(chip, '후속 칩 박스를 못 잡았다').not.toBeNull()
+  expect(chip!.y, `후속 칩 top ${chip!.y}`).toBeGreaterThanOrEqual(0)
+  expect(chip!.y + chip!.height, '후속 칩이 화면 아래에 잘려 있다').toBeLessThanOrEqual(vh)
 
-  const top = await page.evaluate(() => {
-    const el = document.querySelector('[data-result-anchor]') as HTMLElement | null
-    return el ? Math.round(el.getBoundingClientRect().top) : 99999
-  })
-  expect(top).toBeGreaterThan(-60)
-
-  // 후속 칩까지 도착했지만 바닥으로 끌려 내려가지 않았다
-  await expect(page.getByTestId('chip-act-restart')).toBeAttached()
-  const atBottom = await page.evaluate(
-    () =>
-      window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 40,
+  // ① 그전에 덱 시작점(헤더 아래)에 실제로 **머물렀다** — 바닥으로 스쳐 지나간 게 아니다
+  const trace = await viewportTrace(page)
+  const held = longestRun(
+    trace,
+    (s) => s.boxes.anchor != null && s.boxes.anchor.top > -60 && s.boxes.anchor.top < 220,
   )
-  expect(atBottom, '결과 시퀀스가 바닥까지 연쇄 스크롤했다').toBe(false)
+  expect(held, `덱 시작점에 머문 연속 샘플 ${held}개(50ms 간격)`).toBeGreaterThanOrEqual(6)
+  // 순서: 덱 시작점 체류가 바닥 도달보다 먼저다
+  const restedAt = trace.findIndex(
+    (s) => s.boxes.anchor != null && s.boxes.anchor.top > -60 && s.boxes.anchor.top < 220,
+  )
+  const bottomAt = trace.findIndex((s) => s.gap <= 2 && s.boxes.chip != null)
+  expect(restedAt, '덱 시작점 체류가 기록되지 않았다').toBeGreaterThanOrEqual(0)
+  expect(bottomAt, '바닥 도달이 기록되지 않았다').toBeGreaterThan(restedAt)
+})
+
+test('③-b 후속 안내 뒤에는 바닥 추종이 재개된다 — 다음 봇 버블도 화면에 따라온다', async ({
+  page,
+}) => {
+  await openMain(page)
+  await fillMainSlots(page, { income: '그외' })
+
+  // 덱 시작점보다 아래(= 실제로 더 내려왔다) + 액션 칩이 화면 안
+  const deckTop = await page.evaluate(() => {
+    const el = document.querySelector('[data-result-anchor]') as HTMLElement | null
+    return el ? Math.round(el.getBoundingClientRect().top + window.scrollY - 72) : -1
+  })
+  await expectAtBottom(page, '후속 안내가 왔는데 바닥까지 내려가지 않았다')
+  const y = await page.evaluate(() => Math.round(window.scrollY))
+  expect(y, `scrollY ${y} · 덱 시작점 ${deckTop}`).toBeGreaterThan(deckTop)
+  const vh = page.viewportSize()!.height
+  const chip = await page.getByTestId('chip-act-restart').boundingBox()
+  expect(chip!.y).toBeGreaterThanOrEqual(0)
+  expect(chip!.y + chip!.height).toBeLessThanOrEqual(vh)
+
+  // 여기서부터는 평범한 대화 — 새 봇 버블(처음부터 확인 질문)이 오면 다시 바닥에 붙는다
+  await page.getByTestId('chip-act-restart').click()
+  await expect(stream(page).getByText(/처음부터 다시 시작할까요/)).toBeVisible()
+  await settleTypewriter(page)
+  await expectAtBottom(page, '후속 안내 뒤 새 버블에서 바닥 추종이 재개되지 않았다')
+  const keep = await page.getByTestId('chip-restart-no').boundingBox()
+  expect(keep!.y).toBeGreaterThanOrEqual(0)
+  expect(keep!.y + keep!.height, '새 칩이 화면 아래에 잘려 있다').toBeLessThanOrEqual(vh)
 })
 
 test.describe('데스크톱', () => {

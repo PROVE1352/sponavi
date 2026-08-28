@@ -178,3 +178,75 @@ export async function assertNoHorizontalScroll(page: Page): Promise<void> {
   )
   expect(overflow, `가로 오버플로 ${overflow}px`).toBeLessThanOrEqual(1)
 }
+
+// ── 스크롤 궤적 기록기 (FR-12 AC9 v1.11) ────────────────────────────────
+// "덱 시작점에 먼저 머물렀다 → 후속 안내가 오자 바닥으로 내려갔다"처럼 **중간 상태**가 있는
+// 동작은 최종 상태만 봐서는 검증할 수 없다. 그렇다고 고정 sleep 으로 그 순간을 노리면
+// 기기 속도에 따라 흔들린다 — 50ms 간격으로 위치를 계속 적어 두고 나중에 읽는다.
+export interface ViewportSample {
+  t: number
+  y: number
+  // 문서 끝까지 남은 거리(0 = 바닥에 붙음)
+  gap: number
+  // 이름 → 뷰포트 기준 상/하단(요소가 아직 없으면 null)
+  boxes: Record<string, { top: number; bottom: number } | null>
+}
+
+export async function traceViewport(page: Page, targets: Record<string, string>): Promise<void> {
+  await page.evaluate((sel) => {
+    const w = window as unknown as { __trace?: unknown[]; __traceId?: number }
+    if (w.__traceId) clearInterval(w.__traceId)
+    const samples: unknown[] = []
+    w.__trace = samples
+    const t0 = performance.now()
+    w.__traceId = window.setInterval(() => {
+      const boxes: Record<string, { top: number; bottom: number } | null> = {}
+      for (const [name, css] of Object.entries(sel)) {
+        const el = document.querySelector(css)
+        const r = el?.getBoundingClientRect()
+        boxes[name] = r ? { top: Math.round(r.top), bottom: Math.round(r.bottom) } : null
+      }
+      samples.push({
+        t: Math.round(performance.now() - t0),
+        y: Math.round(window.scrollY),
+        gap: Math.round(document.documentElement.scrollHeight - window.innerHeight - window.scrollY),
+        boxes,
+      })
+    }, 50)
+  }, targets)
+}
+
+export async function viewportTrace(page: Page): Promise<ViewportSample[]> {
+  return page.evaluate(
+    () => (window as unknown as { __trace?: ViewportSample[] }).__trace ?? [],
+  ) as Promise<ViewportSample[]>
+}
+
+// 궤적에서 "조건을 만족한 채 연속으로 머문" 최대 샘플 수(1 샘플 = 50ms).
+// 스쳐 지나간 프레임과 실제로 멈춰 있던 구간을 구별하는 데 쓴다.
+export function longestRun(
+  samples: ViewportSample[],
+  ok: (s: ViewportSample) => boolean,
+): number {
+  let best = 0
+  let run = 0
+  for (const s of samples) {
+    run = ok(s) ? run + 1 : 0
+    if (run > best) best = run
+  }
+  return best
+}
+
+// 지금 화면이 문서 바닥에 붙어 있는가(액션 칩이 컴포저 위로 온전히 보이는 상태).
+export async function expectAtBottom(page: Page, message: string): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          () =>
+            document.documentElement.scrollHeight - window.innerHeight - Math.round(window.scrollY),
+        ),
+      { message, timeout: 8_000 },
+    )
+    .toBeLessThanOrEqual(2)
+}

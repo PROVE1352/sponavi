@@ -485,6 +485,7 @@ def _assess_demo(store: Store, age: int, sex: str, measures: dict) -> dict:
                 "value": value,
                 "band": band,
                 "basis": BASIS_DEMO,
+                "basis_checked": None,
             })
     weak_factors = [w["item"] for w in weaknesses]
     recommendations, videos, filter_sports = _recommend_tail(store, weak_factors)

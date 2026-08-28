@@ -16,6 +16,22 @@ import { useEffect, useState } from 'react'
 const MS_PER_CHAR = 16
 const MAX_TOTAL_MS = 2500
 
+// W2 자동재생(`#/demo?…&auto=1`) 전용 가속 — 8ms/자(PRD FR-12 AC10 v1.10 단서).
+// 폰 390px·LTE 스로틀에서 P2 전 구간 30초 예산을 맞추기 위한 값이며,
+// 사람이 직접 조작하는 경로의 16ms/자는 건드리지 않는다.
+// ★ 이 스위치는 useAutoplay 가 재생 시작·종료에 맞춰 켜고 끈다. 재생 속도 계산은
+//   Typewriter 와 ChatStream 등장 큐가 같은 값을 봐야 하므로 여기 한 곳에서만 정한다.
+const AUTO_MS_PER_CHAR = 8
+let autoPacing = false
+
+export function setAutoPacing(on: boolean): void {
+  autoPacing = on
+}
+
+function msPerChar(): number {
+  return autoPacing ? AUTO_MS_PER_CHAR : MS_PER_CHAR
+}
+
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function prefersReducedMotion(): boolean {
@@ -28,7 +44,7 @@ export function prefersReducedMotion(): boolean {
 export function typingDurationMs(text: string): number {
   const len = text.length
   if (len === 0) return 0
-  return Math.max(1, Math.min(MS_PER_CHAR, MAX_TOTAL_MS / len)) * len
+  return Math.max(1, Math.min(msPerChar(), MAX_TOTAL_MS / len)) * len
 }
 
 export function Typewriter({
@@ -55,7 +71,7 @@ export function Typewriter({
       return
     }
 
-    const per = Math.max(1, Math.min(MS_PER_CHAR, MAX_TOTAL_MS / Math.max(1, text.length)))
+    const per = Math.max(1, Math.min(msPerChar(), MAX_TOTAL_MS / Math.max(1, text.length)))
     const start = performance.now()
     let raf = 0
     const step = () => {

@@ -6,7 +6,7 @@
 //
 // 저장 금지(P-3): 슬롯·대화는 메모리에만 둔다. localStorage/sessionStorage 미사용.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { assess, chatFaq, chatNlu, getPersonas, getSigungu, useMockData } from '../api/client'
 import type {
   AssessRequest,
@@ -20,6 +20,7 @@ import type {
   ChatMessage,
   ChatSlots,
   Chip,
+  FitnessResultMsg,
   FitnessTurnApi,
   NluPhase,
   NluSlotsWire,
@@ -28,6 +29,8 @@ import type {
 } from '../types_chat'
 import { EMPTY_SLOTS } from '../types_chat'
 import { toAppError } from '../components/ErrorPanel'
+import { pickAutoplayPersona, prefillMeasures, type AutoplayCommand } from './autoplay'
+import { useAutoplay } from './useAutoplay'
 import { readDemoRoute } from './route'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
@@ -57,6 +60,14 @@ import {
 } from './policy'
 
 const INCOME_VALUES = INCOME_OPTIONS.map((o) => o.value)
+
+// 자동재생이 대신 눌러 주는 "체력 처방 시작". 히어로 CTA·후속 칩과 **같은 액션**이다 —
+// 자동재생 전용 진입로를 새로 만들지 않는다(FR-02 AC5 · 설계 W2 행).
+const AUTOPLAY_FITNESS_CHIP: Chip = {
+  id: 'act-fitness-auto',
+  label: '체력 처방 시작',
+  action: { kind: 'start_fitness' },
+}
 
 function botText(
   text: string,
@@ -114,10 +125,18 @@ export function useChatController(demo = false) {
   const [personas, setPersonas] = useState<DemoPersona[]>([])
   const lastAttempt = useRef<AssessRequest | null>(null)
   const booted = useRef(false)
+  // W2 자동재생: 딥링크가 자동재생을 요청했고 페르소나까지 확정됐는가.
+  const [autoArmed, setAutoArmed] = useState(false)
+  // `/api/demo/personas` 실패 시의 P2 폴백 바디(목록에 없으므로 따로 들고 있는다).
+  const [autoFallback, setAutoFallback] = useState<DemoPersona | null>(null)
+  // 자동재생이 PAR-Q 를 프리셋으로 통과시켰는가(카드 위 라벨의 근거).
+  const [autoParqUsed, setAutoParqUsed] = useState(false)
 
   // 3A: 데모 페르소나를 골랐다면 그 페르소나의 측정값이 체력 폼의 씨앗이 된다
   // (심사위원이 혼자 밟는 경로 — 값을 손으로 넣지 않아도 처방까지 간다).
-  const activePersona = personas.find((p) => p.id === state.activePersonaId) ?? null
+  const activePersona =
+    personas.find((p) => p.id === state.activePersonaId) ??
+    (autoFallback && autoFallback.id === state.activePersonaId ? autoFallback : null)
 
   // 체력 레인(FR-07~09)의 조회·제출·AI 상태. 판정 결과의 나이·성별을 그대로 따른다.
   const lane = useFitness({
@@ -279,10 +298,15 @@ export function useChatController(demo = false) {
       })
 
       // OV10 딥링크: `#/demo?p=P2` 는 그 칩을 대신 눌러 준다(LLM 0회 · 칩 경로 그대로).
-      // `auto` 는 여기서 읽기만 하고 쓰지 않는다 — 자동재생은 W2 몫이다.
-      const { p: wanted } = readDemoRoute()
-      const picked = wanted ? ps.find((x) => x.id === wanted) : undefined
-      if (picked) selectPersona(picked, greetId)
+      // W2: `auto=1` 이면 그다음 여정(체력 처방 → 필터)을 자동재생이 이어 받는다.
+      //   · 페르소나 조회가 죽어도 `p=P2&auto=1` 은 클라 상수 바디로 재생된다(실패 모드 표)
+      //   · `auto` 만 있고 `p` 가 없으면 아무 일도 하지 않는다
+      const { p: wanted, auto } = readDemoRoute()
+      const { persona: picked, fallback } = pickAutoplayPersona(ps, wanted, auto)
+      if (!picked) return
+      if (fallback) setAutoFallback(picked)
+      selectPersona(picked, greetId)
+      if (auto) setAutoArmed(true)
     })()
 
     // FAQ 사전(정적). 실패해도 대화는 그대로 동작한다.
@@ -804,6 +828,62 @@ export function useChatController(demo = false) {
     [dispatch],
   )
 
+  // ── W2 자동재생 ─────────────────────────────────────────────
+  // 단계 판단은 autoplay.ts(순수 상태기계), 시간·취소·스크롤은 useAutoplay 가 갖는다.
+  // 여기서는 "화면이 어디까지 왔는가"를 모아 넘기고, 명령을 기존 액션에 그대로 태운다.
+  const autoMeasures = useMemo(
+    () => prefillMeasures(lane.grouped, activePersona?.demo?.fitness ?? null),
+    [activePersona, lane.grouped],
+  )
+
+  const autoResult = state.messages.find(
+    (m): m is FitnessResultMsg =>
+      m.kind === 'fitness_result' && m.id === state.fitness.resultMsgId,
+  )
+
+  const onAutoCommand = useCallback(
+    (command: AutoplayCommand) => {
+      switch (command.kind) {
+        case 'start_fitness':
+          onChip(AUTOPLAY_FITNESS_CHIP, '')
+          return
+        case 'pass_parq':
+          setAutoParqUsed(true)
+          onParqContinue()
+          return
+        case 'submit_form':
+          onFitnessSubmit(command.measures)
+          return
+        case 'apply_filter':
+          applyFilter(command.sports)
+          return
+      }
+    },
+    [applyFilter, onChip, onFitnessSubmit, onParqContinue],
+  )
+
+  const autoplay = useAutoplay({
+    armed: autoArmed,
+    progress: state.reveal.revealed,
+    view: {
+      settled: state.reveal.settled,
+      busy: state.pending || lane.itemsLoading || lane.submitting,
+      assessDone: state.messages.some((m) => m.kind === 'assess_result'),
+      // /api/assess 실패 = error 버블 + 재시도 버튼 → 자동재생은 중단(클라 룰 폴백 없음).
+      assessError: state.messages.some((m) => m.kind === 'error'),
+      parqPreset: activePersona?.demo?.parq_preset === true,
+      parqShown: state.messages.some((m) => m.kind === 'fitness_parq'),
+      formShown: state.messages.some((m) => m.kind === 'fitness_form'),
+      itemsError: lane.itemsError,
+      itemsReady: lane.grouped.length > 0,
+      measures: autoMeasures,
+      submitError: lane.submitError != null,
+      resultShown: autoResult != null,
+      filterSports: autoResult?.result.facility_filter_sports ?? [],
+    },
+    onCommand: onAutoCommand,
+  })
+
   // 메시지 렌더러가 받는 체력 턴 계약 = 레인 훅 + 스토어 진행도 + 턴 진행 액션.
   const fitness: FitnessTurnApi = {
     ...lane,
@@ -820,6 +900,9 @@ export function useChatController(demo = false) {
     personas,
     // 3A: 체력 폼이 마운트될 때 쓸 데모 프리필(선택된 페르소나의 측정값).
     fitnessPrefill: lane.initialValues,
+    // W2: 자동재생 진행 여부(상태 필) + PAR-Q 프리셋 표기.
+    autoplayRunning: autoplay.running,
+    parqPreset: autoParqUsed,
     onChip,
     onSend,
     onRetry,

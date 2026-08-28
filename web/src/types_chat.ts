@@ -312,6 +312,12 @@ export interface FitnessLaneState {
   resultMsgId: string | null
 }
 
+// 등장 큐 진행도(연출 전용 — 대화 사실은 여기 없다).
+export interface RevealState {
+  revealed: number
+  settled: boolean
+}
+
 export interface ChatState {
   messages: ChatMessage[]
   slots: ChatSlots
@@ -332,5 +338,9 @@ export interface ChatState {
   activePersonaId: string | null
   // 체력 레인(3턴) 진행 상태.
   fitness: FitnessLaneState
+  // 순차 등장 큐(ChatStream useRevealQueue)의 진행도 브리지(W2 자동재생).
+  //   revealed = 지금까지 연 버블 수 · settled = 연출이 다 끝났는가
+  // 자동재생이 "앞 단계 UI 가 실제로 그려졌는가"를 DOM 폴링 없이 알기 위한 유일한 신호다.
+  reveal: RevealState
   faq: FaqEntry[]
 }

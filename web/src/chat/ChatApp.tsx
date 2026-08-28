@@ -13,6 +13,7 @@ import { ChatStream } from './ChatStream'
 import { Composer } from './Composer'
 import { ContextPanel } from './ContextPanel'
 import { useIsDemo } from './route'
+import { AUTOPLAY_STATUS_TEXT } from './autoplay'
 import { BOT_NAME } from './policy'
 import type { MessageHandlers } from './messages'
 
@@ -97,6 +98,8 @@ function ChatShell({ demo }: { demo: boolean }) {
     applyFilter,
     fitness,
     fitnessPrefill,
+    autoplayRunning,
+    parqPreset,
   } = useChatController(demo)
   const panelRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
@@ -157,6 +160,8 @@ function ChatShell({ demo }: { demo: boolean }) {
     fitness,
     // 3A: 데모 페르소나를 골랐다면 체력 폼이 그 값으로 미리 채워진다(심사 1클릭 경로).
     fitnessPrefill,
+    // W2: 자동재생이 문진을 프리셋으로 통과시켰다는 표기(PAR-Q 카드 안).
+    parqPreset,
   }
 
   return (
@@ -204,6 +209,20 @@ function ChatShell({ demo }: { demo: boolean }) {
           />
         </main>
       </div>
+
+      {/* W2 자동재생 상태 필. 끝나거나 사용자가 개입하면 사라진다.
+          클릭을 가로채지 않는다(pointer-events-none) — 화면 어디를 눌러도 취소가 먼저 걸린다. */}
+      {autoplayRunning && (
+        <div
+          data-testid="autoplay-status"
+          role="status"
+          className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4"
+        >
+          <span className="rounded-full bg-slate-900/85 px-3.5 py-1.5 text-xs font-semibold text-white shadow-card dark:bg-white/90 dark:text-slate-900">
+            {AUTOPLAY_STATUS_TEXT}
+          </span>
+        </div>
+      )}
 
       {demo && <Footer health={health} />}
     </div>

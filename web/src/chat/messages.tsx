@@ -779,6 +779,8 @@ export interface MessageHandlers {
   fitness: FitnessTurnApi
   // 3A: 데모 페르소나 프리필(코드→값). 폼이 마운트될 때 씨앗으로만 쓴다.
   fitnessPrefill?: Record<string, number> | null
+  // W2: 자동재생이 PAR-Q 를 프리셋으로 통과시켰는가 → 게이트 카드에 그 사실을 표기한다.
+  parqPreset?: boolean
 }
 
 export function MessageView({
@@ -826,6 +828,7 @@ export function MessageView({
           <ParqGate
             done={h.fitness.parqOk && msg.laneId === h.fitness.laneId}
             locked={msg.laneId !== h.fitness.laneId}
+            preset={h.parqPreset === true && msg.laneId === h.fitness.laneId}
             onContinue={h.fitness.onParqContinue}
           />
         </BotLane>

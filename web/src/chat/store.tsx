@@ -29,6 +29,7 @@ export const INITIAL_STATE: ChatState = {
   pending: false,
   activePersonaId: null,
   fitness: { laneId: 0, active: false, parqOk: false, resultMsgId: null },
+  reveal: { revealed: 0, settled: false },
   faq: [],
 }
 
@@ -52,6 +53,8 @@ export type ChatAction =
   | { type: 'fitnessStart' }
   | { type: 'fitnessParqOk' }
   | { type: 'fitnessResult'; msgId: string }
+  // 등장 큐 브리지(W2): ChatStream 이 "몇 개 열었고 연출이 끝났는지"를 스토어로 올린다.
+  | { type: 'setReveal'; revealed: number; settled: boolean }
   | { type: 'setFaq'; faq: FaqEntry[] }
   | { type: 'reset'; keep: { llmMode: LlmMode; faq: FaqEntry[] } }
 
@@ -118,6 +121,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, fitness: { ...state.fitness, parqOk: true } }
     case 'fitnessResult':
       return { ...state, fitness: { ...state.fitness, resultMsgId: action.msgId } }
+    case 'setReveal':
+      // 값이 그대로면 같은 객체를 돌려준다 — 연출 신호 때문에 트리가 다시 그려지지 않게.
+      if (state.reveal.revealed === action.revealed && state.reveal.settled === action.settled) {
+        return state
+      }
+      return { ...state, reveal: { revealed: action.revealed, settled: action.settled } }
     case 'setFaq':
       return { ...state, faq: action.faq }
     case 'reset':

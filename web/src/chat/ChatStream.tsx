@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage } from '../types_chat'
 import { MessageView, NabiAvatar, type MessageHandlers } from './messages'
 import { BOT_NAME, T } from './policy'
+import { useChat } from './store'
 import { prefersReducedMotion, typingDurationMs } from './Typewriter'
 
 const STICK_THRESHOLD_PX = 160
@@ -110,7 +111,12 @@ function useRevealQueue(messages: ChatMessage[]) {
     () => (revealed >= messages.length ? messages : messages.slice(0, revealed)),
     [messages, revealed],
   )
-  return { visible, indicator, settled: revealed >= messages.length && !indicator }
+  return {
+    visible,
+    indicator,
+    revealed: Math.min(revealed, messages.length),
+    settled: revealed >= messages.length && !indicator,
+  }
 }
 
 // 나비가 다음 말을 준비하는 동안의 점 3개. 낭독 대상이 아니다(aria-hidden) —
@@ -149,7 +155,14 @@ export function ChatStream({
   panelFocus: number
   handlers: MessageHandlers
 }) {
-  const { visible, indicator, settled } = useRevealQueue(messages)
+  const { visible, indicator, revealed, settled } = useRevealQueue(messages)
+
+  // 연출 진행도를 스토어로 올린다(W2 자동재생의 진행 신호). 자동재생은 이 값만 보고
+  // 다음 단계로 넘어간다 — DOM 을 폴링하지 않는다. 값이 그대로면 리듀서가 상태를 유지한다.
+  const { dispatch } = useChat()
+  useEffect(() => {
+    dispatch({ type: 'setReveal', revealed, settled })
+  }, [dispatch, revealed, settled])
 
   // 타이프라이터는 "방금 열린 마지막 버블" 하나만 재생한다(FR-12 AC10).
   // 큐가 한 번에 하나씩만 열기 때문에 재생 대상은 항상 마지막 메시지다.

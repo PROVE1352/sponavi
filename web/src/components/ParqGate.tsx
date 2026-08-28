@@ -3,16 +3,21 @@
 //   (ARCHITECTURE §8 · P-3 비저장). 훅·스토어·서버 어디에도 올라가지 않는다.
 
 import { useState } from 'react'
+import { PARQ_PRESET_NOTE } from '../chat/autoplay'
 import { CheckIcon, InfoIcon } from './ui'
 
 export function ParqGate({
   // 이미 통과한 턴(또는 지난 회차)이면 조작을 잠그고 통과 표시만 남긴다.
   done,
   locked = false,
+  // W2 자동재생이 데모 페르소나 프리셋으로 이 게이트를 대신 통과했는가(★FR-P2).
+  // 그 사실을 카드 위에 남긴다 — 실사용자가 "문진을 건너뛰었다"고 오해하면 안 된다(P-1).
+  preset = false,
   onContinue,
 }: {
   done: boolean
   locked?: boolean
+  preset?: boolean
   onContinue: () => void
 }) {
   const [checked, setChecked] = useState(false)
@@ -31,6 +36,14 @@ export function ParqGate({
           전문가와 상담하세요.
         </p>
       </div>
+      {preset && (
+        <p
+          data-testid="parq-preset-note"
+          className="mt-2 text-xs font-medium text-brand-700 dark:text-brand-100"
+        >
+          {PARQ_PRESET_NOTE}
+        </p>
+      )}
       <label className="mt-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
         <input
           type="checkbox"

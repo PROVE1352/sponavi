@@ -76,3 +76,39 @@ test('P5 · 수강료 미등록 6곳 — 섹션 요약 1줄 + 행은 "미등록"
   await expect(section).not.toContainText('무료')
   await expect(section).not.toContainText('−0원')
 })
+
+// C-3(P-1): 장애인 가맹 6곳 중 지원유형이 공개된 곳은 1곳뿐이다(D01). 나머지 5곳은
+// 원천에 "지원함" 불리언만 있고 유형이 없다 — 예전엔 그 카드가 "✓ 장애인 지원"과
+// "접근성 정보 없음"을 동시에 말했다. 확언은 유형이 있을 때만, 없으면 "유형 미상"으로.
+test('P5 · 장애인 가맹 6곳 — 확언(✓)은 지원유형이 있는 카드만, 나머지는 "유형 미상" (C-3)', async ({
+  page,
+}) => {
+  await startPersona(page, 'P5')
+  await openPanel(page, 'list')
+
+  const section = panel(page).getByTestId('voucher-section')
+  const rows = section.getByTestId('dvoucher-facility')
+  await expect(rows).toHaveCount(6)
+
+  // ① 유형이 공개된 1곳만 확언 — 그 카드 안에 근거(지원유형)가 함께 보인다
+  await expect(section.getByTestId('support-confirmed')).toHaveCount(1)
+  const confirmed = rows.filter({ hasText: '서울장애인체육관' }).first()
+  await expect(confirmed.getByTestId('access-tags')).toContainText('지체')
+
+  // ② 유형을 모르는 5곳은 "없음"이 아니라 "유형 미상" — 지원 사실 자체는 지우지 않는다
+  await expect(section.getByTestId('support-unknown-types')).toHaveCount(5)
+  await expect(section.getByTestId('support-unknown-types').first()).toHaveText(
+    '장애인 지원(유형 미상)',
+  )
+
+  // ③ 어느 카드도 "✓ 장애인 지원"과 "접근성 정보 없음"을 동시에 말하지 않는다
+  await expect(section.getByTestId('access-none')).toHaveCount(0)
+  const contradictions = await rows.evaluateAll((nodes) =>
+    nodes.filter(
+      (n) =>
+        n.querySelector('[data-testid="support-confirmed"]') != null &&
+        (n.textContent ?? '').includes('접근성 정보 없음'),
+    ).length,
+  )
+  expect(contradictions, '확언 배지 + "접근성 정보 없음" 동시 표기').toBe(0)
+})

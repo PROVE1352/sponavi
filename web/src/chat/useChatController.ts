@@ -337,7 +337,7 @@ export function useChatController(demo = false) {
   )
 
   // ── 체력 레인 3턴(PAR-Q → 측정 폼 → 결과) ──────────────────────
-  // 나비는 안내만 한다. 문진 내용·측정 항목·판정·처방은 전부 카드가 말한다(FR-12 AC2).
+  // 화자는 안내만 한다. 문진 내용·측정 항목·판정·처방은 전부 카드가 말한다(FR-12 AC2).
   const startFitness = useCallback(() => {
     if (!state.lastAssess) {
       push(botText(T.fitnessNeedsResult))

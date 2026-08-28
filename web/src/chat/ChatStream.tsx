@@ -1,7 +1,7 @@
 // 채팅 스트림. role="log" + aria-live="polite" 로 새 봇 메시지를 낭독한다(FR-12 AC8).
 // 자동 스크롤은 "바닥에 붙어 있을 때만" — 사용자가 위로 스크롤 중이면 강제로 끌어내리지 않는다.
 //
-// ★ v1.6 순차 등장(FR-12 AC10): 연속된 나비 발화는 동시에 마운트되지 않는다.
+// ★ v1.6 순차 등장(FR-12 AC10): 연속된 화자 발화는 동시에 마운트되지 않는다.
 //     앞 버블 타이핑 완료 → 타이핑 인디케이터(점 3개) → 다음 버블 등장·타이핑
 //   부팅(인사 → 첫 질문)도 같은 규칙을 탄다 — 질문이 인사보다 먼저 떠 있지 않는다.
 //   사용자 입력(칩·전송)이 들어오면 남은 시퀀스를 그 자리에서 전부 완료한다(대기 강제 금지).
@@ -24,7 +24,7 @@ const INDICATOR_MS = 320
 const TYPING_TAIL_MS = 60
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
-// 타이프라이터가 붙는 메시지 = 나비가 "말하는" 버블(발화·질문).
+// 타이프라이터가 붙는 메시지 = 화자가 "말하는" 버블(발화·질문).
 // 카드·고지 블록·사용자 버블은 여기 해당하지 않는다 — 순서만 지켜 등장한다.
 function spokenTextOf(m: ChatMessage): string | null {
   if (m.role !== 'bot') return null
@@ -89,7 +89,7 @@ function useRevealQueue(messages: ChatMessage[]) {
     const prevEnd = prevSpoken ? typingDurationMs(prevSpoken) + TYPING_TAIL_MS : 0
     const rest = prevSpoken ? revealedAt.current + prevEnd - performance.now() : 0
     const wait = Math.max(0, rest)
-    // 인디케이터는 "연속된 나비 발화" 사이에만 — 카드나 사용자 답변 뒤 첫 마디는 바로 나온다.
+    // 인디케이터는 "연속된 화자 발화" 사이에만 — 카드나 사용자 답변 뒤 첫 마디는 바로 나온다.
     const withIndicator = prev?.role === 'bot' && spokenTextOf(messages[revealed]) != null
 
     if (!withIndicator) {
@@ -119,7 +119,7 @@ function useRevealQueue(messages: ChatMessage[]) {
   }
 }
 
-// 나비가 다음 말을 준비하는 동안의 점 3개. 낭독 대상이 아니다(aria-hidden) —
+// 화자가 다음 말을 준비하는 동안의 점 3개. 낭독 대상이 아니다(aria-hidden) —
 // 스크린리더에는 완성된 문장만 1회 전달된다(FR-12 AC8·AC10).
 function TypingIndicator() {
   return (

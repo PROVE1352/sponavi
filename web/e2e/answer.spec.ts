@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { settleTypewriter, stream } from './helpers'
 
 // 접지 답변 레인(v1.9 · PRD FR-13 AC9 · API.md `/api/chat/nlu` 의 `answer`).
-//   ① answer + faq_key → 나비 버블이 answer 를 말하고, 그 아래 컴팩트 출처 카드가 붙는다
+//   ① answer + faq_key → 화자 버블이 answer 를 말하고, 그 아래 컴팩트 출처 카드가 붙는다
 //      (같은 턴의 reply 는 쓰지 않는다 — 버블 두 개가 잇달아 나오면 수다스럽다).
 //      정직성(§6 사전): 버블 보조 줄에 "AI 안내 · 출처는 아래 카드에서 확인해 주세요".
 //   ② answer=null + faq_key → v1.8 까지의 전체 FAQ 카드 그대로(폐기 시 카드 폴백 회귀).
@@ -66,7 +66,7 @@ test('① answer + faq_key → 접지 답변 버블 + 컴팩트 출처 카드 + 
   await stubNlu(page, GROUNDED)
   await ask(page, '장애인 이용권도 소득 기준이 있나요?')
 
-  // 본문은 나비 버블이 말한다(카드 본문 재탕이 아니라 answer 그대로)
+  // 본문은 화자 버블이 말한다(카드 본문 재탕이 아니라 answer 그대로)
   await expect(stream(page).getByText(GROUNDED)).toBeVisible()
   // reply 와 둘 다 왔지만 화면에는 answer 만 — 연속 버블 금지
   await expect(stream(page).getByText(REPLY)).toHaveCount(0)

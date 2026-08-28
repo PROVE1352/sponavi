@@ -199,6 +199,6 @@ test('⑤ 390px — "지도에서 보기"·"시설 목록 보기"가 패널을 �
     .toBe(true)
   await expect(panel(page).getByTestId('voucher-section')).toBeVisible()
 
-  // 나비도 한 줄로 알려 준다(정직: 어디가 바뀌었는지)
+  // 화자도 한 줄로 알려 준다(정직: 어디가 바뀌었는지)
   await expect(stream(page).getByText(/패널에 열어 두었어요/).first()).toBeAttached()
 })

@@ -14,7 +14,6 @@ import { Composer } from './Composer'
 import { ContextPanel } from './ContextPanel'
 import { useIsDemo } from './route'
 import { AUTOPLAY_STATUS_TEXT } from './autoplay'
-import { BOT_NAME } from './policy'
 import type { MessageHandlers } from './messages'
 
 function Header({
@@ -29,13 +28,13 @@ function Header({
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5">
-        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="스포내비 맨 위로">
+        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="되나요 맨 위로">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg font-black text-white">
             S
           </span>
           <span className="min-w-0 leading-none">
             <span className="block truncate text-base font-black tracking-tight text-slate-900 dark:text-white">
-              스포내비
+              되나요
             </span>
             <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-600 dark:text-slate-400">
               스포츠 복지 내비게이터
@@ -152,7 +151,7 @@ function ChatShell({ demo }: { demo: boolean }) {
     onRetry,
     // ★ 칩과 동일 경로(openPanel): 상태만 바꾸면 모바일에서 "눌러도 아무 일 없는" 버튼이 된다.
     onOpenPanel: openPanel,
-    // 종목 필터 + 목록 탭 전환 + 나비 한 줄 안내(부수효과는 컨트롤러가 소유).
+    // 종목 필터 + 목록 탭 전환 + 화자 한 줄 안내(부수효과는 컨트롤러가 소유).
     onApplyFilter: applyFilter,
     // 칩은 질문 버블 아래 인라인으로 렌더된다(FR-12 AC1 v1.6) —
     // 그래서 "열려 있는 질문"이 메시지 렌더러로 내려간다.
@@ -195,7 +194,7 @@ function ChatShell({ demo }: { demo: boolean }) {
         )}
 
         <main className="order-2 flex min-w-0 flex-1 flex-col lg:order-1">
-          <h1 className="sr-only">스포내비 — {BOT_NAME}와 함께 스포츠 복지 확인하기</h1>
+          <h1 className="sr-only">되나요 — 스포츠 복지 자격·시설·체력, 되는지 바로 확인하기</h1>
           <ChatStream
             messages={state.messages}
             pending={state.pending}

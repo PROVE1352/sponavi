@@ -1,6 +1,6 @@
-// 채팅 메시지 렌더러. 봇 발화는 안내자 "나비"(PRD §2.5) 이름·아바타와 함께 나온다.
+// 채팅 메시지 렌더러. 봇 발화는 화자 라벨("되나요", PRD §2.5)·아바타와 함께 나온다.
 // 버블 구분은 색 + 정렬 + 아이콘 삼중(색맹 안전, A11Y-3).
-// 사실을 말하는 것은 나비 버블이 아니라 카드다 — 카드는 기존 컴포넌트를 그대로 재사용한다.
+// 사실을 말하는 것은 화자 버블이 아니라 카드다 — 카드는 기존 컴포넌트를 그대로 재사용한다.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -46,7 +46,7 @@ function useIsWide(): boolean {
   return wide
 }
 
-// 나비 아바타 — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
+// 화자 아바타(나비 모양 SVG, 이름과 무관한 심볼) — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
 // 액션 블루 디스크 위에 흰 나비: 윗날개는 불투명, 아랫날개는 반투명(투톤).
 export function NabiAvatar({ className = 'h-7 w-7' }: { className?: string }) {
   return (
@@ -96,7 +96,7 @@ function UserIcon({ className = 'h-4 w-4' }: { className?: string }) {
 }
 
 // 봇 레인: 아바타 + 발신자명 + 내용. 내용은 버블이거나(짧은 말) 카드다(사실).
-// 연속된 나비 발화는 아바타·이름을 한 번만 보여 준다(첫 버블에만).
+// 연속된 화자 발화는 아바타·이름을 한 번만 보여 준다(첫 버블에만).
 export function BotLane({
   children,
   label,
@@ -635,7 +635,7 @@ function AssessResult({ msg, h }: { msg: AssessResultMsg; h: MessageHandlers }) 
   )
 }
 
-// 나비 발화 버블(FR-12 AC10 타이프라이터 적용 대상은 여기 본문 텍스트뿐이다 —
+// 화자 발화 버블(FR-12 AC10 타이프라이터 적용 대상은 여기 본문 텍스트뿐이다 —
 // 카드·고지 블록·사용자 버블에는 적용하지 않는다).
 function BotTextBubble({
   msg,
@@ -791,7 +791,7 @@ export function MessageView({
 }: {
   msg: ChatMessage
   h: MessageHandlers
-  // 연속된 나비 발화 묶음의 첫 메시지에서만 아바타·이름을 보여 준다.
+  // 연속된 화자 발화 묶음의 첫 메시지에서만 아바타·이름을 보여 준다.
   showSender?: boolean
   // 타이프라이터를 재생할 최신 봇 발화인가(FR-12 AC10). 나머지는 완성 상태로 그린다.
   typing?: boolean

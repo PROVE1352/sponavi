@@ -62,7 +62,7 @@ test('① 390px 결과 덱 — 결과 전체가 단일 스냅 스크롤 컨테�
   await expect(page.getByTestId('assess-carousel')).toHaveCount(0)
   await expect(page.getByTestId('facility-carousel')).toHaveCount(0)
 
-  // 넘김 힌트(나비 톤) + 진행 표시(시각 점 + 텍스트)
+  // 넘김 힌트(안내 톤) + 진행 표시(시각 점 + 텍스트)
   await expect(page.getByTestId('carousel-hint').first()).toContainText('옆으로 넘기')
   await expect(page.getByTestId('deck-progress')).toContainText('1 /')
 
@@ -88,7 +88,7 @@ test('② 봇 발화 타이프라이터 — 순차 표시 후 완성 문장으�
   // 끝나면 완성 문장 — 중간에서 멈추지 않는다
   await expect(tw).toHaveAttribute('data-typing', 'false')
   await expect(page.getByTestId('typewriter-pending')).toHaveCount(0)
-  await expect(stream(page).getByText('안녕하세요, 스포내비 안내자 나비예요.')).toBeVisible()
+  await expect(stream(page).getByText('안녕하세요, 되나요예요.')).toBeVisible()
 
   // 보조 줄(비저장 고지)은 본문 완료 뒤 보인다
   const sub = stream(page).getByTestId('bot-sub')
@@ -97,7 +97,7 @@ test('② 봇 발화 타이프라이터 — 순차 표시 후 완성 문장으�
   // 진행 중 새 입력이 와도 앞 발화는 완성 상태로 남는다(끊긴 문장 금지)
   await pickAge(page, 27)
   await settleTypewriter(page)
-  await expect(stream(page).getByText('안녕하세요, 스포내비 안내자 나비예요.')).toBeVisible()
+  await expect(stream(page).getByText('안녕하세요, 되나요예요.')).toBeVisible()
   await expect(page.locator('[data-typing="true"]')).toHaveCount(0)
 })
 
@@ -108,7 +108,7 @@ test('③ prefers-reduced-motion — 타이프라이터는 즉시 전체 표시,
   const tw = page.getByTestId('typewriter').first()
   await expect(tw).toHaveAttribute('data-typing', 'false')
   await expect(page.getByTestId('typewriter-pending')).toHaveCount(0)
-  await expect(stream(page).getByText('안녕하세요, 스포내비 안내자 나비예요.')).toBeVisible()
+  await expect(stream(page).getByText('안녕하세요, 되나요예요.')).toBeVisible()
 
   // 메시지 등장 애니메이션도 비활성
   const anim = await stream(page)
@@ -218,7 +218,7 @@ test('⑧ 부팅 순차 등장 — 인사 타이핑 완료 → 타이핑 인디�
   await page.goto('/')
 
   // 인사 버블이 타이핑되는 동안 첫 질문 버블은 아직 없다("미리 떠 있음" 금지)
-  await expect(stream(page).getByText('안녕하세요, 스포내비 안내자 나비예요.')).toBeVisible()
+  await expect(stream(page).getByText('안녕하세요, 되나요예요.')).toBeVisible()
   await expect(stream(page).getByTestId('question-age_band')).toHaveCount(0)
 
   // 인디케이터는 낭독 대상이 아니다(완성 문장만 1회 낭독 — AC8)

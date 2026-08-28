@@ -180,9 +180,13 @@ if [ "$WITH_DB" -eq 1 ]; then
     echo "[X] 실패 — data_built 가 그대로다. 새 DB 가 컨테이너에 반영되지 않았다." >&2
     echo "    확인: 바인드마운트 inode(--inplace), 서버 파일 권한, 그리고 애초에 로컬 DB 가" >&2
     echo "    서버와 다른 내용이었는지(내용이 같으면 mtime 까지 같아 data_built 도 안 변한다)." >&2
-    exit 1
+    # 같은 data_built 재전송(예: 손상 복구, 같은 빌드 재푸시)은 실패가 아니다 — 2c 의 quick_check 가
+    # 이미 본체를 검증했으므로 경고만 남기고 5c(지문 기록)로 간다. (2026-08-28 복구 배포에서 여기서
+    # 멈춰 FREEZE.sha 를 손으로 적어야 했다.)
+    echo "[!] 같은 data_built 로 재전송됨 — quick_check ok 이므로 복구/재푸시로 간주하고 계속한다."
+  else
+    echo "OK — 새 DB 반영됨"
   fi
-  echo "OK — 새 DB 반영됨"
 
   echo "== 5c. FREEZE.sha 기록 (--with-db) =="
   # 지문은 '서버에서' 계산한다 — 정본은 로컬 파일이 아니라 프로덕션에 올라간 그 DB 다.

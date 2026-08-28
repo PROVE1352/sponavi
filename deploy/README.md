@@ -55,3 +55,6 @@ WAL 을 본체에 접어넣는다. 기본 배포의 `--exclude 'data/sponavi.db*
 - `scripts/uptime_probe.sh` — `https://doenayo.kro.kr/api/health`를 10초 타임아웃으로 찌르고 `~/Library/Logs/sponavi-uptime.log`에 1줄 기록. 연속 실패 3회째(≈15분)와 이후 1시간마다 macOS 알림, 복구 시 알림 1회.
 - 설치(도메인·HTTPS 살아난 뒤): `cp deploy/com.sponavi.uptime.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/com.sponavi.uptime.plist`
 - 한계: 맥이 잠들면 공백. 심사 기간(10월)엔 무료 외부 핑거(5분 HTTP 모니터) 1개를 추가로 두는 안이 Reviewer Concern 2로 남아 있음 — 도입 여부는 W3 말에 결정.
+
+## FREEZE.sha 는 서버에서만 계산한다 (2026-08-28)
+`.dump` 텍스트는 sqlite3 버전(서버 3.37 / 맥 3.51)에 따라 달라서 **로컬 지문 ≠ 서버 지문**이 정상이다. 대조는 항상 "서버 현재 지문 vs FREEZE.sha(서버에서 기록)"로만 한다. 내용 동일성은 테이블별 행수 비교로 확인했다(11개 테이블 일치). 지문 계산 전 `quick_check` 게이트가 있어 손상 DB 는 지문 단계에서 실패한다.

@@ -222,7 +222,9 @@ test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + �
   await expect(tab).toBeVisible()
   await expect(tab).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('context-panel').getByText(/운동 필터:/)).toBeVisible()
-  await expect(stream(page).getByText(/고르신 종목만 남겨서/)).toBeVisible()
+  await expect(stream(page).getByText(/종목만 남겨서 시설 목록을 옆 패널에/)).toBeVisible()
+  // 카드 안 버튼도 사용자 말풍선을 남긴다(고아 봇 문장 방지)
+  await expect(stream(page).getByText(/^이 운동 되는 근처 강좌 보기 · /)).toBeVisible()
 })
 
 // C-4(P-1): "근처 N곳"이 종목 필터를 통과한 부분집합인데 옆 패널은 필터 이전 전체를 세면,

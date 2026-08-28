@@ -377,7 +377,8 @@ export function useChatController(demo = false) {
         return
       }
       dispatch({ type: 'setPanel', open: true, tab, focus: true })
-      push(botText(T.mapOpened))
+      // 탭별로 말한다 — '지도에서 보기'와 '시설 목록 보기'가 같은 문장을 내면 두 번 눌렀을 때 복붙처럼 읽힌다(실기기 제보 2026-08-28).
+      push(botText(tab === 'map' ? T.mapOpened : T.listOpened))
     },
     [dispatch, push, state.lastAssess],
   )
@@ -491,9 +492,12 @@ export function useChatController(demo = false) {
   // 처방 → 강좌 연결(FR-09 AC1): 종목 필터 + 목록 탭 전환 + 한 줄 안내.
   const applyFilter = useCallback(
     (sports: string[]) => {
+      // 카드 안 버튼은 칩이 아니라 사용자 말풍선이 안 남는다 — 스트림 끝에 봇 한 줄만 붙으면
+      // 고아 문장처럼 읽힌다(실기기 제보 2026-08-28). 누른 행동을 먼저 사용자 버블로 남긴다.
+      push(userText(`이 운동 되는 근처 강좌 보기 · ${sports.join(' · ')}`))
       dispatch({ type: 'setFilterSports', sports })
       dispatch({ type: 'setPanel', open: true, tab: 'list', focus: true })
-      push(botText(T.fitnessFilterApplied))
+      push(botText(T.fitnessFilterApplied(sports)))
     },
     [dispatch, push],
   )

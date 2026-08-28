@@ -221,7 +221,8 @@ export const T = {
   restartKeep: '그대로 이어서 진행할게요.',
   restarted: '처음부터 다시 시작할게요.',
 
-  mapOpened: '지도와 시설 목록을 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
+  mapOpened: '지도를 옆 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
+  listOpened: '시설 목록을 옆 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
   mapNeedsResult: '지도는 먼저 몇 가지를 알려주신 뒤에 보여드릴 수 있어요.',
 
   // 체력 레인 3턴(PAR-Q → 측정 폼 → 결과). 안내만 하고, 문진·판정·처방의 내용은 카드가 말한다.
@@ -232,7 +233,8 @@ export const T = {
   // 방향을 말하지 않는다("위 카드"는 히어로 CTA 로 들어온 사용자에게 반대 방향이었다).
   fitnessAlready: '체력 처방 카드로 이동할게요 — 거기서 이어서 하실 수 있어요.',
   fitnessNeedsResult: '체력 처방은 예상 자격을 먼저 확인한 뒤에 이어서 하실 수 있어요.',
-  fitnessFilterApplied: '고르신 종목만 남겨서 시설 목록을 옆 패널에 열어 두었어요.',
+  fitnessFilterApplied: (sports: string[]) =>
+    `${sports.join('·')} 종목만 남겨서 시설 목록을 옆 패널에 열어 두었어요.`,
 
   followUpPrompt: '더 필요하신 게 있으면 아래에서 골라 주세요.',
 

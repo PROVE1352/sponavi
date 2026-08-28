@@ -14,7 +14,8 @@ import type {
   Provenance,
 } from '../types'
 import type { AppError } from './ErrorPanel'
-import { matchesFilter } from '../lib/sports'
+import { countMatching, nearbyMatchText } from '../lib/sports'
+import { dedupeDisplayTitles } from '../lib/format'
 import { FITNESS_DISCLAIMER } from './FitnessForm'
 import { Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
 
@@ -83,13 +84,13 @@ export function FitnessResultCard({
   const items = result.items ?? []
   const rg = result.reference_grade
   const sports = result.facility_filter_sports ?? []
-  const matchCount = useMemo(() => {
-    if (sports.length === 0) return 0
+  // C-4: 이 버튼의 숫자는 "종목 필터를 통과한 부분집합"이다. 옆 패널의 전체 카운트와
+  // 나란히 놓여도 서로 반박하지 않도록 부분/전체를 한 문장에 같이 적는다(P-1).
+  const counts = useMemo(
     // 종목 매칭은 lib/sports 1벌(2A) — 별칭 확장은 서버가 이미 끝냈다.
-    return [...nearby.voucher_facilities, ...nearby.alternatives].filter((f) =>
-      matchesFilter(f.sports, sports),
-    ).length
-  }, [sports, nearby])
+    () => countMatching([...nearby.voucher_facilities, ...nearby.alternatives], sports),
+    [sports, nearby],
+  )
 
   return (
     <section
@@ -186,8 +187,11 @@ export function FitnessResultCard({
           className="min-h-11 w-full rounded-lg border-2 border-brand-600 px-4 py-2.5 text-left font-semibold text-brand-700 transition hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
         >
           이 운동 되는 근처 강좌 보기 · {sports.join(' · ')}
-          <span className="ml-1 font-normal text-brand-700 dark:text-brand-100">
-            (근처 {matchCount}곳)
+          <span
+            data-testid="facility-filter-count"
+            className="ml-1 font-normal text-brand-700 dark:text-brand-100"
+          >
+            ({nearbyMatchText(counts)})
           </span>
         </button>
       )}
@@ -259,6 +263,10 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
   const exercises = (rec.exercises as (GraphNamed | string)[]).map(named)
   const sports = ((rec.sports ?? []) as (GraphNamed | string)[]).map(named)
   const videos = (rec.videos ?? []) as GraphVideo[]
+  // C-5: 카드에 찍히는 이름은 소스의 변형 번호("-1")를 뗀 표시명. 원문은 alt·data 속성에 남는다.
+  // 꼬리를 떼서 이름이 겹치면 "(2)"로 되살려 두 카드가 같은 이름이 되지 않게 한다.
+  const shownVideos = videos.slice(0, 3)
+  const videoNames = dedupeDisplayTitles(shownVideos.map((v) => v.title))
   // 그래프가 이 요인에 아무것도 잇지 못한 경우(예: 고아 요인) — 빈 블록을 조용히 남기지 않고
   // 근거가 없다고 말한다(P-1). 없는 추천을 지어내지 않는다.
   const empty = exercises.length === 0 && sports.length === 0 && videos.length === 0
@@ -327,14 +335,21 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
         </div>
       )}
 
-      {videos.length > 0 && (
+      {shownVideos.length > 0 && (
         <ul className="mt-3 flex flex-wrap gap-3">
-          {videos.slice(0, 3).map((v, i) => (
-            <li key={i} data-testid="video-card" className="w-32">
-              <a href={v.url ?? '#'} target="_blank" rel="noreferrer noopener" className="block">
+          {shownVideos.map((v, i) => (
+            <li key={i} data-testid="video-card" data-raw-title={v.title} className="w-32">
+              <a
+                href={v.url ?? '#'}
+                target="_blank"
+                rel="noreferrer noopener"
+                title={v.title}
+                className="block"
+              >
+                {/* 썸네일 alt 는 원천 제목 그대로 — 표시용 다듬기는 화면 문자열에만 적용한다 */}
                 <VideoThumb src={v.img_url} title={v.title} />
                 <span className="mt-1 block truncate text-xs text-brand-700 underline underline-offset-2 dark:text-brand-100">
-                  {v.title}
+                  {videoNames[i]}
                 </span>
               </a>
             </li>

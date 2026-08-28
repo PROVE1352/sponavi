@@ -26,7 +26,7 @@ export function CardDeck({
   children,
 }: {
   ariaLabel: string
-  // 나비 톤의 넘김 안내 한 줄(정책 템플릿에서 내려온다).
+  // 안내 톤의 넘김 안내 한 줄(정책 템플릿에서 내려온다).
   hint: string
   count: number
   testId: string

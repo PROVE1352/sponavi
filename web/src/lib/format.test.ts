@@ -1,7 +1,7 @@
 // 표기 헬퍼 스모크 테스트(T1A). 지금은 기존 동작만 고정한다 —
 // won()/CQ1A(결측 null) 케이스는 Lane W(T8)가 구현과 함께 붙였다.
 import { describe, expect, it } from 'vitest'
-import { km, percent, weekdays, won, wonPlain } from './format'
+import { dedupeDisplayTitles, displayTitle, km, percent, weekdays, won, wonPlain } from './format'
 
 describe('km', () => {
   it('소수 첫째 자리로 반올림해 km 를 붙인다', () => {
@@ -56,5 +56,48 @@ describe('wonPlain', () => {
   it('0도 "무료"로 바꾸지 않고 그대로 0원이라고 쓴다(자부담 셀)', () => {
     expect(wonPlain(0)).toBe('0원')
     expect(wonPlain(105000)).toBe('105,000원')
+  })
+})
+
+// C-5: 영상 카드 제목의 "-1" 은 이름이 아니라 원천의 변형 번호다(표시용으로만 뗀다).
+describe('displayTitle', () => {
+  it('★ C-5 회귀: 끝에 붙은 변형 번호를 표시용으로 떼어낸다', () => {
+    expect(displayTitle('교차윗몸일으키기-1')).toBe('교차윗몸일으키기')
+    expect(displayTitle('교차윗몸일으키기_2')).toBe('교차윗몸일으키기')
+    expect(displayTitle('반복 옆뛰기-10')).toBe('반복 옆뛰기')
+  })
+
+  it('꼬리가 없으면 그대로 둔다', () => {
+    expect(displayTitle('윗몸 말아올리기')).toBe('윗몸 말아올리기')
+    expect(displayTitle('스텝검사')).toBe('스텝검사')
+  })
+
+  it('이름의 일부인 숫자·중간 하이픈은 건드리지 않는다', () => {
+    expect(displayTitle('1분 플랭크')).toBe('1분 플랭크')
+    expect(displayTitle('20m 왕복오래달리기')).toBe('20m 왕복오래달리기')
+    expect(displayTitle('셔틀런-20m 구간')).toBe('셔틀런-20m 구간')
+  })
+
+  it('꼬리를 떼면 아무것도 안 남는 제목은 원문을 유지한다(빈 이름 금지)', () => {
+    expect(displayTitle('-1')).toBe('-1')
+    expect(displayTitle('_3')).toBe('_3')
+  })
+})
+
+describe('dedupeDisplayTitles', () => {
+  it('꼬리를 떼서 이름이 겹치면 두 번째부터 (2)·(3)으로 구별한다', () => {
+    expect(
+      dedupeDisplayTitles(['교차윗몸일으키기', '교차윗몸일으키기-1', '윗몸 말아올리기']),
+    ).toEqual(['교차윗몸일으키기', '교차윗몸일으키기 (2)', '윗몸 말아올리기'])
+    expect(dedupeDisplayTitles(['걷기-1', '걷기-2', '걷기-3'])).toEqual([
+      '걷기',
+      '걷기 (2)',
+      '걷기 (3)',
+    ])
+  })
+
+  it('겹치지 않으면 접미사를 붙이지 않는다', () => {
+    expect(dedupeDisplayTitles(['스텝검사', '걷기 운동'])).toEqual(['스텝검사', '걷기 운동'])
+    expect(dedupeDisplayTitles([])).toEqual([])
   })
 })

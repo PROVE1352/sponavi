@@ -53,6 +53,30 @@ test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배�
   await expect(result.getByText('전문가 큐레이션(검증 중)').first()).toBeVisible()
   await expect(page.getByTestId('video-card').first()).toBeVisible()
 
+  // C-5: 카드에 찍히는 이름은 원천의 변형 번호 꼬리("-1"·"_2")를 뗀 표시명이고,
+  // 원문은 data-raw-title / 썸네일 alt 에 그대로 남는다(정보 삭제 아님).
+  const blocks = await page.getByTestId('rec-block').evaluateAll((nodes) =>
+    nodes.map((block) =>
+      [...block.querySelectorAll('[data-testid="video-card"]')].map((n) => ({
+        shown: (n.querySelector('span')?.textContent ?? '').trim(),
+        raw: n.getAttribute('data-raw-title') ?? '',
+        alt: n.querySelector('img')?.getAttribute('alt') ?? null,
+      })),
+    ),
+  )
+  const cards = blocks.flat()
+  expect(cards.length).toBeGreaterThan(0)
+  for (const c of cards) {
+    expect(c.shown, `표시명에 원천 변형 번호가 남음: ${c.shown}`).not.toMatch(/[-_]\d+$/)
+    expect(c.raw, '원문 제목이 data 속성에 없음').not.toBe('')
+    if (c.alt !== null) expect(c.alt, '썸네일 alt 가 원문과 다름').toBe(c.raw)
+  }
+  // 한 추천 블록 안에서 표시명이 겹치면 카드가 서로 구별되지 않는다
+  for (const b of blocks) {
+    const shown = b.map((c) => c.shown)
+    expect(new Set(shown).size, `표시명 중복: ${shown.join(', ')}`).toBe(shown.length)
+  }
+
   // ④ 근처 강좌 연동 버튼(카운트 표기)
   await expect(page.getByTestId('facility-filter-apply')).toBeVisible()
 
@@ -185,14 +209,48 @@ test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + �
 
   const apply = page.getByTestId('facility-filter-apply')
   await expect(apply).toContainText('요가')
+
+  // C-4: 페르소나 프리필이면 약점이 많아 필터가 아무것도 걸러내지 않는다 —
+  // 걸러진 게 없으면 같은 숫자를 두 번 말하지 않고, 옆 패널 카운트와도 어긋나지 않는다.
+  await expect(page.getByTestId('facility-filter-count')).toHaveText('(근처 3곳)')
+  await expect(page.getByTestId('context-panel')).toContainText('공공·대안 3곳')
+
   await apply.click()
 
-  // 목록 탭으로 전환 + 필터 배지 + 나비 한 줄 안내
+  // 목록 탭으로 전환 + 필터 배지 + 화자 한 줄 안내
   const tab = page.getByTestId('panel-tab-list')
   await expect(tab).toBeVisible()
   await expect(tab).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('context-panel').getByText(/운동 필터:/)).toBeVisible()
   await expect(stream(page).getByText(/고르신 종목만 남겨서/)).toBeVisible()
+})
+
+// C-4(P-1): "근처 N곳"이 종목 필터를 통과한 부분집합인데 옆 패널은 필터 이전 전체를 세면,
+// 두 숫자가 서로를 반박하는 것처럼 읽힌다(심사 지적: 좌 "근처 4곳" vs 우 "공공·대안 6곳").
+// 부분/전체를 한 문장에 같이 적어 관계가 보이게 한다.
+test('종목 필터로 걸러진 카운트는 전체 수와 함께 적는다 — 좌우 숫자가 모순되지 않는다 (C-4)', async ({
+  page,
+}) => {
+  // 프리필 없는 메인 경로 27세 → 성북 공공·대안 3곳(P01 요가·P02 배드민턴/탁구·P03 필라테스/요가).
+  await openMain(page)
+  await fillMainSlots(page)
+  await startFitnessThroughParq(page)
+
+  // 유연성 한 항목만 미달 → 연결 종목 요가·필라테스 → 3곳 중 2곳만 통과(진짜 부분집합)
+  await page.getByTestId('fit-input-sit_reach').fill('-3')
+  await page.getByTestId('fitness-submit').click()
+  await expect(page.getByTestId('fitness-result')).toBeVisible()
+
+  const countText = page.getByTestId('facility-filter-count')
+  await expect(countText).toHaveText('(이 종목 근처 2곳 · 전체 3곳)')
+
+  // 같은 화면의 패널 카운트(필터 이전 전체)와 나란히 놓여도 서로 반박하지 않는다
+  await expect(page.getByTestId('panel-alt-count')).toHaveText('공공·대안 3곳')
+  await expect(countText).not.toHaveText(/^\(근처 \d+곳\)$/) // 부분집합을 전체인 척하지 않는다
+
+  // 필터를 실제로 적용하면 목록이 2곳으로 줄고, 배지도 줄었다는 사실을 함께 말한다
+  await page.getByTestId('facility-filter-apply').click()
+  await expect(page.getByTestId('panel-alt-count')).toHaveText('공공·대안 3곳 · 이 종목 2곳')
 })
 
 test('390px 측정 폼 — 입력 폭·글자 크기·터치 타겟이 모바일에서 깨지지 않는다 (v1.7)', async ({

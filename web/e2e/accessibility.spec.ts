@@ -47,6 +47,39 @@ test('P3 → 접근성 태그 + 편의시설 필터 칩 적용 시 리스트 감
   await expect(panel(page).getByTestId('dvoucher-facility')).toHaveCount(1)
 })
 
+// C-3(P-1): 한 카드가 "✓ 장애인 지원"(확언)과 "접근성 정보 없음"을 동시에 말하면 안 된다.
+// 확언은 지원유형이 확인된 카드에만, 유형을 모르면 "장애인 지원(유형 미상)"이라고 적는다.
+test('시설 카드는 "✓ 장애인 지원"과 "접근성 정보 없음"을 동시에 말하지 않는다 (C-3 · P-1)', async ({
+  page,
+}) => {
+  await openPanel(page, 'list')
+  const cards = panel(page).locator('li') // 가맹·대안 시설 행 전부
+
+  // ① 지원유형이 확인된 가맹시설(D01)만 확언 배지를 단다 — 유형이 카드 안에 함께 보인다.
+  const dvoucher = panel(page).getByTestId('dvoucher-facility').first()
+  await expect(dvoucher.getByTestId('support-confirmed')).toHaveText('장애인 지원')
+  await expect(dvoucher.getByTestId('access-tags')).toContainText('지체')
+  await expect(dvoucher.getByTestId('access-none')).toHaveCount(0)
+
+  // ② 지원유형 소스가 없는 공공·대안 카드는 확언 대신 "유형 미상"으로 적는다.
+  const publicCard = panel(page)
+    .locator('li')
+    .filter({ hasText: '성북구민체육센터' })
+    .first()
+  await expect(publicCard.getByTestId('support-unknown-types')).toHaveText('장애인 지원(유형 미상)')
+  await expect(publicCard.getByTestId('support-confirmed')).toHaveCount(0)
+
+  // ③ 불변식: 확언 배지를 단 카드에는 "접근성 정보 없음"이 존재하지 않는다.
+  const contradictions = await cards.evaluateAll((nodes) =>
+    nodes.filter(
+      (n) =>
+        n.querySelector('[data-testid="support-confirmed"]') != null &&
+        (n.textContent ?? '').includes('접근성 정보 없음'),
+    ).length,
+  )
+  expect(contradictions, '확언 배지 + "접근성 정보 없음" 동시 표기').toBe(0)
+})
+
 test('P3 → 보유 편의시설 칩(장애인 화장실)은 리스트를 유지한다', async ({ page }) => {
   await openPanel(page, 'list')
   await expect(panel(page).getByTestId('dvoucher-facility')).toHaveCount(1)

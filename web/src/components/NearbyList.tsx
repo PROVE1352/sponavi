@@ -4,8 +4,10 @@ import type { AccessibilityMap, FacilityAccessibility } from '../types_accessibi
 import { accessibilitySourceLine } from '../types_accessibility'
 import { getAccessibility } from '../api/client'
 import { km, walkMinutes, won, wonPlain } from '../lib/format'
+import type { AccessibilityView } from '../lib/accessibility'
+import { LOAD_FAILED_TEXT, NO_INFO_TEXT, accessibilityView } from '../lib/accessibility'
 import { matchesFilter } from '../lib/sports'
-import { ApproxLocationBadge, Badge, CheckIcon, WarnIcon } from './ui'
+import { ApproxLocationBadge, Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
 
 // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
@@ -204,7 +206,9 @@ export function NearbyList({
               data-testid="voucher-fee-summary"
               className="mb-2 text-xs text-slate-600 dark:text-slate-400"
             >
-              총 {vouchers.length}곳 · 수강료 미등록 {feeMissing}곳 — 시설 문의
+              {/* 필터가 걸려 있으면 이 수는 "총"이 아니라 걸러진 뒤의 수다(C-4·P-1) */}
+              {filterActive ? '이 종목' : '총'} {vouchers.length}곳 · 수강료 미등록 {feeMissing}곳 —
+              시설 문의
             </p>
           )}
           <ul className="space-y-2">
@@ -272,51 +276,62 @@ function LocationLine({ coordSource, dist }: { coordSource?: string; dist: numbe
   return null
 }
 
-function DisabilityTag({ support }: { support: boolean | null }) {
-  if (support !== true) return null
+// C-3(P-1): 지원 배지는 lib/accessibility 의 판정 1벌만 따른다.
+//   유형 확인됨 → "✓ 장애인 지원"(확언) / 지원 불리언만 → "장애인 지원(유형 미상)"(확언 아님).
+// 확언(✓)과 "접근성 정보 없음"이 한 카드에 같이 설 수 없는 이유가 여기 있다.
+function DisabilityTag({ badge }: { badge: AccessibilityView['badge'] }) {
+  if (!badge) return null
+  const confirmed = badge.kind === 'confirmed'
   return (
-    <Badge tone="purple" icon={<CheckIcon className="w-3 h-3" />}>
-      장애인 지원
-    </Badge>
+    <span data-testid={confirmed ? 'support-confirmed' : 'support-unknown-types'}>
+      <Badge
+        tone="purple"
+        icon={
+          confirmed ? <CheckIcon className="w-3 h-3" /> : <InfoIcon className="w-3 h-3" />
+        }
+      >
+        {badge.label}
+      </Badge>
+    </span>
   )
 }
 
-// FR-10 AC2: 장애지원유형 목록 + 편의시설 태그. 데이터 없으면 "접근성 정보 없음"(미상 구분).
+// FR-10 AC2: 장애지원유형 목록 + 편의시설 태그.
+// "접근성 정보 없음"은 유형·편의시설이 모두 없고 지원 불리언도 참이 아닐 때만 나온다(C-3).
 // 조회 자체가 실패했으면(error) "없음"과 구분해 "일시적으로 불러오지 못함"으로 정직하게 표기.
-function AccessibilityTags({ data, error }: { data?: FacilityAccessibility; error?: boolean }) {
-  if (!data) {
-    if (error) {
-      return (
-        <p data-testid="access-error-inline" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-          접근성 정보를 일시적으로 불러오지 못했습니다
-        </p>
-      )
-    }
+function AccessibilityTags({ view }: { view: AccessibilityView }) {
+  if (view.note === 'error') {
     return (
-      <p data-testid="access-none" className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-        접근성 정보 없음
+      <p data-testid="access-error-inline" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+        {LOAD_FAILED_TEXT}
       </p>
     )
   }
-  const empty = data.types.length === 0 && data.amenities.length === 0
+  if (view.note === 'none') {
+    return (
+      <p data-testid="access-none" className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+        {NO_INFO_TEXT}
+      </p>
+    )
+  }
+  if (view.types.length === 0 && view.amenities.length === 0) return null
   return (
     <div data-testid="access-tags" className="mt-2 space-y-1.5">
-      {data.types.length > 0 && (
+      {view.types.length > 0 && (
         <p className="text-xs text-slate-600 dark:text-slate-300">
           <span className="font-semibold text-violet-700 dark:text-violet-300">지원: </span>
-          {data.types.join(', ')}
+          {view.types.join(', ')}
         </p>
       )}
-      {data.amenities.length > 0 && (
+      {view.amenities.length > 0 && (
         <ul className="flex flex-wrap gap-1">
-          {data.amenities.map((a) => (
+          {view.amenities.map((a) => (
             <li key={a.code}>
               <Badge tone="purple">{a.name}</Badge>
             </li>
           ))}
         </ul>
       )}
-      {empty && <p className="text-xs text-slate-600 dark:text-slate-400">접근성 정보 없음</p>}
     </div>
   )
 }
@@ -332,6 +347,8 @@ export function VoucherRow({
   accessError?: boolean
 }) {
   const isDvoucher = v.source === 'dvoucher'
+  // 배지와 하단 태그를 같은 판정에서 뽑는다 — 두 곳이 각자 판단하면 모순이 생긴다(C-3).
+  const view = accessibilityView(v.disability_support, accessibility, accessError)
   return (
     <li
       data-testid={isDvoucher ? 'dvoucher-facility' : 'voucher-facility'}
@@ -348,7 +365,7 @@ export function VoucherRow({
         <div className="flex flex-col items-end gap-1">
           <Badge tone={isDvoucher ? 'purple' : 'brand'}>{isDvoucher ? '장애인 가맹' : '이용권 가맹'}</Badge>
           {v.coord_source === 'centroid' && <ApproxLocationBadge />}
-          <DisabilityTag support={v.disability_support} />
+          <DisabilityTag badge={view.badge} />
         </div>
       </div>
       {v.addr && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{v.addr}</p>}
@@ -392,7 +409,7 @@ export function VoucherRow({
       )}
 
       {/* FR-10: 장애인 가맹시설엔 접근성 태그(지원유형·편의시설) */}
-      {isDvoucher && <AccessibilityTags data={accessibility} error={accessError} />}
+      {isDvoucher && <AccessibilityTags view={view} />}
 
       <div className="mt-2">
         <LocationLine coordSource={v.coord_source} dist={v.dist_km} />
@@ -421,6 +438,9 @@ export function faciGbLabel(gb?: '공공' | '신고' | '등록' | null): {
 
 export function AltRow({ a }: { a: AlternativeFacility }) {
   const gb = faciGbLabel(a.faci_gb)
+  // 공공·대안 풀에는 지원유형 조회 소스가 없다 — 원천이 준 불리언만 있으므로
+  // "✓ 장애인 지원" 확언 대신 "장애인 지원(유형 미상)"으로 사실 그대로 적는다(C-3).
+  const view = accessibilityView(a.disability_support)
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -435,7 +455,7 @@ export function AltRow({ a }: { a: AlternativeFacility }) {
         <div className="flex flex-col items-end gap-1">
           <Badge tone={gb.tone}>{gb.label}</Badge>
           {a.coord_source === 'centroid' && <ApproxLocationBadge />}
-          <DisabilityTag support={a.disability_support} />
+          <DisabilityTag badge={view.badge} />
         </div>
       </div>
       <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{a.note}</p>

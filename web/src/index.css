@@ -57,9 +57,44 @@
    네이비(950 = #0F172A)로 내려가는 하나의 램프다.
    상태색은 색맹 안전 — UI에서 항상 아이콘·텍스트를 함께 쓴다.
    초록=자격 / 로즈=불가 / 호박=근사·주의 / 보라=장애인. */
+/* ── B · 종이 메모 폰트 (셀프호스팅, OFL) — 헤딩 나눔명조 800 / 본문 고운돋움 ──
+   한글(가~힣)+자모+라틴+문장부호 서브셋 woff2. 스펙: docs/designs/b-paper-tokens.md */
+@font-face {
+  font-family: 'Nanum Myeongjo';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/NanumMyeongjo-ExtraBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Gowun Dodum';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/GowunDodum-Regular.woff2') format('woff2');
+}
+
 @theme {
+  /* ── B · 종이 메모 토큰 (2026-08-28 리디자인, docs/designs/b-paper-tokens.md) ──
+     bg-paper / text-ink / text-mute / border-rule / bg-tint / text-accent / text-ok
+     다크는 -dark 접미 토큰을 dark: 변형으로 짝지어 쓴다. */
+  --color-paper: #f7f3ea;
+  --color-ink: #1f2a44;
+  --color-mute: #6b6357;
+  --color-rule: #d9d0c1;
+  --color-tint: #ebe4d4;
+  --color-accent-ink: #c0532b;
+  --color-ok: #3d6b3a;
+  --color-paper-dark: #17171a;
+  --color-ink-dark: #ece6d8;
+  --color-mute-dark: #a39c8e;
+  --color-rule-dark: #3a3833;
+  --color-tint-dark: #24231f;
+  --color-accent-ink-dark: #e2764d;
+  --color-ok-dark: #7fb37a;
+  --font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', 'Noto Serif KR', serif;
   --font-sans:
-    'Atkinson Hyperlegible', 'Pretendard', 'Pretendard Variable', -apple-system,
+    'Gowun Dodum', 'Atkinson Hyperlegible', 'Pretendard', 'Pretendard Variable', -apple-system,
     BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR',
     system-ui, sans-serif;
 

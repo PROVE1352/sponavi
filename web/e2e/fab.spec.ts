@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test'
-import { expectAtBottom, fillMainSlots, openMain, settleTypewriter } from './helpers'
+import {
+  expectAtBottom,
+  expectMapMounted,
+  fillMainSlots,
+  openMain,
+  settleTypewriter,
+} from './helpers'
 
 // "맨 아래로" 버튼(FAB) 계약 —
 //   ① 바닥에 붙어 있으면 없는 것과 같다(data-visible=false · 클릭·포커스 대상 아님)
@@ -133,5 +139,55 @@ test('⑤ prefers-reduced-motion — 등장·퇴장에 이동·축소가 없다'
   await expect.poll(gapToBottom.bind(null, page), {
     message: '모션 최소화에서 FAB 가 바닥으로 데려가지 못했다',
     timeout: 2_500,
+  }).toBeLessThanOrEqual(2)
+})
+
+test('⑥ 패널을 연 뒤에도 FAB 는 바닥까지 데려가고, 뒤늦은 레이아웃 성장까지 따라간다', async ({
+  page,
+}) => {
+  await openMain(page)
+  await fillMainSlots(page)
+  await settleTypewriter(page)
+
+  // 지도 패널을 연다(문서가 스트림 밖에서 크게 자라는 상황 — 제보의 재현 조건)
+  await page.getByTestId('chip-act-map').click()
+  await expect(page.getByTestId('panel-tab-map')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('panel-body')).toBeVisible()
+
+  // 패널이 자리를 잡을 때까지(지도 마운트 + 바닥 복귀 완료) 기다렸다가 올라간다.
+  await expectMapMounted(page)
+  await expectAtBottom(page, '"지도에서 보기" 뒤 바닥으로 돌아오지 않았다')
+
+  // 실제 손가락처럼 굴린다 — 휠·터치는 우리 스크롤 보호창(autoUntil) 안이라도 즉시 개입으로 잡혀
+  // 바닥 추종이 풀린다(지도 타일이 자라는 동안 손을 다시 끌어내리지 않는다).
+  // ※ 합성 휠은 실기기와 달리 진행 중인 smooth 스크롤 애니메이션을 취소하지 못한다 —
+  //   지도 타일이 계속 도착하는 동안에는 한 번 더 굴려야 할 수 있어 폴링으로 굴린다.
+  await expect
+    .poll(
+      async () => {
+        await page.mouse.wheel(0, -800)
+        return fab(page).getAttribute('data-visible')
+      },
+      { message: '위로 굴렸는데 FAB 가 나타나지 않았다', timeout: 8_000 },
+    )
+    .toBe('true')
+
+  await fab(page).click()
+  await expect.poll(gapToBottom.bind(null, page), {
+    message: '패널이 열린 상태에서 FAB 가 바닥으로 데려가지 못했다',
+    timeout: 2_500,
+  }).toBeLessThanOrEqual(2)
+
+  // ★ 바닥에 닿은 뒤 문서가 더 자라도(지도 타일·이미지가 뒤늦게 도착하는 상황) 따라간다.
+  //   스트림 밖에서 자라는 경우까지 보려고 body 에 직접 붙인다(React 소유 노드는 건드리지 않는다).
+  await page.evaluate(() => {
+    const grow = document.createElement('div')
+    grow.id = 'e2e-late-growth'
+    grow.style.height = '600px'
+    document.body.appendChild(grow)
+  })
+  await expect.poll(gapToBottom.bind(null, page), {
+    message: '뒤늦은 레이아웃 성장(600px)을 바닥 추종이 따라가지 못했다',
+    timeout: 1_000,
   }).toBeLessThanOrEqual(2)
 })

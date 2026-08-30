@@ -468,3 +468,21 @@ body {
 .dark .marker-pin {
   border-color: #0b1220;
 }
+
+/* 시설 목록에서 지목된 마커 — 색 체계(파랑·초록·보라)는 그대로 두고 크기와 잉크 테두리로만
+   구분한다. 색을 바꾸면 범례가 거짓말이 된다(색+아이콘+텍스트 삼중 원칙). */
+.marker-pin.marker-focused {
+  width: 30px;
+  height: 30px;
+  border-color: var(--color-ink);
+  box-shadow:
+    0 0 0 3px var(--color-paper),
+    0 2px 10px rgb(2 6 23 / 0.4);
+  z-index: 2;
+}
+.dark .marker-pin.marker-focused {
+  border-color: var(--color-ink-dark);
+  box-shadow:
+    0 0 0 3px var(--color-paper-dark),
+    0 2px 10px rgb(0 0 0 / 0.55);
+}

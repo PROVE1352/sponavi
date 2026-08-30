@@ -400,6 +400,54 @@ def test_off_mode_is_rules(monkeypatch):
     assert meta["fallback_reason"] == "off"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "왜 이 운동 추천했어?",
+        "왜 그 운동이야",
+        "왜 추천했는지 알려줘",
+        "추천 근거가 뭐야",
+        "추천 이유 알려주세요",
+        "근거 알려줘",
+    ],
+)
+def test_why_exercise_rule_intent_wins_even_with_llm_off(monkeypatch, text):
+    """근거 질문은 LLM 이 꺼져 있어도 잡힌다 — 결과 카드에서 근거 블록을 걷어낸 뒤
+    (FR-08 AC8) 이 의도가 근거로 가는 유일한 길이라 결정적으로 동작해야 한다."""
+    monkeypatch.setenv("SPONAVI_CHAT_LLM", "off")
+    resp, meta = chat.run_nlu(_fresh_store(), {"text": text, "slots": {}})
+    assert resp["intent"] == "why_exercise"
+    # 규칙 의도라도 rules 폴백의 나머지 계약은 그대로다(빈 슬롯 · 발화 없음).
+    assert resp["provider"] == "rules" and resp["slot_updates"] == {}
+    assert resp["reply"] is None and resp["answer"] is None
+    assert meta["fallback_reason"] == "off"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["성북구 살아요", "27살이에요", "이용권 누가 받아요?", "운동 추천해줘", "지도 보여줘"],
+)
+def test_why_exercise_rule_does_not_overreach(monkeypatch, text):
+    """근거를 묻지 않은 발화까지 끌어오지 않는다(오탐이 곧 엉뚱한 답)."""
+    monkeypatch.setenv("SPONAVI_CHAT_LLM", "off")
+    resp, _meta = chat.run_nlu(_fresh_store(), {"text": text, "slots": {}})
+    assert resp["intent"] == "unknown"
+
+
+def test_why_exercise_rule_overrides_llm_intent(monkeypatch):
+    """LLM 이 다른 의도를 골라도 규칙이 이긴다 — 두 경로가 갈리면 안 된다."""
+
+    class Wrong:
+        name = "openai"
+
+        def nlu(self, text, slots, phase, grounding=""):
+            return {"intent": "ask_faq", "faq_key": None, "reply": None, "answer": None}
+
+    monkeypatch.setattr(chat, "get_provider", lambda: Wrong())
+    resp, _meta = chat.run_nlu(_fresh_store(), {"text": "왜 이 운동 추천했어?", "slots": {}})
+    assert resp["intent"] == "why_exercise"
+
+
 def test_openai_provider_without_key_falls_back(monkeypatch):
     """키 미주입 서버에서도 무중단 — 실호출 없이 즉시 rules 강등."""
     monkeypatch.setenv("SPONAVI_CHAT_LLM", "openai")

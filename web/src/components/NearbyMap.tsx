@@ -135,7 +135,30 @@ function isDarkTheme(): boolean {
   return document.documentElement.classList.contains('dark')
 }
 
-export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Nearby }) {
+// "이 시설을 지도에서 보여 달라"는 요청. 같은 시설을 다시 눌러도 seq 가 오르면 다시 날아간다
+// (streamFocus·panelFocus 와 같은 형태 — 상태가 아니라 요청 횟수를 센다).
+export interface MapLocate {
+  id: string
+  seq: number
+}
+
+// 지목 확대 배율. fitBounds 의 maxZoom(15)보다 한 단계 안쪽 = "이 시설 한 곳"이 읽히는 거리.
+const LOCATE_ZOOM = 16
+
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+export function NearbyMap({
+  personLoc,
+  nearby,
+  locate,
+}: {
+  personLoc: LatLon
+  nearby: Nearby
+  // 시설 목록에서 이름을 누르면 여기로 온다(패널이 지도 탭으로 바뀐 뒤).
+  locate?: MapLocate | null
+}) {
   const points = useMemo<MapPoint[]>(() => {
     const pts: MapPoint[] = [
       { id: 'me', name: '내 위치', lat: personLoc.lat, lon: personLoc.lon, kind: 'person' },
@@ -170,6 +193,11 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
   const boxRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)
   const markersRef = useRef<Marker[]>([])
+  // 지목(flyTo + 팝업 + 강조)을 위해 id 로 마커를 되찾는 색인. 마커가 다시 그려질 때 함께 갱신된다.
+  const byIdRef = useRef(new Map<string, { marker: Marker; el: HTMLElement; point: MapPoint }>())
+  // 지금 강조 중인 마커 — 다음 지목에서 표식을 걷어내야 하므로 들고 있는다.
+  const focusedRef = useRef<HTMLElement | null>(null)
+  const locateDone = useRef(0)
   // fitBounds 는 "이번 결과에 대해 한 번"만 — 숨김 탭(0px)에서는 미뤘다가 보일 때 실행한다.
   const fitRef = useRef<{ points: MapPoint[]; done: boolean }>({ points: [], done: false })
   // WebGL 이 없거나(구형 기기·정책 차단) 지도 초기화가 실패해도 앱은 살아 있어야 한다.
@@ -246,16 +274,66 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
     const map = mapRef.current
     if (!map) return
     for (const m of markersRef.current) m.remove()
-    markersRef.current = points.map((p) =>
-      new Marker({ element: markerElement(p), anchor: 'center' })
+    byIdRef.current = new Map()
+    focusedRef.current = null
+    markersRef.current = points.map((p) => {
+      const el = markerElement(p)
+      const marker = new Marker({ element: el, anchor: 'center' })
         .setLngLat([p.lon, p.lat])
         .setPopup(new Popup({ offset: 14, maxWidth: '240px' }).setDOMContent(popupContent(p)))
-        .addTo(map),
-    )
+        .addTo(map)
+      byIdRef.current.set(p.id, { marker, el, point: p })
+      return marker
+    })
     fitRef.current.done = false
     fitToPoints()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points, failed])
+
+  // ── 지목(시설 목록에서 시설 누르기) → 그 좌표로 확대 + 팝업 + 마커 강조 ──────────
+  //   요청 1건당 정확히 한 번 움직인다(seq). 화면 이동은 flyTo — 어디서 어디로 갔는지가
+  //   보여야 "이 시설이 저기구나"가 읽힌다. 모션 최소화 선호면 즉시 이동(jumpTo).
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !locate || locate.seq === locateDone.current) return
+    const hit = byIdRef.current.get(locate.id)
+    if (!hit) return
+    locateDone.current = locate.seq
+    // 목록 탭에서 넘어온 직후라 지도가 0px 였을 수 있다 — 캔버스 크기를 먼저 맞춘다.
+    map.resize()
+    // 미뤄둔 fitBounds 가 나중에 실행되면 방금 맞춘 화면을 도로 넓혀 버린다 — 여기서 소진시킨다.
+    fitRef.current.done = true
+    boxRef.current?.removeAttribute('data-map-ready')
+    const center: [number, number] = [hit.point.lon, hit.point.lat]
+    if (prefersReducedMotion()) map.jumpTo({ center, zoom: LOCATE_ZOOM })
+    else map.flyTo({ center, zoom: LOCATE_ZOOM, duration: 700 })
+    // 강조는 색 체계를 건드리지 않는다 — 크기와 잉크 테두리로만 구분한다(색맹 안전).
+    if (focusedRef.current && focusedRef.current !== hit.el) {
+      focusedRef.current.classList.remove('marker-focused')
+      focusedRef.current.removeAttribute('data-testid')
+      focusedRef.current.dataset.testid = 'map-marker'
+    }
+    hit.el.classList.add('marker-focused')
+    hit.el.dataset.testid = 'marker-focused'
+    focusedRef.current = hit.el
+    // 팝업 문구는 마커가 이미 갖고 있는 것을 그대로 쓴다(같은 사실을 두 벌로 적지 않는다).
+    if (!hit.marker.getPopup()?.isOpen()) hit.marker.togglePopup()
+  }, [locate])
+
+  // 현재 배율을 DOM 으로 내보낸다(e2e 가 map 인스턴스에 손대지 않고 확대를 확인하는 통로).
+  useEffect(() => {
+    const map = mapRef.current
+    const el = boxRef.current
+    if (!map || !el) return
+    const write = () => el.setAttribute('data-zoom', map.getZoom().toFixed(2))
+    write()
+    map.on('zoom', write)
+    map.on('moveend', write)
+    return () => {
+      map.off('zoom', write)
+      map.off('moveend', write)
+    }
+  }, [failed])
 
   // ── 컨테이너 크기 변화(탭 전환·시트 접힘/펼침·회전) → resize + 미뤄둔 fit ──
   useEffect(() => {

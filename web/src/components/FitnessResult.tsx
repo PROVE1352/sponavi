@@ -30,29 +30,25 @@ import {
   TINT_BOX,
   WarnIcon,
 } from './ui'
+import { sourceLabel, viaGoalLabel } from '../lib/rationale'
 
 // 근거 표기 톤: 공식·지침은 초록 체크, 큐레이션·콘텐츠는 뮤트 텍스트(채운 배지 없음).
 type BadgeTone = 'neutral' | 'brand' | 'ok' | 'fail' | 'warn' | 'purple'
 
 // 엣지 출처 → UI 근거 표기(FITNESS_GRAPH §2.3). 근거 없는 추천은 서버가 내보내지 않는다.
+// 라벨 사전은 lib/rationale 이 소유한다 — 채팅의 "왜 이 운동" 답변과 같은 말을 써야 한다.
+// 여기서는 톤(색)만 얹는다.
+const SOURCE_TONE: Record<string, BadgeTone> = {
+  kspo_standard: 'ok',
+  guideline: 'brand',
+  kspo_video: 'neutral',
+  curated: 'purple',
+}
+
 function sourceBadge(prov?: Provenance): { label: string; tone: BadgeTone } | null {
-  if (!prov) return null
-  switch (prov.source) {
-    case 'kspo_standard':
-      return { label: '공단 공식 기준', tone: 'ok' }
-    case 'guideline':
-      // 카피 사전(PRD §6 · FITNESS_GRAPH §2.3) 고정 문구 — A급은 "정부·국제 지침".
-      return { label: '정부·국제 지침', tone: 'brand' }
-    case 'kspo_video':
-      return { label: '공단 콘텐츠', tone: 'neutral' }
-    case 'curated':
-      return {
-        label: prov.curated_status === 'pending' ? '전문가 큐레이션(검증 중)' : '전문가 큐레이션',
-        tone: 'purple',
-      }
-    default:
-      return { label: '참고', tone: 'neutral' }
-  }
+  const label = sourceLabel(prov)
+  if (!label) return null
+  return { label, tone: SOURCE_TONE[String(prov?.source)] ?? 'neutral' }
 }
 
 // 공식(체크) / 그 외(뮤트 텍스트) — 색맹 안전을 위해 초록에는 항상 체크 아이콘을 붙인다.
@@ -78,12 +74,6 @@ function EvidenceNote({ label, tone }: { label: string; tone: BadgeTone }) {
 
 function named(x: GraphNamed | string): { name: string; prov?: Provenance } {
   return typeof x === 'string' ? { name: x } : { name: x.name, prov: x.provenance }
-}
-
-// 멀티홉 표기(FITNESS_GRAPH §3.5): "via {goal}" 대신 한국어로. 경로 등급은 서버가 이미
-// 두 홉 중 약한 쪽으로 내려 잡아 보냈다 — 화면은 그 사실을 바꾸지 않고 경유만 밝힌다.
-function viaGoalLabel(prov?: Provenance): string | null {
-  return prov?.via_goal ? `${prov.via_goal} 목적 경유` : null
 }
 
 // 기준 미달만 인주색 — 나머지 등급 라벨은 잉크(화면당 강조는 한두 군데).

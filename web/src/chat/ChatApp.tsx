@@ -98,6 +98,8 @@ function ChatShell({ demo }: { demo: boolean }) {
     parqPreset,
     streamFocus,
     scrollToBottom,
+    mapLocate,
+    locateFacility,
   } = useChatController(demo)
   const panelRef = useRef<HTMLDivElement>(null)
   // "맨 아래로" 버튼이 컴포저 바로 위에 앉도록 실측용 앵커를 넘긴다.
@@ -114,11 +116,15 @@ function ChatShell({ demo }: { demo: boolean }) {
     getHealth().then(setHealth).catch(() => setHealth(null))
   }, [demo])
 
-  // "지도에서 보기"·"시설 목록 보기"를 눌렀을 때(panelFocus 증가) 패널까지 데려간다.
-  // 모바일에서 패널은 스트림 위쪽이라, 결과까지 내려온 사용자에게는 상태만 바꿔서는
-  // 아무 일도 일어나지 않은 것처럼 보인다(v1.7 실기기 피드백).
+  // 패널을 **봐야만 하는** 요청(panelFocus 증가)일 때만 패널까지 데려간다.
+  //   지금 이 경로를 쓰는 것은 "시설 목록에서 시설 누르기"(지도 확대) 하나뿐이다 —
+  //   지도를 보려고 누른 것이라 화면이 지도에 가 있어야 뜻이 통한다.
+  // ★ "지도에서 보기"·"시설 목록 보기"·처방 필터는 더 이상 여기 오지 않는다(2026-08-30):
+  //   패널만 열고 화면은 대화 바닥에 남긴다(useChatController.returnToBottom).
+  // ★ 데스크톱(lg+)은 패널이 옆 열이라 스크롤할 것이 없다 — 모바일 시트에서만 움직인다.
   useEffect(() => {
     if (state.panelFocus === 0) return
+    if (window.matchMedia('(min-width: 64rem)').matches) return
     const el = panelRef.current
     if (!el) return
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -195,6 +201,8 @@ function ChatShell({ demo }: { demo: boolean }) {
             onToggle={(open) => setPanel(open)}
             onTab={(tab) => setPanel(state.panel.open, tab)}
             onClearFilter={() => setFilterSports(undefined)}
+            locate={mapLocate}
+            onLocate={locateFacility}
           />
         )}
 

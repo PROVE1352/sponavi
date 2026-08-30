@@ -6,7 +6,7 @@ import { useId } from 'react'
 import type { RefObject } from 'react'
 import type { AssessRequest, AssessResponse } from '../types'
 import type { PanelTab } from '../types_chat'
-import { NearbyMap } from '../components/NearbyMap'
+import { NearbyMap, type MapLocate } from '../components/NearbyMap'
 import { NearbyList } from '../components/NearbyList'
 import { Badge } from '../components/ui'
 import { countMatching, poolCountText } from '../lib/sports'
@@ -23,6 +23,8 @@ export function ContextPanel({
   onToggle,
   onTab,
   onClearFilter,
+  locate,
+  onLocate,
 }: {
   req: AssessRequest
   data: AssessResponse
@@ -34,6 +36,9 @@ export function ContextPanel({
   onToggle: (open: boolean) => void
   onTab: (tab: PanelTab) => void
   onClearFilter: () => void
+  // 시설 목록 → 지도 확대(요청 1건당 seq 1 증가).
+  locate?: MapLocate | null
+  onLocate?: (id: string) => void
 }) {
   const baseId = useId()
   const mapPanelId = `${baseId}-map`
@@ -128,7 +133,7 @@ export function ContextPanel({
             hidden={tab !== 'map'}
             className="py-3"
           >
-            <NearbyMap personLoc={personLocOf(req)} nearby={data.nearby} />
+            <NearbyMap personLoc={personLocOf(req)} nearby={data.nearby} locate={locate} />
             <p className="mt-2 text-xs text-mute dark:text-mute-dark">
               지도 없이도 같은 정보를 시설 목록과 대화 카드에서 확인하실 수 있어요.
             </p>
@@ -145,6 +150,7 @@ export function ContextPanel({
               nearby={data.nearby}
               filterSports={filterSports}
               onClearFilter={onClearFilter}
+              onLocate={onLocate}
             />
           </div>
         </div>

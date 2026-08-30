@@ -191,50 +191,63 @@ test.describe('데스크톱', () => {
   })
 })
 
-test('⑤ 390px — "지도에서 보기"·"시설 목록 보기"가 패널을 열고 화면으로 데려온다', async ({
+test('⑤ 390px — "지도에서 보기"·"시설 목록 보기"는 패널을 열되 화면은 바닥에 남긴다', async ({
   page,
 }) => {
   await openDemo(page)
   await startPersona(page, 'P1')
   await settleTypewriter(page)
+  await expectAtBottom(page, '결과 뒤 바닥에 있지 않다(⑤ 시작 조건)')
 
-  // 결과까지 내려온 상태 — 이 시점에 패널(스트림 위쪽)은 화면 밖에 있다
-  const before = await panel(page).boundingBox()
-  const vh = page.viewportSize()!.height
-  expect(before, '패널 박스를 못 잡았다').not.toBeNull()
-  expect(before!.y + before!.height, '시작 상태에서 이미 패널이 화면 안이다').toBeLessThan(0)
-
-  // 덱 안의 "지도에서 보기" → 지도 탭 활성 + 패널이 뷰포트 안으로 들어온다
+  // 덱 안의 "지도에서 보기" → 지도 탭이 열린다
   await deck(page).getByTestId('open-map-panel').click()
   await expect(page.getByTestId('panel-tab-map')).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('panel-body')).toBeVisible()
-  // 패널 본문이 실제로 뷰포트 안에 들어온다(위로 벗어나 있지도, 아래로 밀려 있지도 않다)
-  await expect
-    .poll(
-      async () => {
-        const b = await page.getByTestId('panel-body').boundingBox()
-        return b && b.y < vh && b.y + b.height > 0
-      },
-      { message: '지도 패널이 화면 안으로 들어오지 않았다' },
-    )
-    .toBe(true)
   await expectMapMounted(page)
 
-  // 스트림 후속 칩("시설 목록 보기")도 같은 동작 — 목록 탭으로 전환되고 다시 데려온다
-  await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight }))
+  // ★ 2026-08-30 사용자 결정: 패널로 데려가지 않는다. 모바일에서 패널은 스트림 위쪽이라
+  //   패널까지 끌고 가면 방금 붙은 답과 액션 칩이 화면 밖으로 밀린다(제보: scrollY 2836 → 12).
+  //   지도 타일·패널이 뒤늦게 커져도 결국 바닥에 닿아 있어야 한다(레이아웃 성장 추종).
+  await expectAtBottom(page, '"지도에서 보기" 뒤 화면이 바닥에 남지 않았다')
+  const vh = page.viewportSize()!.height
+  const mapChip = await page.getByTestId('chip-act-list').boundingBox()
+  expect(mapChip!.y).toBeGreaterThanOrEqual(0)
+  expect(mapChip!.y + mapChip!.height, '액션 칩이 화면 밖으로 밀렸다').toBeLessThanOrEqual(vh)
+
+  // 스트림 후속 칩("시설 목록 보기")도 같은 규칙 — 탭만 바뀌고 화면은 바닥
   await page.getByTestId('chip-act-list').click()
   await expect(page.getByTestId('panel-tab-list')).toHaveAttribute('aria-selected', 'true')
-  await expect
-    .poll(
-      async () => {
-        const b = await page.getByTestId('panel-body').boundingBox()
-        return b && b.y < vh && b.y + b.height > 0
-      },
-      { message: '목록 패널이 화면 안으로 들어오지 않았다' },
-    )
-    .toBe(true)
   await expect(panel(page).getByTestId('voucher-section')).toBeVisible()
+  await expectAtBottom(page, '"시설 목록 보기" 뒤 화면이 바닥에 남지 않았다')
 
-  // 화자도 한 줄로 알려 준다(정직: 어디가 바뀌었는지)
+  // 화자도 한 줄로 알려 준다(정직: 어디가 바뀌었는지). 방향("옆")은 말하지 않는다 —
+  // 폰에서 패널은 옆이 아니라 위다.
   await expect(stream(page).getByText(/패널에 열어 두었어요/).first()).toBeAttached()
+  await expect(stream(page).getByText(/옆 패널/)).toHaveCount(0)
+})
+
+test('⑤-b 메인 경로에서도 패널 칩은 화면을 바닥에 남긴다(지도·목록 둘 다)', async ({ page }) => {
+  await openMain(page)
+  await fillMainSlots(page)
+  await settleTypewriter(page)
+
+  for (const [chip, tab] of [
+    ['chip-act-map', 'map'],
+    ['chip-act-list', 'list'],
+  ] as const) {
+    // 일부러 위로 올라간 상태에서 누른다 — "누르면 바닥으로 돌아온다"가 계약이다
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }))
+    await page.getByTestId(chip).click()
+    await expect(page.getByTestId(`panel-tab-${tab}`)).toHaveAttribute('aria-selected', 'true')
+    await expect(page.getByTestId('panel-body')).toBeVisible()
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            () => document.documentElement.scrollHeight - window.innerHeight - Math.round(window.scrollY),
+          ),
+        { message: `${chip} 을 눌렀는데 3초 안에 바닥으로 돌아오지 않았다`, timeout: 3_000 },
+      )
+      .toBeLessThanOrEqual(2)
+  }
 })

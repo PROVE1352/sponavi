@@ -221,8 +221,10 @@ export const T = {
   restartKeep: '그대로 이어서 진행할게요.',
   restarted: '처음부터 다시 시작할게요.',
 
-  mapOpened: '지도를 옆 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
-  listOpened: '시설 목록을 옆 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
+  // ★ 방향을 말하지 않는다. 패널은 데스크톱에서 옆 열이지만 모바일에서는 스트림 **위쪽** 시트다 —
+  //   "옆 패널"은 폰에서 틀린 안내였다(2026-08-30 실기기 제보).
+  mapOpened: '지도를 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
+  listOpened: '시설 목록을 패널에 열어 두었어요. 접기 버튼으로 다시 접으실 수 있어요.',
   mapNeedsResult: '지도는 먼저 몇 가지를 알려주신 뒤에 보여드릴 수 있어요.',
 
   // 체력 레인 3턴(PAR-Q → 측정 폼 → 결과). 안내만 하고, 문진·판정·처방의 내용은 카드가 말한다.
@@ -234,9 +236,15 @@ export const T = {
   fitnessAlready: '체력 처방 카드로 이동할게요 — 거기서 이어서 하실 수 있어요.',
   fitnessNeedsResult: '체력 처방은 예상 자격을 먼저 확인한 뒤에 이어서 하실 수 있어요.',
   fitnessFilterApplied: (sports: string[]) =>
-    `${sports.join('·')} 종목만 남겨서 시설 목록을 옆 패널에 열어 두었어요.`,
+    `${sports.join('·')} 종목만 남겨서 시설 목록을 패널에 열어 두었어요.`,
 
   followUpPrompt: '더 필요하신 게 있으면 아래에서 골라 주세요.',
+
+  // 처방 근거(FR-08 AC8). 결과 카드에서 항목별 근거 블록을 걷어낸 대신, 물으면 답한다.
+  //   ※ "사실은 카드가 말한다"의 예외 — 이 발화 자체가 근거 열거라서 첫 문장에서 그렇다고 밝힌다.
+  whyOffer: '추천 근거가 궁금하시면 아래에서 물어봐 주세요.',
+  whyIntro: '추천 근거를 항목별로 적어 둘게요.',
+  whyNeedsPrescription: '먼저 체력 처방을 받으면 근거를 알려드릴 수 있어요.',
 
   faqEmpty: '그 질문은 아직 확인된 답변을 준비하지 못했어요. 공식 신청처에서 확인해 주시면 정확해요.',
 
@@ -687,6 +695,25 @@ export function followUpChips(
     action: { kind: 'restart', step: 'ask' },
   })
   return chips
+}
+
+// 규칙 의도(정규식) — LLM 유무와 무관하게 잡아야 하는 최소 의도.
+// "왜 이 운동?"은 결과 카드에서 항목별 근거 블록을 걷어낸 뒤 근거로 가는 유일한 길이라,
+// 칩 모드(LLM off·목모드)에서도 답할 수 있어야 한다(FR-08 AC8).
+// ★ 서버 chat.py 의 _WHY_EXERCISE 와 같은 패턴이다 — 한쪽만 고치면 두 경로가 갈린다.
+export const WHY_EXERCISE_RE = /왜\s*(이|그)\s*운동|왜\s*추천|추천\s*(근거|이유)|근거\s*(알려|뭐)/
+
+export function ruleIntent(text: string): 'why_exercise' | null {
+  return WHY_EXERCISE_RE.test(text) ? 'why_exercise' : null
+}
+
+// 처방 근거를 묻는 칩. AI 처방이 도착한 뒤 한 줄로 붙는다(결과 카드는 더 길어지지 않는다).
+export const WHY_CHIP_ID = 'act-why'
+
+export function whyChips(): Chip[] {
+  return [
+    { id: WHY_CHIP_ID, label: '왜 이 운동인지 물어보기', action: { kind: 'why_exercise' } },
+  ]
 }
 
 export function restartConfirmChips(): Chip[] {

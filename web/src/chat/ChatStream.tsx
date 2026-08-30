@@ -30,6 +30,15 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 // 예약해 둔 바닥 이동을 취소시키는 사용자 개입(자동재생 취소 트리거와 같은 목록).
 // 덱을 보는 동안 사용자가 먼저 움직였다면 화면 주도권은 사용자 것이다.
 const TAKEOVER_EVENTS = ['wheel', 'touchmove', 'pointerdown', 'keydown'] as const
+// ★ 단, "맨 아래로" 버튼에서 시작한 입력은 개입이 아니다 — 그 누름 자체가 바닥으로 가겠다는 뜻이다.
+//   터치에서는 pointerdown 이 click 보다 먼저 오므로, 제외하지 않으면 버튼이 자기 이동을
+//   누르기도 전에 취소해 버린다("눌러도 안 움직임" 제보의 후보 원인 중 하나).
+const TAKEOVER_EXEMPT_SELECTOR = '[data-testid="scroll-bottom-fab"]'
+
+function isExemptFromTakeover(e: Event): boolean {
+  const t = e.target
+  return t instanceof Element && t.closest(TAKEOVER_EXEMPT_SELECTOR) != null
+}
 
 // 타이프라이터가 붙는 메시지 = 화자가 "말하는" 버블(발화·질문).
 // 카드·고지 블록·사용자 버블은 여기 해당하지 않는다 — 순서만 지켜 등장한다.
@@ -216,6 +225,27 @@ export function ChatStream({
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // ★ 사용자가 직접 굴리면(휠·터치) 그 즉시 화면 주도권은 사용자 것이다 — 우리 스크롤
+  //   보호창(autoUntil) 안이라도 예외가 없다. 문서 성장 추종이 문서 전체를 보게 되면서
+  //   패널·지도가 자라는 몇 초 동안 위로 올라가려는 손을 계속 바닥으로 끌어내릴 수 있는데,
+  //   그 탈출구가 여기다. "맨 아래로" 버튼에서 시작한 입력만 예외(그 누름은 개입이 아니다).
+  useEffect(() => {
+    const onUserScroll = (e: Event) => {
+      if (isExemptFromTakeover(e)) return
+      stick.current = false
+      autoUntil.current = 0
+    }
+    const types = ['wheel', 'touchmove'] as const
+    for (const type of types) {
+      window.addEventListener(type, onUserScroll, { capture: true, passive: true })
+    }
+    return () => {
+      for (const type of types) {
+        window.removeEventListener(type, onUserScroll, { capture: true })
+      }
+    }
+  }, [])
+
   // ★ 결과 덱 도착(FR-12 AC9 v1.7): 바닥 추종을 멈추고 "덱 시작점"으로 딱 한 번 이동한다.
   //   결과는 이제 메시지 하나라, 바닥을 따라가면 사용자는 덱의 아랫동아리만 보게 된다.
   //   이후 후속 칩이 붙어도 강제로 끌어내리지 않는다 — 사용자가 직접 바닥까지 내려오면
@@ -278,7 +308,10 @@ export function ChatStream({
         return
       }
       const wait = Math.max(0, deckScrollAt.current + DECK_HOLD_MS - Date.now())
-      const onTakeover = () => stopBottom()
+      const onTakeover = (e: Event) => {
+        if (isExemptFromTakeover(e)) return
+        stopBottom()
+      }
       for (const type of TAKEOVER_EVENTS) {
         window.addEventListener(type, onTakeover, { capture: true, passive: true })
       }
@@ -321,22 +354,37 @@ export function ChatStream({
     scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
   }, [visible.length, indicator, pending])
 
-  // 높이가 뒤늦게 자라는 것들(칩 fade-in · 카드 · 지도 타일)도 따라간다.
-  // 스크롤 자체는 높이를 바꾸지 않으므로 되먹임 루프가 생기지 않는다.
+  // 높이가 뒤늦게 자라는 것들(칩 fade-in · 카드 · 지도 타일 · 패널 펼침)도 따라간다.
+  // ★ 2026-08-30: 스트림만 보던 것을 **문서 전체**로 넓혔다. 모바일에서 패널은 스트림 밖
+  //   (위쪽)이라, 패널이 열리거나 지도 타일이 도착하면 스트림 높이는 그대로인데 바닥은
+  //   저만치 멀어진다 — scrollTo(scrollHeight) 를 이미 쏜 뒤라 화면은 바닥에 못 닿은 채
+  //   멈춰 있었다("맨 아래로를 눌러도 안 움직임"). 바닥 추종 중일 때만 따라간다.
+  //   스크롤 자체는 높이를 바꾸지 않으므로 되먹임 루프가 생기지 않는다.
   useEffect(() => {
-    const el = boxRef.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    let last = el.getBoundingClientRect().height
-    const ro = new ResizeObserver(() => {
-      const h = el.getBoundingClientRect().height
+    if (typeof ResizeObserver === 'undefined') return
+    const docHeight = () => document.documentElement.scrollHeight
+    let last = docHeight()
+    let raf = 0
+    const follow = () => {
+      raf = 0
+      const h = docHeight()
       const grew = h > last + 1
       last = h
       if (!grew || !stick.current) return
       autoUntil.current = Date.now() + 600
       scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
+    }
+    // 관찰 대상 여럿이 같은 프레임에 울리므로 rAF 로 한 번만 잰다.
+    const ro = new ResizeObserver(() => {
+      if (raf) return
+      raf = requestAnimationFrame(follow)
     })
-    ro.observe(el)
-    return () => ro.disconnect()
+    ro.observe(document.body)
+    if (boxRef.current) ro.observe(boxRef.current)
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [])
 
   return (

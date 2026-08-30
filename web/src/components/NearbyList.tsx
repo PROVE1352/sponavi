@@ -83,10 +83,13 @@ export function NearbyList({
   nearby,
   filterSports,
   onClearFilter,
+  onLocate,
 }: {
   nearby: Nearby
   filterSports?: string[]
   onClearFilter?: () => void
+  // 시설 이름을 누르면 지도 탭으로 바꾸고 그 좌표로 확대한다(패널 전용).
+  onLocate?: (id: string) => void
 }) {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
 
@@ -144,7 +147,7 @@ export function NearbyList({
       <ListHeading title="공공·대안 시설" />
       <ul>
         {alts.map((a, i) => (
-          <AltRow key={a.id} a={a} index={i + 1} />
+          <AltRow key={a.id} a={a} index={i + 1} onLocate={onLocate} />
         ))}
       </ul>
     </div>
@@ -238,6 +241,7 @@ export function NearbyList({
                 index={i + 1}
                 accessibility={access[v.id]}
                 accessError={accessError}
+                onLocate={onLocate}
               />
             ))}
           </ul>
@@ -359,14 +363,24 @@ function RowShell({
   index,
   name,
   right,
+  facilityId,
+  locatable,
+  onLocate,
   children,
 }: {
   testId: string
   index?: number
   name: string
   right: ReactNode
+  // 지도에서 지목할 수 있는 행인가. 실좌표가 아닌 행(구 중심 폴백)은 확대해도 그 자리가 아니다.
+  facilityId?: string
+  locatable?: boolean
+  onLocate?: (id: string) => void
   children: ReactNode
 }) {
+  const nameClass = 'min-w-0 break-keep text-left text-[16px] font-bold text-ink dark:text-ink-dark'
+  // 행 전체가 아니라 **이름만** 버튼이다 — 행 안의 전화·출처 링크와 탭 순서가 엉키지 않는다.
+  const canLocate = onLocate != null && locatable === true && facilityId != null
   return (
     <li data-testid={testId} className={`grid grid-cols-[22px_minmax(0,1fr)] gap-x-2 py-3 ${ROW_RULE}`}>
       <span aria-hidden="true" className="pt-0.5 text-[12px] text-mute dark:text-mute-dark">
@@ -374,11 +388,30 @@ function RowShell({
       </span>
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="min-w-0 break-keep text-[16px] font-bold text-ink dark:text-ink-dark">
-            {name}
-          </span>
+          {canLocate ? (
+            <button
+              type="button"
+              data-testid="facility-locate"
+              aria-label={`${name} 지도에서 보기`}
+              onClick={() => onLocate(facilityId)}
+              className={`press ${nameClass} underline decoration-rule decoration-1 underline-offset-4 hover:decoration-ink dark:decoration-rule-dark dark:hover:decoration-ink-dark`}
+            >
+              {name}
+            </button>
+          ) : (
+            <span className={nameClass}>{name}</span>
+          )}
           {right && <span className="shrink-0">{right}</span>}
         </div>
+        {/* P-1: 구 중심 폴백 좌표를 확대해 보여 주면 없는 정밀도를 지어내는 것이 된다. */}
+        {onLocate != null && locatable === false && (
+          <p
+            data-testid="facility-locate-unavailable"
+            className="text-[12px] text-mute dark:text-mute-dark"
+          >
+            위치 근사 — 지도 확대 불가
+          </p>
+        )}
         {children}
       </div>
     </li>
@@ -391,11 +424,14 @@ export function VoucherRow({
   index,
   accessibility,
   accessError,
+  onLocate,
 }: {
   v: VoucherFacility
   index?: number
   accessibility?: FacilityAccessibility
   accessError?: boolean
+  // 패널 목록에서만 넘어온다 — 스트림 요약 카드의 행은 지도를 소유하지 않는다.
+  onLocate?: (id: string) => void
 }) {
   const isDvoucher = v.source === 'dvoucher'
   // 배지와 하단 태그를 같은 판정에서 뽑는다 — 두 곳이 각자 판단하면 모순이 생긴다(C-3).
@@ -405,6 +441,9 @@ export function VoucherRow({
       testId={isDvoucher ? 'dvoucher-facility' : 'voucher-facility'}
       index={index}
       name={v.name}
+      facilityId={v.id}
+      locatable={v.coord_source !== 'centroid'}
+      onLocate={onLocate}
       right={
         v.coord_source === 'centroid' ? null : <LocationLine coordSource={v.coord_source} dist={v.dist_km} />
       }
@@ -484,7 +523,15 @@ export function faciGbLabel(gb?: '공공' | '신고' | '등록' | null): {
   }
 }
 
-export function AltRow({ a, index }: { a: AlternativeFacility; index?: number }) {
+export function AltRow({
+  a,
+  index,
+  onLocate,
+}: {
+  a: AlternativeFacility
+  index?: number
+  onLocate?: (id: string) => void
+}) {
   const gb = faciGbLabel(a.faci_gb)
   // 공공·대안 풀에는 지원유형 조회 소스가 없다 — 원천이 준 불리언만 있으므로
   // "✓ 장애인 지원" 확언 대신 "장애인 지원(유형 미상)"으로 사실 그대로 적는다(C-3).
@@ -494,6 +541,9 @@ export function AltRow({ a, index }: { a: AlternativeFacility; index?: number })
       testId="alt-facility"
       index={index}
       name={a.name}
+      facilityId={a.id}
+      locatable={a.coord_source !== 'centroid'}
+      onLocate={onLocate}
       right={a.coord_source === 'centroid' ? null : <LocationLine coordSource={a.coord_source} dist={a.dist_km} />}
     >
       <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">

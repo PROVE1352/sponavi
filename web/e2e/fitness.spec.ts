@@ -154,6 +154,69 @@ test('AI 처방 — 항목별 근거 블록은 없다(v1.12 사용자 결정: �
   await assertNoHorizontalScroll(page)
 })
 
+// ── "왜 이 운동?" — 걷어낸 근거 블록의 새 자리(FR-08 AC8) ──────────────────────
+// 결과 카드에서 항목별 근거 블록을 삭제한 대신 "물어보면 나온다"가 사용자 전제다.
+// 그 전제를 칩·자유 입력 두 경로로 지킨다.
+
+test('처방 뒤 "왜 이 운동인지 물어보기" 칩 → 항목별 근거 + FITT 출처, 화면은 바닥', async ({
+  page,
+}) => {
+  await startPersona(page, 'P2')
+  await startFitnessThroughParq(page)
+  await submitFourWeaknesses(page)
+
+  await page.getByTestId('ai-prescribe-btn').click()
+  await expect(page.getByTestId('ai-result')).toBeVisible()
+
+  // 처방이 붙은 뒤에 칩이 따라 붙는다(카드는 더 길어지지 않는다)
+  const why = page.getByTestId('chip-act-why')
+  await expect(why).toBeVisible()
+  await why.click()
+
+  const log = stream(page)
+  // 첫 문장에서 "지금부터 근거를 열거한다"고 밝힌다(화자가 사실을 말하는 예외 구간)
+  await expect(log.getByText('추천 근거를 항목별로 적어 둘게요.')).toBeVisible()
+  // 근거 경로 · 출처 라벨 · FITT 수치 출처가 모두 한 발화 안에 있다
+  await expect(log.getByText(/근거 경로: 약점 유연성 ← 스트레칭/)).toBeVisible()
+  await expect(log.getByText(/공단 공식 기준/).last()).toBeVisible()
+  await expect(log.getByText(/전문가 큐레이션\(검증 중\)/).last()).toBeVisible()
+  await expect(log.getByText(/FITT 수치: 정부·국제 지침/)).toBeVisible()
+
+  // 근거가 없는 항목은 지어내지 않는다(fitness_map 폴백 = 순발력)
+  await expect(log.getByText(/근거 정보 없음/)).toBeVisible()
+
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          () => document.documentElement.scrollHeight - window.innerHeight - Math.round(window.scrollY),
+        ),
+      { message: '근거 발화 뒤 화면이 바닥에 있지 않다', timeout: 5_000 },
+    )
+    .toBeLessThanOrEqual(2)
+  await assertNoHorizontalScroll(page)
+})
+
+test('처방 전에 "왜 이 운동 추천했어?" 자유 입력 → 지어내지 않고 처방부터 권한다', async ({
+  page,
+}) => {
+  await startPersona(page, 'P2')
+
+  // 목모드는 LLM off(칩 모드)다 — 규칙 의도가 LLM 없이도 이 질문을 잡아야 한다.
+  await page.getByTestId('composer-input').fill('왜 이 운동 추천했어?')
+  await page.getByTestId('composer-send').click()
+
+  const log = stream(page)
+  await expect(log.getByText('먼저 체력 처방을 받으면 근거를 알려드릴 수 있어요.')).toBeVisible()
+  // 근거를 지어내지 않는다
+  await expect(log.getByText(/근거 경로:/)).toHaveCount(0)
+  // 그 자리에서 처방을 시작할 수 있다(id 꼬리표 -why 는 칩 중복 방지 규약)
+  const start = page.getByTestId('chip-act-fitness-why')
+  await expect(start).toBeVisible()
+  await start.click()
+  await expect(page.getByTestId('parq-gate')).toBeVisible()
+})
+
 test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + 패널 목록 탭 전환 (FR-09 AC1)', async ({ page }) => {
   await startPersona(page, 'P2')
   await startFitnessThroughParq(page)

@@ -33,6 +33,8 @@ import { pickAutoplayPersona, prefillMeasures, type AutoplayCommand } from './au
 import { useAutoplay } from './useAutoplay'
 import { readDemoRoute } from './route'
 import { FOCUS_BOTTOM_NOW_ID, type StreamFocus } from './ChatStream'
+import { FITT_SOURCE, rationaleLines } from '../lib/rationale'
+import type { MapLocate } from '../components/NearbyMap'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
 import {
@@ -43,6 +45,8 @@ import {
   T,
   answerEcho,
   followUpChips,
+  ruleIntent,
+  whyChips,
   matchSido,
   matchSigungu,
   nextQuestion,
@@ -188,6 +192,30 @@ export function useChatController(demo = false) {
 
   const push = useCallback(
     (...messages: ChatMessage[]) => dispatch({ type: 'push', messages }),
+    [dispatch],
+  )
+
+  // ★ 패널을 여는 행동(지도·시설 목록·처방 필터) 뒤의 화면 규칙(2026-08-30 실기기 제보):
+  //   패널은 열되 **화면은 대화 바닥으로 돌아온다**. 모바일에서 패널은 스트림 위쪽(order-1)이라
+  //   패널로 데려가면 방금 붙은 답과 액션 칩이 화면 밖으로 밀려났다 — 사용자에게는
+  //   "지도 보기를 눌렀더니 맨 위로 튀고 대화가 사라진" 화면이었다(프로덕션 scrollY 2836 → 12).
+  //   데스크톱(lg+)은 패널이 옆 열이라 애초에 옮길 것이 없다 — 바닥 복귀만으로 충분하다.
+  //   자동재생 중에는 자동재생의 앵커가 우선이다(여기서 끼어들면 두 스크롤이 다툰다).
+  const returnToBottom = useCallback(() => {
+    if (autoOwnsView.current) return
+    scrollToBottom()
+  }, [scrollToBottom])
+
+  // ★ 시설 목록에서 시설 이름을 눌렀다 = "이게 지도 어디인지 보여 달라"(2026-08-30 사용자 요청).
+  //   패널을 지도 탭으로 바꾸고 그 좌표로 확대한다. 여기서만 화면을 **패널로** 데려간다 —
+  //   지도를 보려고 누른 것이라 화면이 지도에 가 있어야 뜻이 통한다(focus: true → 모바일 한정).
+  //   봇 발화는 만들지 않는다: 말 대신 화면이 답한다(같은 사실을 두 벌로 적지 않는다).
+  const [mapLocate, setMapLocate] = useState<MapLocate | null>(null)
+  const locateFacility = useCallback(
+    (id: string) => {
+      dispatch({ type: 'setPanel', open: true, tab: 'map', focus: true })
+      setMapLocate((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }))
+    },
     [dispatch],
   )
 
@@ -380,19 +408,20 @@ export function useChatController(demo = false) {
   }, [dispatch, push])
 
   // ── 액션 헬퍼 ───────────────────────────────────────────────
-  // 지도·목록 열기. 모바일에서 패널은 스트림 위쪽에 있고 결과 도착과 함께 이미 펼쳐져 있어,
-  // 상태만 바꾸면 "눌러도 아무 일도 없는" 버튼이 된다 — focus 로 셸이 패널까지 스크롤한다.
+  // 지도·목록 열기. 패널을 열고 **화면은 바닥(방금 붙은 답 + 액션 칩)에 둔다** —
+  // 패널까지 끌고 가지 않는다(returnToBottom 주석 참조). 패널이 열렸다는 사실은 답이 말한다.
   const openPanel = useCallback(
     (tab: PanelTab) => {
       if (!state.lastAssess) {
         push(botText(T.mapNeedsResult))
         return
       }
-      dispatch({ type: 'setPanel', open: true, tab, focus: true })
+      dispatch({ type: 'setPanel', open: true, tab })
       // 탭별로 말한다 — '지도에서 보기'와 '시설 목록 보기'가 같은 문장을 내면 두 번 눌렀을 때 복붙처럼 읽힌다(실기기 제보 2026-08-28).
       push(botText(tab === 'map' ? T.mapOpened : T.listOpened))
+      returnToBottom()
     },
-    [dispatch, push, state.lastAssess],
+    [dispatch, push, returnToBottom, state.lastAssess],
   )
 
   // ── 체력 레인 3턴(PAR-Q → 측정 폼 → 결과) ──────────────────────
@@ -508,11 +537,53 @@ export function useChatController(demo = false) {
       // 고아 문장처럼 읽힌다(실기기 제보 2026-08-28). 누른 행동을 먼저 사용자 버블로 남긴다.
       push(userText(`이 운동 되는 근처 강좌 보기 · ${sports.join(' · ')}`))
       dispatch({ type: 'setFilterSports', sports })
-      dispatch({ type: 'setPanel', open: true, tab: 'list', focus: true })
+      dispatch({ type: 'setPanel', open: true, tab: 'list' })
       push(botText(T.fitnessFilterApplied(sports)))
+      returnToBottom()
     },
-    [dispatch, push],
+    [dispatch, push, returnToBottom],
   )
+
+  // ── "왜 이 운동?" (FR-08 AC8) ─────────────────────────────────
+  // 항목별 근거 블록은 결과 카드에서 걷어냈다(2026-08-30 사용자 결정 — 카드가 길어져 정작
+  // 처방이 안 읽혔다). 대신 물으면 답한다. 문장은 lib/rationale 이 만들고(화면 배지와 같은 사전),
+  // 여기서는 "언제 말할지"만 정한다.
+  const answerWhy = useCallback(() => {
+    const rx = lane.ai?.처방 ?? []
+    // 처방이 없으면 지어내지 않는다 — 먼저 처방을 받자고 말하고 그 자리에서 시작할 수 있게 한다.
+    if (rx.length === 0) {
+      push(botText(T.whyNeedsPrescription), {
+        id: nextId('q'),
+        role: 'bot',
+        kind: 'chip_question',
+        question: 'greet',
+        text: T.followUpPrompt,
+        // id 꼬리표(-why)는 같은 칩이 스트림에 두 번 뜰 때의 충돌 방지 규약 그대로다.
+        chips: [{ id: 'act-fitness-why', label: '체력 처방 시작', action: { kind: 'start_fitness' } }],
+        select: 'action',
+      })
+      return
+    }
+    // 항목마다 한 줄 + 마지막에 FITT 수치 출처 한 줄(항목마다 반복하지 않는다).
+    push(botText([T.whyIntro, ...rationaleLines(rx), FITT_SOURCE].join('\n')))
+  }, [lane.ai, push])
+
+  // AI 처방이 도착하면 "왜 이 운동인지 물어보기"를 한 줄로 붙인다 — 걷어낸 근거 블록의 새 자리다.
+  // 처방 1회당 한 번만(같은 응답 객체면 다시 붙이지 않는다).
+  const whyOffered = useRef<unknown>(null)
+  useEffect(() => {
+    if (!lane.ai || whyOffered.current === lane.ai) return
+    whyOffered.current = lane.ai
+    push({
+      id: nextId('q'),
+      role: 'bot',
+      kind: 'chip_question',
+      question: 'greet',
+      text: T.whyOffer,
+      chips: whyChips(),
+      select: 'action',
+    })
+  }, [lane.ai, push])
 
   // 카드 전체 렌더(칩 FAQ · answer 없는 라우팅). 접지 답변이 있는 턴은 컴팩트 출처 카드를
   // 직접 붙이므로 이 경로를 타지 않는다(FR-13 AC9).
@@ -649,6 +720,11 @@ export function useChatController(demo = false) {
           startFitness({ focus: chip.id !== AUTOPLAY_FITNESS_CHIP.id })
           return
         }
+        case 'why_exercise': {
+          push(userText(chip.label))
+          answerWhy()
+          return
+        }
         case 'restart': {
           push(userText(chip.label))
           if (a.step === 'ask') askRestart()
@@ -661,6 +737,7 @@ export function useChatController(demo = false) {
     [
       advance,
       answerFaq,
+      answerWhy,
       askQuestion,
       askRestart,
       dispatch,
@@ -742,6 +819,12 @@ export function useChatController(demo = false) {
       const text = raw.trim()
       if (text === '' || state.pending) return
       push(userText(text))
+
+      // 규칙 의도가 LLM 보다 먼저다 — 칩 모드(LLM off)에서도 같은 답을 내야 하는 의도다.
+      if (ruleIntent(text) === 'why_exercise') {
+        answerWhy()
+        return
+      }
 
       if (state.llmMode === 'chips') {
         // 지역 질문이 열려 있으면 강등 안내 대신 로컬 매칭으로 답한다(칩과 동일 동작).
@@ -869,6 +952,9 @@ export function useChatController(demo = false) {
           case 'start_fitness':
             startFitness()
             return
+          case 'why_exercise':
+            answerWhy()
+            return
           case 'show_map':
             openPanel('map')
             return
@@ -891,6 +977,7 @@ export function useChatController(demo = false) {
     [
       advance,
       answerFaq,
+      answerWhy,
       askRestart,
       degrade,
       dispatch,
@@ -1011,6 +1098,9 @@ export function useChatController(demo = false) {
     streamFocus,
     // "맨 아래로" 버튼이 누르는 액션 — 문서 바닥 + 바닥 추종 재개.
     scrollToBottom,
+    // 시설 목록 → 지도 확대(패널 지도 탭 + flyTo + 마커 강조).
+    mapLocate,
+    locateFacility,
     // 3A: 체력 폼이 마운트될 때 쓸 데모 프리필(선택된 페르소나의 측정값).
     fitnessPrefill: lane.initialValues,
     // W2: 자동재생 진행 여부(상태 필) + PAR-Q 프리셋 표기.

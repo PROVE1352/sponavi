@@ -25,7 +25,8 @@ const STEP_ANCHOR: Record<AutoplayCommand['kind'], string | null> = {
   start_fitness: '[data-testid="parq-gate"]',
   pass_parq: '[data-testid="fitness-form-card"]',
   submit_form: '[data-testid="fitness-result"]',
-  // 필터 적용은 기존 applyFilter 가 패널까지 데려간다(panelFocus) — 여기서 또 옮기지 않는다.
+  // 필터 적용은 화면을 옮기지 않는다 — 자동재생이 화면을 소유하는 동안
+  //   applyFilter 의 바닥 복귀도 꺼져 있어(autoOwnsView) 체력 결과 앵커에 그대로 머문다.
   apply_filter: null,
 }
 

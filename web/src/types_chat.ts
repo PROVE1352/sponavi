@@ -77,6 +77,8 @@ export type ChatIntent =
   | 'start_fitness'
   | 'show_map'
   | 'restart'
+  // FR-08 AC8: 처방 근거를 묻는 의도("왜 이 운동 추천했어?"). 규칙 NLU 가 먼저 잡는다.
+  | 'why_exercise'
   | 'unknown'
 
 export interface RegionCandidate {
@@ -142,6 +144,8 @@ export type ChipAction =
   | { kind: 'faq'; faqKey: string }
   | { kind: 'open_panel'; tab: PanelTab }
   | { kind: 'start_fitness' }
+  // FR-08 AC8: 처방 근거를 채팅으로 묻는다(결과 카드의 항목별 근거 블록을 대신한다).
+  | { kind: 'why_exercise' }
   | { kind: 'restart'; step: 'ask' | 'yes' | 'no' }
 
 export interface Chip {
@@ -323,9 +327,11 @@ export interface ChatState {
   slots: ChatSlots
   phase: ChatPhase
   panel: { open: boolean; tab: PanelTab }
-  // "패널을 봐 달라"는 명시적 요청이 몇 번 있었는가(지도/목록 버튼·칩·처방 연동).
-  // 모바일에서 패널은 스트림 위쪽에 있어 이미 열려 있으면 눌러도 아무 일도 없어 보인다 —
-  // 이 카운터가 오를 때마다 셸이 패널로 부드럽게 스크롤한다(v1.7 실기기 피드백).
+  // "패널을 **봐야만 하는**" 요청이 몇 번 있었는가. 이 카운터가 오를 때마다 셸이 모바일(<lg)에서
+  // 패널로 부드럽게 스크롤한다(데스크톱은 옆 열이라 옮길 것이 없다).
+  // ★ 2026-08-30: 지도/목록 버튼·칩·처방 필터는 더 이상 여기 오지 않는다 — 패널만 열고
+  //   화면은 대화 바닥에 남긴다(그쪽으로 끌고 가면 방금 붙은 답과 액션 칩이 화면 밖으로 밀렸다).
+  //   지금 이 경로를 쓰는 것은 "시설 목록에서 시설 누르기"(지도 확대) 하나뿐이다.
   panelFocus: number
   // 체력 처방 → 근처 자원 종목 필터(구 ResultView 소유분 이주).
   filterSports?: string[]

@@ -36,11 +36,12 @@ export function Composer({
     <div
       ref={boxRef}
       data-testid="composer"
-      className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95"
+      className="sticky bottom-0 z-30 -mx-5 border-t border-rule bg-paper px-5 pt-3 pb-4 dark:border-rule-dark dark:bg-paper-dark"
     >
-      <form onSubmit={submit} className="flex items-end gap-2">
+      <form onSubmit={submit} className="flex items-end gap-2.5">
         <label className="min-w-0 flex-1">
           <span className="sr-only">메시지 입력</span>
+          {/* 상자 없는 입력 — 밑줄 한 줄만(B·종이 메모). 배경도 투명해 종이 위에 바로 쓴다. */}
           <input
             type="text"
             value={text}
@@ -48,23 +49,39 @@ export function Composer({
             data-testid="composer-input"
             placeholder="메시지를 입력하세요"
             autoComplete="off"
-            className="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-base text-slate-900 transition-colors duration-200 placeholder:text-slate-500 hover:border-slate-400 dark:border-slate-700 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400 dark:hover:border-slate-600"
+            className="min-h-11 w-full rounded-none border-0 border-b-[1.5px] border-ink bg-transparent px-0.5 py-3 text-base text-ink placeholder:text-mute dark:border-ink-dark dark:text-ink-dark dark:placeholder:text-mute-dark"
           />
         </label>
         <button
           type="submit"
           data-testid="composer-send"
           disabled={pending || text.trim() === ''}
-          className="press inline-flex min-h-11 shrink-0 items-center rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+          className="press grid h-11 w-11 shrink-0 place-items-center rounded-full bg-ink text-paper disabled:opacity-40 dark:bg-ink-dark dark:text-paper-dark"
         >
-          보내기
+          {/* 라벨은 낭독으로 남기고(문구 그대로), 화면에는 위 화살표만 — 유일한 원형 예외. */}
+          <span className="sr-only">보내기</span>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            className="h-[18px] w-[18px]"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
       </form>
 
       {llmMode === 'chips' && (
-        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-slate-600 dark:text-slate-400">
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-snug text-mute dark:text-mute-dark">
           <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <b data-testid="chips-mode-label" className="text-amber-700 dark:text-amber-300">
+          <b
+            data-testid="chips-mode-label"
+            className="font-normal text-accent-ink dark:text-accent-ink-dark"
+          >
             {T.degraded}
           </b>
         </p>

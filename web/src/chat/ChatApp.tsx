@@ -27,22 +27,18 @@ function Header({
   onToggleTheme: () => void
 }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/90">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5">
-        <a href="#top" className="flex min-w-0 items-center gap-2.5" aria-label="되나요 맨 위로">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-600 text-lg font-black text-white">
-            S
+    // 제호 아래 2px 잉크 괘선 — 화면에서 가장 굵은 선이 여기 하나다(B·종이 메모).
+    <header className="sticky top-0 z-40 border-b-2 border-ink bg-paper dark:border-ink-dark dark:bg-paper-dark">
+      <div className="mx-auto flex max-w-7xl items-baseline justify-between gap-3 px-5 pt-4 pb-2.5">
+        <a href="#top" className="flex min-w-0 items-baseline gap-2.5" aria-label="되나요 맨 위로">
+          <span className="font-serif shrink-0 text-[22px] leading-none font-extrabold tracking-[-0.02em] text-ink dark:text-ink-dark">
+            되나요
           </span>
-          <span className="min-w-0 leading-none">
-            <span className="block truncate text-base font-black tracking-tight text-slate-900 dark:text-white">
-              되나요
-            </span>
-            <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-600 dark:text-slate-400">
-              스포츠 복지, 되는지 바로 확인
-            </span>
+          <span className="min-w-0 truncate text-[12px] text-mute dark:text-mute-dark">
+            스포츠 복지, 되는지 바로 확인
           </span>
         </a>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-baseline gap-3">
           {/* 목모드 "데모 데이터" 배지는 데모 페이지 소관(FR-12 AC5 v1.4) */}
           {IS_MOCK && demo && (
             <span data-testid="demo-badge">
@@ -55,7 +51,7 @@ function Header({
             type="button"
             onClick={onToggleTheme}
             aria-label={dark ? '라이트 모드로 전환' : '다크 모드로 전환'}
-            className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-slate-300 px-4 text-sm font-semibold text-slate-700 transition-colors duration-200 ease-out hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            className="press inline-flex min-h-11 items-center bg-transparent text-[13px] text-mute underline decoration-1 underline-offset-4 hover:text-ink dark:text-mute-dark dark:hover:text-ink-dark"
           >
             {dark ? '라이트' : '다크'}
           </button>
@@ -71,9 +67,9 @@ function Footer({ health }: { health: HealthResponse | null }) {
   return (
     <footer
       data-testid="page-footer"
-      className="mt-auto border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60"
+      className="mt-auto border-t border-rule bg-paper dark:border-rule-dark dark:bg-paper-dark"
     >
-      <div className="mx-auto w-full max-w-7xl space-y-1.5 px-4 py-4 text-[11px] leading-relaxed text-slate-600 dark:text-slate-400">
+      <div className="mx-auto w-full max-w-7xl space-y-1.5 px-5 py-4 text-[11px] leading-relaxed text-mute dark:text-mute-dark">
         <p>
           <span data-testid="footer-data-built">데이터 기준 {dataBuilt}</span>
           {version && <span data-testid="footer-version"> · v{version}</span>} · 출처: 국민체육진흥공단
@@ -169,21 +165,25 @@ function ChatShell({ demo }: { demo: boolean }) {
   }
 
   return (
-    <div id="top" className="flex min-h-dvh flex-col overflow-x-clip">
+    <div
+      id="top"
+      className="flex min-h-dvh flex-col overflow-x-clip bg-paper text-ink dark:bg-paper-dark dark:text-ink-dark"
+    >
       {!online && (
+        // 알약·그림자 없이 괘선 한 줄 + tint 바탕. 색맹 안전: 아이콘 + 문장 병기.
         <div
           role="status"
           data-testid="offline-banner"
-          className="flex items-center justify-center gap-2 bg-amber-400 px-4 py-1.5 text-center text-xs font-semibold text-amber-950"
+          className="flex items-center justify-center gap-2 border-b border-rule bg-tint px-5 py-2 text-center text-xs text-ink dark:border-rule-dark dark:bg-tint-dark dark:text-ink-dark"
         >
-          <WarnIcon className="h-3.5 w-3.5 shrink-0" />
+          <WarnIcon className="h-3.5 w-3.5 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
           오프라인 상태입니다 — 네트워크 연결을 확인해 주세요. 다시 연결되면 자동으로 사라집니다.
         </div>
       )}
 
       <Header demo={demo} dark={dark} onToggleTheme={toggleTheme} />
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 lg:flex-row lg:items-start lg:gap-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-5 lg:flex-row lg:items-start lg:gap-6">
         {state.lastAssess && (
           <ContextPanel
             anchorRef={panelRef}
@@ -229,9 +229,9 @@ function ChatShell({ demo }: { demo: boolean }) {
         <div
           data-testid="autoplay-status"
           role="status"
-          className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-4"
+          className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-5"
         >
-          <span className="rounded-full bg-slate-900/85 px-3.5 py-1.5 text-xs font-semibold text-white shadow-card dark:bg-white/90 dark:text-slate-900">
+          <span className="rounded-[3px] border border-rule bg-tint px-3.5 py-1.5 text-xs text-ink dark:border-rule-dark dark:bg-tint-dark dark:text-ink-dark">
             {AUTOPLAY_STATUS_TEXT}
           </span>
         </div>

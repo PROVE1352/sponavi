@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChatMessage } from '../types_chat'
-import { MessageView, NabiAvatar, type MessageHandlers } from './messages'
+import { MessageView, type MessageHandlers } from './messages'
 import { BOT_NAME, T } from './policy'
 import { useChat } from './store'
 import { prefersReducedMotion, typingDurationMs } from './Typewriter'
@@ -148,21 +148,19 @@ function useRevealQueue(messages: ChatMessage[]) {
 // 스크린리더에는 완성된 문장만 1회 전달된다(FR-12 AC8·AC10).
 function TypingIndicator() {
   return (
+    // 말풍선 없음 — 종이 위에 점 세 개만 찍힌다(B·종이 메모).
     <div
-      className="msg-in flex items-start gap-2"
+      className="msg-in flex items-center gap-1.5"
       data-testid="typing-indicator"
       aria-hidden="true"
     >
-      <NabiAvatar />
-      <div className="inline-flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-slate-700 dark:bg-slate-900">
-        {[0, 150, 300].map((delay) => (
-          <span
-            key={delay}
-            className="typing-dot h-1.5 w-1.5 rounded-full bg-slate-400"
-            style={{ animationDelay: `${delay}ms` }}
-          />
-        ))}
-      </div>
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          className="typing-dot h-1.5 w-1.5 rounded-full bg-mute dark:bg-mute-dark"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
     </div>
   )
 }
@@ -351,7 +349,8 @@ export function ChatStream({
       data-testid="chat-stream"
       // 순차 등장이 아직 진행 중인가(e2e 앵커 — 고정 sleep 없이 "연출 끝"을 기다린다).
       data-sequencing={settled ? 'false' : 'true'}
-      className="flex min-w-0 flex-col gap-4 py-4"
+      // flex-1 = 대화가 짧아도 컴포저가 종이 아래끝에 앉는다(MainChat.dc.html 의 프레임).
+      className="flex min-w-0 flex-1 flex-col gap-[18px] pt-[18px] pb-3"
     >
       {visible.map((m, i) => (
         // msg-in = 등장 모션(fade + 8px 상승, 200ms ease-out · FR-12 AC11).
@@ -376,18 +375,19 @@ export function ChatStream({
       {indicator && <TypingIndicator />}
 
       {pending && (
-        <div className="msg-in flex items-start gap-2" data-testid="chat-pending">
-          <NabiAvatar />
-          <div className="min-w-0">
-            <p className="mb-1 text-[11px] font-semibold text-slate-600 dark:text-slate-400">{BOT_NAME}</p>
-            <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-card dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              <span className="flex gap-1" aria-hidden="true">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400" />
-              </span>
-              {T.assessing}
-            </div>
+        // 판정 대기 = 한 줄 각주 + 오른쪽으로 뻗는 1px 괘선(Main.dc.html 의 확인 중 줄).
+        <div className="msg-in flex min-w-0 flex-col gap-[5px]" data-testid="chat-pending">
+          <span className="text-[11px] tracking-[0.14em] text-mute dark:text-mute-dark">
+            {BOT_NAME}
+          </span>
+          <div className="flex items-center gap-2.5">
+            <span className="flex shrink-0 gap-1" aria-hidden="true">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mute dark:bg-mute-dark" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mute dark:bg-mute-dark" />
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-mute dark:bg-mute-dark" />
+            </span>
+            <span className="text-[13px] text-mute dark:text-mute-dark">{T.assessing}</span>
+            <span aria-hidden="true" className="h-px flex-1 bg-rule dark:bg-rule-dark" />
           </div>
         </div>
       )}

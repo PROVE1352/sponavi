@@ -50,12 +50,12 @@ export function ContextPanel({
     >
       <div
         ref={anchorRef}
-        className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900"
+        className="border-t-2 border-ink bg-paper dark:border-ink-dark dark:bg-paper-dark"
       >
         {/* 요약 바 — 모바일에서는 접힘 상태의 존재감, 데스크톱에서는 헤더 */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-rule py-2.5 dark:border-rule-dark">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="text-sm font-bold text-slate-900 dark:text-white">근처 자원</span>
+            <span className="font-serif text-[16px] font-extrabold text-ink dark:text-ink-dark">근처 자원</span>
             {/* FR-04 AC6: 잘린 목록 길이를 구 단위 카운트인 척 쓰지 않는다(요약 바도 같은 문구) */}
             <Badge tone="brand">{facilityCountText(req, data)}</Badge>
             <Badge tone="ok">
@@ -68,7 +68,7 @@ export function ContextPanel({
             onClick={() => onToggle(!open)}
             aria-expanded={open}
             aria-controls={`${baseId}-body`}
-            className="inline-flex min-h-11 items-center rounded-full border-[1.5px] border-slate-300 px-4 text-xs font-semibold text-slate-700 transition-colors duration-200 ease-out hover:border-slate-400 hover:bg-slate-100 lg:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800"
+            className="press inline-flex min-h-11 items-center bg-transparent text-[13px] text-mute underline decoration-1 underline-offset-4 hover:text-ink lg:hidden dark:text-mute-dark dark:hover:text-ink-dark"
           >
             {open ? '접기' : '지도·목록 펼치기'}
           </button>
@@ -83,7 +83,7 @@ export function ContextPanel({
           data-testid="panel-body"
           className={open ? 'sheet-slide-down block' : 'hidden lg:block'}
         >
-          <div role="tablist" aria-label="패널 보기 전환" className="flex gap-1 px-3 pt-3">
+          <div role="tablist" aria-label="패널 보기 전환" className="flex gap-5 pt-3">
             <button
               type="button"
               role="tab"
@@ -93,10 +93,10 @@ export function ContextPanel({
               data-testid="panel-tab-map"
               onClick={() => onTab('map')}
               className={
-                'min-h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors duration-200 ease-out ' +
+                'font-serif min-h-11 bg-transparent px-0.5 text-[16px] font-extrabold ' +
                 (tab === 'map'
-                  ? 'bg-brand-600 text-white'
-                  : 'border-[1.5px] border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800')
+                  ? 'border-b-[2.5px] border-ink text-ink dark:border-ink-dark dark:text-ink-dark'
+                  : 'border-b-[2.5px] border-transparent text-mute hover:text-ink dark:text-mute-dark dark:hover:text-ink-dark')
               }
             >
               지도
@@ -110,10 +110,10 @@ export function ContextPanel({
               data-testid="panel-tab-list"
               onClick={() => onTab('list')}
               className={
-                'min-h-11 flex-1 rounded-full px-3 text-sm font-semibold transition-colors duration-200 ease-out ' +
+                'font-serif min-h-11 bg-transparent px-0.5 text-[16px] font-extrabold ' +
                 (tab === 'list'
-                  ? 'bg-brand-600 text-white'
-                  : 'border-[1.5px] border-slate-300 text-slate-700 hover:border-slate-400 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-800')
+                  ? 'border-b-[2.5px] border-ink text-ink dark:border-ink-dark dark:text-ink-dark'
+                  : 'border-b-[2.5px] border-transparent text-mute hover:text-ink dark:text-mute-dark dark:hover:text-ink-dark')
               }
             >
               시설 목록
@@ -126,10 +126,10 @@ export function ContextPanel({
             id={mapPanelId}
             aria-labelledby={`${mapPanelId}-tab`}
             hidden={tab !== 'map'}
-            className="p-3"
+            className="py-3"
           >
             <NearbyMap personLoc={personLocOf(req)} nearby={data.nearby} />
-            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+            <p className="mt-2 text-xs text-mute dark:text-mute-dark">
               지도 없이도 같은 정보를 시설 목록과 대화 카드에서 확인하실 수 있어요.
             </p>
           </div>
@@ -139,7 +139,7 @@ export function ContextPanel({
             id={listPanelId}
             aria-labelledby={`${listPanelId}-tab`}
             hidden={tab !== 'list'}
-            className="max-h-[70dvh] overflow-y-auto p-3 lg:max-h-[calc(100dvh-16rem)]"
+            className="max-h-[70dvh] overflow-y-auto py-3 lg:max-h-[calc(100dvh-16rem)]"
           >
             <NearbyList
               nearby={data.nearby}

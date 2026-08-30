@@ -96,7 +96,8 @@ export function ScrollToBottomFab({
       tabIndex={visible ? 0 : -1}
       onClick={onPress}
       style={{ bottom: `${offset}px` }}
-      className="press fab-pop fixed right-4 z-40 grid h-11 w-11 place-items-center rounded-full bg-brand-600 text-white shadow-card hover:bg-brand-700"
+      // 그림자 없음 — 잉크 원판 + 1px 괘선 테두리만으로 종이에서 떠 있는 것을 표현한다.
+      className="press fab-pop fixed right-5 z-40 grid h-11 w-11 place-items-center rounded-full border border-rule bg-ink text-paper dark:border-rule-dark dark:bg-ink-dark dark:text-paper-dark"
     >
       <ChevronDownIcon className="h-5 w-5" />
     </button>

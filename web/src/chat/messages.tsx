@@ -46,57 +46,8 @@ function useIsWide(): boolean {
   return wide
 }
 
-// 화자 아바타(나비 모양 SVG, 이름과 무관한 심볼) — 인라인 SVG 단색 투톤(이모지·그라데이션 금지).
-// 액션 블루 디스크 위에 흰 나비: 윗날개는 불투명, 아랫날개는 반투명(투톤).
-export function NabiAvatar({ className = 'h-7 w-7' }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`grid shrink-0 place-items-center rounded-full bg-brand-600 text-white ${className}`}
-    >
-      <svg viewBox="0 0 24 24" fill="none" className="h-[18px] w-[18px]">
-        {/* 윗날개 한 쌍 */}
-        <path
-          d="M11.2 8.5C9.7 6 7 4.8 5.15 5.9 3.35 7 3.45 9.7 5.05 11.25c1.05 1.05 3.1 1.7 6.15 1.95V8.5Z"
-          fill="currentColor"
-        />
-        <path
-          d="M12.8 8.5c1.5-2.5 4.2-3.7 6.05-2.6 1.8 1.1 1.7 3.8.1 5.35-1.05 1.05-3.1 1.7-6.15 1.95V8.5Z"
-          fill="currentColor"
-        />
-        {/* 아랫날개 한 쌍(반투명 = 투톤) */}
-        <path
-          d="M11.2 14.05c-2.6.2-4.25.95-4.95 2.15-.8 1.4.1 3.05 1.75 3.25 1.7.2 2.9-1.35 3.2-3.35v-2.05Z"
-          fill="currentColor"
-          fillOpacity="0.62"
-        />
-        <path
-          d="M12.8 14.05c2.6.2 4.25.95 4.95 2.15.8 1.4-.1 3.05-1.75 3.25-1.7.2-2.9-1.35-3.2-3.35v-2.05Z"
-          fill="currentColor"
-          fillOpacity="0.62"
-        />
-        {/* 몸통 + 더듬이 */}
-        <path
-          d="M12 7.8v9.1M12 7.8c-.1-1-.8-1.7-1.8-1.85M12 7.8c.1-1 .8-1.7 1.8-1.85"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    </span>
-  )
-}
-
-function UserIcon({ className = 'h-4 w-4' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm0 1.5c-3 0-5.5 1.7-5.5 3.8 0 .9.7 1.2 1.5 1.2h8c.8 0 1.5-.3 1.5-1.2 0-2.1-2.5-3.8-5.5-3.8Z" />
-    </svg>
-  )
-}
-
-// 봇 레인: 아바타 + 발신자명 + 내용. 내용은 버블이거나(짧은 말) 카드다(사실).
-// 연속된 화자 발화는 아바타·이름을 한 번만 보여 준다(첫 버블에만).
+// 봇 레인: 아바타 없음(B·종이 메모 — 말풍선도 아바타도 두지 않는다).
+// 봇 턴의 첫 문장 위에만 11px 자간 0.14em 뮤트 "되나요" 라벨이 붙는다.
 export function BotLane({
   children,
   label,
@@ -107,29 +58,26 @@ export function BotLane({
   showSender?: boolean
 }) {
   return (
-    <div className="flex w-full min-w-0 items-start gap-2">
-      {showSender ? <NabiAvatar /> : <span aria-hidden="true" className="w-7 shrink-0" />}
-      <div className="min-w-0 flex-1">
-        {showSender && (
-          <p className="mb-1 text-[11px] font-semibold tracking-wide text-slate-600 dark:text-slate-400">
-            {label ?? BOT_NAME}
-          </p>
-        )}
-        {children}
-      </div>
+    <div className="flex w-full min-w-0 flex-col gap-[5px]">
+      {showSender && (
+        <span className="text-[11px] tracking-[0.14em] text-mute dark:text-mute-dark">
+          {label ?? BOT_NAME}
+        </span>
+      )}
+      {children}
     </div>
   )
 }
 
+// 봇 발화 = 말풍선 없는 왼쪽 본문 16px/1.7. 폰에서는 한 줄이 330px 를 넘지 않는다.
+// notice 톤만 예외로 tint 바탕 + 1px 괘선 상자(radius 3) — 상자가 아니라 강조 메모다.
 function BotBubble({ children, tone = 'plain' }: { children: ReactNode; tone?: 'plain' | 'notice' }) {
   const styles =
     tone === 'notice'
-      ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-100'
-      : 'border-slate-200 bg-white text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100'
+      ? 'rounded-[3px] border border-rule bg-tint px-3 py-2.5 text-ink dark:border-rule-dark dark:bg-tint-dark dark:text-ink-dark'
+      : 'text-ink dark:text-ink-dark'
   return (
-    <div
-      className={`max-w-[46rem] rounded-2xl rounded-tl-md border px-4 py-3 text-base leading-[1.6] shadow-card ${styles}`}
-    >
+    <div className={`max-w-[330px] text-[16px] leading-[1.7] lg:max-w-[46rem] ${styles}`}>
       {children}
     </div>
   )
@@ -137,19 +85,41 @@ function BotBubble({ children, tone = 'plain' }: { children: ReactNode; tone?: '
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex w-full min-w-0 items-start justify-end gap-2">
-      <div className="max-w-[36rem] min-w-0 rounded-2xl rounded-tr-md bg-brand-700 px-4 py-2.5 text-base leading-[1.6] text-white shadow-card">
+    <div className="flex w-full min-w-0 justify-end">
+      <div className="max-w-[85%] min-w-0 rounded-[3px] bg-tint px-3 py-[7px] text-[15px] leading-[1.5] text-ink dark:bg-tint-dark dark:text-ink-dark">
         <span className="sr-only">내가 보낸 말: </span>
         <span className="break-words">{text}</span>
       </div>
-      <span
-        aria-hidden="true"
-        className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-700 text-white dark:bg-slate-600"
-      >
-        <UserIcon className="h-4 w-4" />
-      </span>
     </div>
   )
+}
+
+// ── 칩 두 종류(B·종이 메모) ──────────────────────────────────────────────
+// 생김새는 aria 의 select 가 아니라 **칩이 하는 일**(action.kind)이 정한다 —
+// 퀵스타트·재시작 확인은 radiogroup 이 아닌 'action' 묶음이지만 "고르는 답"이기 때문이다.
+//   answer = 답을 고르는 칩(연령·성별·지역·소득·장애 · 퀵스타트 · 예/아니요)
+//            → 1.5px 잉크 네모(radius 3), 고른 것은 잉크 채움 + 종이 글자
+//   action = 행동 칩(지도·목록·체력·처음부터·FAQ · 답 고치기)
+//            → 테두리 없는 밑줄 텍스트 버튼(인주색), 44px 높이는 그대로
+type ChipStyle = 'answer' | 'action'
+
+function chipStyleOf(c: Chip): ChipStyle {
+  switch (c.action.kind) {
+    case 'answer':
+    case 'persona':
+    case 'manual_start':
+      return 'answer'
+    // "처음부터 다시"는 행동, 그 뒤 예/아니요는 고르는 답이다.
+    case 'restart':
+      return c.action.step === 'ask' ? 'action' : 'answer'
+    default:
+      return 'action'
+  }
+}
+
+// 행동 칩 묶음에서 딱 하나만 잉크 700 으로 세운다(Main.dc.html: "체력 처방 시작").
+function isEmphasizedAction(c: Chip): boolean {
+  return c.action.kind === 'start_fitness'
 }
 
 // 칩 그룹. 단일 선택은 radiogroup 시맨틱, 즉시 실행 버튼은 group.
@@ -168,14 +138,27 @@ export function ChipRow({
 }) {
   if (chips.length === 0) return null
   const single = select === 'single'
+  // 밑줄 텍스트만 있는 줄은 네모 칩보다 넉넉한 가로 간격을 쓴다(Main.dc.html: 6px 18px).
+  const allAction = chips.every((c) => chipStyleOf(c) === 'action')
   return (
     <div
       role={single ? 'radiogroup' : 'group'}
       aria-label={ariaLabel}
-      className="flex flex-wrap gap-2"
+      className={'flex flex-wrap ' + (allAction ? 'gap-x-[18px] gap-y-1.5' : 'gap-2')}
     >
       {chips.map((c) => {
         const chosen = answeredLabel != null && answeredLabel === c.label
+        const style = chipStyleOf(c)
+        const cls =
+          style === 'answer'
+            ? 'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-[3px] border-[1.5px] px-3.5 py-2 text-left text-sm disabled:opacity-60 ' +
+              (chosen
+                ? 'border-ink bg-ink text-paper dark:border-ink-dark dark:bg-ink-dark dark:text-paper-dark'
+                : 'border-ink bg-transparent text-ink hover:bg-tint dark:border-ink-dark dark:text-ink-dark dark:hover:bg-tint-dark')
+            : 'press inline-flex min-h-11 max-w-full flex-col justify-center border-0 bg-transparent px-0.5 text-left text-[15px] underline decoration-[1.5px] underline-offset-[5px] disabled:opacity-60 ' +
+              (isEmphasizedAction(c)
+                ? 'font-bold text-ink hover:text-mute dark:text-ink-dark dark:hover:text-mute-dark'
+                : 'text-accent-ink hover:text-ink dark:text-accent-ink-dark dark:hover:text-ink-dark')
         return (
           <button
             key={c.id}
@@ -184,22 +167,20 @@ export function ChipRow({
             role={single ? 'radio' : undefined}
             aria-checked={single ? chosen : undefined}
             onClick={() => onPick(c)}
-            className={
-              'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-full border-[1.5px] px-4 py-2 text-left text-sm font-semibold transition-colors duration-200 ease-out disabled:opacity-60 ' +
-              (chosen
-                ? 'border-brand-600 bg-brand-600 text-white shadow-card'
-                : 'border-brand-200 bg-white text-brand-800 hover:border-brand-300 hover:bg-brand-50 dark:border-brand-500/40 dark:bg-slate-900 dark:text-brand-100 dark:hover:border-brand-300/60 dark:hover:bg-brand-700/25')
-            }
+            className={cls}
           >
             <span className="inline-flex items-center gap-1.5">
-              {chosen && <CheckIcon className="h-4 w-4 shrink-0" />}
+              {/* 색맹 안전: 채움만이 아니라 체크 아이콘으로도 "고름"을 말한다 */}
+              {chosen && style === 'answer' && <CheckIcon className="h-4 w-4 shrink-0" />}
               <span className="break-keep">{c.label}</span>
             </span>
             {c.hint && (
               <span
                 className={
-                  'mt-0.5 text-xs font-normal break-keep ' +
-                  (chosen ? 'text-brand-50' : 'text-slate-600 dark:text-slate-400')
+                  'mt-0.5 text-xs break-keep no-underline ' +
+                  (chosen && style === 'answer'
+                    ? 'text-paper dark:text-paper-dark'
+                    : 'text-mute dark:text-mute-dark')
                 }
               >
                 {c.hint}
@@ -250,9 +231,9 @@ function ChipQuestion({
           ? msg.answeredLabel && (
               <p
                 data-testid="chip-answered"
-                className="mt-1.5 inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-400"
+                className="mt-1.5 inline-flex items-center gap-1 text-xs text-mute dark:text-mute-dark"
               >
-                <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <CheckIcon className="h-3.5 w-3.5 text-ok dark:text-ok-dark" />
                 {msg.answeredLabel} 선택함
               </p>
             )
@@ -280,6 +261,10 @@ function ChipQuestion({
 // 시설 미리보기 개수는 두 형태가 같다.
 const VOUCHER_PREVIEW = 3
 const ALT_PREVIEW = 2
+
+// 덱 슬라이드 공통: 둥근 카드가 아니라 2px 잉크 괘선으로 여는 섹션(B·종이 메모).
+// 스냅·폭은 index.css 의 .deck-track > * 가 계속 소유한다 — 여기서는 경계만 바꾼다.
+const DECK_SLIDE_CLS = 'min-w-0 border-t-2 border-ink pt-3 dark:border-ink-dark'
 
 const ELIGIBILITY_NOTE = (
   <>
@@ -316,7 +301,7 @@ function FacilityRest({ data }: { data: AssessResponse }) {
   const restA = Math.max(0, data.nearby.alternatives.length - ALT_PREVIEW)
   if (restV === 0 && restA === 0) return null
   return (
-    <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+    <p className="mt-2 text-xs text-mute dark:text-mute-dark">
       나머지 {restV > 0 ? `이용권 가맹 ${restV}곳` : ''}
       {restV > 0 && restA > 0 ? ' · ' : ''}
       {restA > 0 ? `공공·대안 ${restA}곳` : ''}은 시설 목록에서 볼 수 있어요.
@@ -324,14 +309,18 @@ function FacilityRest({ data }: { data: AssessResponse }) {
   )
 }
 
+// 지도·목록 열기 = 행동 칩과 같은 밑줄 텍스트 버튼(칩 규칙과 한 벌).
+const ACTION_LINK_CLS =
+  'press inline-flex min-h-11 items-center border-0 bg-transparent px-0.5 text-[15px] text-accent-ink underline decoration-[1.5px] underline-offset-[5px] hover:text-ink dark:text-accent-ink-dark dark:hover:text-ink-dark'
+
 function FacilityActions({ onOpenPanel }: { onOpenPanel: (tab: 'map' | 'list') => void }) {
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="mt-3 flex flex-wrap gap-x-[18px] gap-y-1.5">
       <button
         type="button"
         data-testid="open-map-panel"
         onClick={() => onOpenPanel('map')}
-        className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        className={ACTION_LINK_CLS}
       >
         지도에서 보기
       </button>
@@ -339,7 +328,7 @@ function FacilityActions({ onOpenPanel }: { onOpenPanel: (tab: 'map' | 'list') =
         type="button"
         data-testid="open-list-panel"
         onClick={() => onOpenPanel('list')}
-        className="press inline-flex min-h-11 items-center gap-1.5 rounded-lg border-[1.5px] border-brand-500 px-4 py-2 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
+        className={ACTION_LINK_CLS}
       >
         시설 목록 전체 보기
       </button>
@@ -349,7 +338,7 @@ function FacilityActions({ onOpenPanel }: { onOpenPanel: (tab: 'map' | 'list') =
 
 function EmptyFacilities() {
   return (
-    <p className="mt-3 rounded-xl bg-slate-100 p-4 text-sm text-slate-700 dark:bg-slate-800/70 dark:text-slate-200">
+    <p className="mt-3 rounded-[3px] border border-rule bg-tint p-3.5 text-sm text-ink dark:border-rule-dark dark:bg-tint-dark dark:text-ink-dark">
       이 조건으로 보여드릴 근처 시설이 없습니다. 빈자리를 임의로 채우지 않고 있는 그대로 알려드려요.
     </p>
   )
@@ -390,7 +379,8 @@ function ResultHero({
   const altEdges = data.alt_edges ?? []
   if (!primary || altRouteItems(primary, altEdges).items.length === 0) return null
   return (
-    <div className="mb-3">
+    // 큰 전환 = 2px 잉크 괘선(카드·그림자 없음). 히어로가 결과에서 가장 굵은 경계다.
+    <div className="mt-1 mb-3 border-t-2 border-ink pt-4 dark:border-ink-dark">
       <AltRoutesBlock card={primary} altEdges={altEdges} onStartFitness={onStartFitness} />
     </div>
   )
@@ -415,15 +405,19 @@ function InlineFacilities({
   const rows = altsFirst ? alts : vouchers
   if (rows.length === 0) return null
   return (
-    <section data-testid="inline-facilities" aria-label="근처 강좌 미리보기" className="mt-3">
-      <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+    <section
+      data-testid="inline-facilities"
+      aria-label="근처 강좌 미리보기"
+      className="mt-5 border-t border-rule pt-4 dark:border-rule-dark"
+    >
+      <h3 className="font-serif mb-2 text-[16px] font-extrabold text-ink dark:text-ink-dark">
         {altsFirst ? '근처 공공·대안 강좌' : '근처 이용권 가맹 강좌'} {rows.length}곳
       </h3>
       <ul className="space-y-2">
         {altsFirst
-          ? alts.map((a) => <AltRow key={a.id} a={a} />)
-          : vouchers.map((v) => (
-              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={accessError} />
+          ? alts.map((a, i) => <AltRow key={a.id} a={a} index={i + 1} />)
+          : vouchers.map((v, i) => (
+              <VoucherRow key={v.id} v={v} index={i + 1} accessibility={access[v.id]} accessError={accessError} />
             ))}
       </ul>
     </section>
@@ -466,26 +460,23 @@ function ResultDeck({
         hint={T.deckSwipe}
         count={slides}
       >
-        {/* ① 제도별 판정 카드. 대체경로는 다음 슬라이드가 맡으므로 카드 안에는 넣지 않는다. */}
+        {/* ① 제도별 판정 카드. 대체경로는 다음 슬라이드가 맡으므로 카드 안에는 넣지 않는다.
+            슬라이드는 카드가 아니라 **섹션**이다 — 둥근 상자·그림자 대신 2px 잉크 괘선으로 연다. */}
         {cards.map((p) => (
-          <li key={p.program_id} className="min-w-0">
+          <li key={p.program_id} className={DECK_SLIDE_CLS}>
             <EligibilityCard p={p} />
           </li>
         ))}
 
         {/* ② 공급공백 · 커버리지 (대체경로는 덱 밖 히어로로 승격 — 6A) */}
-        <li key="supply-gap" className="min-w-0">
+        <li key="supply-gap" className={DECK_SLIDE_CLS}>
           <SupplyGapBanner gap={data.supply_gap} />
         </li>
 
         {/* ③ 근처 자원 머리 슬라이드(카운트 + 패널 열기) */}
-        <li key="facility-head" className="min-w-0">
-          <section
-            data-testid="facility-summary"
-            aria-label="근처 자원 요약"
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
-          >
-            <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+        <li key="facility-head" className={DECK_SLIDE_CLS}>
+          <section data-testid="facility-summary" aria-label="근처 자원 요약">
+            <h3 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
               근처 자원
             </h3>
             <div className="mt-2">
@@ -514,7 +505,7 @@ function ResultDeck({
             ]}
       </CardDeck>
 
-      <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
+      <p className="text-xs text-mute dark:text-mute-dark">{ELIGIBILITY_NOTE}</p>
     </section>
   )
 }
@@ -553,7 +544,7 @@ function ResultBlocks({
             </li>
           ))}
         </CardCarousel>
-        <p className="text-xs text-slate-600 dark:text-slate-400">{ELIGIBILITY_NOTE}</p>
+        <p className="text-xs text-mute dark:text-mute-dark">{ELIGIBILITY_NOTE}</p>
         {/* 결과 카드 하단 인라인 강좌 3행 — 전체 목록은 오른쪽 패널이 계속 소유한다 */}
         <InlineFacilities data={data} access={access} accessError={error} />
       </section>
@@ -563,10 +554,10 @@ function ResultBlocks({
       <section
         data-testid="facility-summary"
         aria-label="근처 자원 요약"
-        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
+        className="border-t-2 border-ink pt-4 dark:border-ink-dark"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">
+          <h3 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
             근처 자원
           </h3>
           <FacilityCounts req={req} data={data} />
@@ -665,7 +656,7 @@ function BotTextBubble({
           <p
             data-testid="bot-sub"
             className={
-              'mt-2 text-[13px] leading-snug break-words whitespace-pre-line text-slate-600 transition-opacity duration-200 ease-out dark:text-slate-400 ' +
+              'mt-2 text-[12.5px] leading-[1.6] break-words whitespace-pre-line text-mute transition-opacity duration-200 ease-out dark:text-mute-dark ' +
               (done ? 'opacity-100' : 'opacity-0')
             }
           >
@@ -689,7 +680,7 @@ function BotTextBubble({
                   href={l.url}
                   target="_blank"
                   rel="noreferrer noopener"
-                  className="press inline-flex min-h-11 items-center rounded-lg border-[1.5px] border-brand-500 px-4 text-sm font-semibold text-brand-800 hover:bg-brand-50 dark:border-brand-500/60 dark:text-brand-100 dark:hover:bg-brand-700/25"
+                  className={ACTION_LINK_CLS}
                 >
                   {l.label}
                 </a>
@@ -714,7 +705,7 @@ function FaqAnswerCard({ msg }: { msg: FaqAnswerMsg }) {
     <p
       data-testid="faq-answer-body"
       className={
-        'whitespace-pre-line break-words leading-[1.6] text-slate-700 dark:text-slate-200 ' +
+        'whitespace-pre-line break-words leading-[1.65] text-ink dark:text-ink-dark ' +
         (compact ? 'mt-2 text-sm' : 'mt-2 text-base')
       }
     >
@@ -727,18 +718,17 @@ function FaqAnswerCard({ msg }: { msg: FaqAnswerMsg }) {
       data-testid="faq-answer"
       data-compact={compact ? 'true' : 'false'}
       className={
-        'rounded-2xl border border-slate-200 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900 ' +
-        (compact ? 'p-3' : 'p-4')
+        'border-t border-rule dark:border-rule-dark ' + (compact ? 'pt-3' : 'pt-4')
       }
     >
-      <p className="flex items-start gap-1.5 text-sm font-bold text-slate-900 dark:text-white">
-        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
+      <p className="font-serif flex items-start gap-1.5 text-[16px] font-extrabold text-ink dark:text-ink-dark">
+        <InfoIcon className="mt-1 h-4 w-4 shrink-0 text-mute dark:text-mute-dark" />
         {msg.entry.q}
       </p>
 
       {compact ? (
         <details data-testid="faq-answer-fold" className="mt-1">
-          <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold text-brand-800 underline decoration-dotted underline-offset-2 dark:text-brand-100">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-xs text-accent-ink underline decoration-dotted underline-offset-[5px] dark:text-accent-ink-dark">
             확인된 답변 원문 보기
           </summary>
           {body}
@@ -749,11 +739,11 @@ function FaqAnswerCard({ msg }: { msg: FaqAnswerMsg }) {
 
       <p
         className={
-          'border-t border-slate-100 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400 ' +
+          'border-t border-rule text-xs text-mute dark:border-rule-dark dark:text-mute-dark ' +
           (compact ? 'mt-2 pt-2' : 'mt-3 pt-2')
         }
       >
-        출처{' '}
+        <span className="tracking-[0.12em]">출처</span>{' '}
         <a
           href={msg.entry.source_url}
           target="_blank"

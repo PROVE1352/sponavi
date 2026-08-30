@@ -49,12 +49,12 @@ test('① 바닥에서는 숨고, ② 위로 올라가면 컴포저 위 오른�
   expect(Math.round(box.width), `FAB 너비 ${box.width}`).toBe(44)
   expect(Math.round(box.height), `FAB 높이 ${box.height}`).toBe(44)
 
-  // 화면 안 · 오른쪽 아래(오른쪽 여백 16px)
+  // 화면 안 · 오른쪽 아래(오른쪽 여백 20px = B·종이 메모의 좌우 여백과 같은 값)
   expect(box.x).toBeGreaterThanOrEqual(0)
   expect(box.y).toBeGreaterThanOrEqual(0)
   expect(box.x + box.width).toBeLessThanOrEqual(vp.width)
   expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
-  expect(Math.round(vp.width - (box.x + box.width)), '오른쪽 여백').toBe(16)
+  expect(Math.round(vp.width - (box.x + box.width)), '오른쪽 여백').toBe(20)
   expect(box.y, 'FAB 가 화면 위쪽 절반에 있다').toBeGreaterThan(vp.height / 2)
 
   // ★ 컴포저를 가리지 않는다 — 두 박스가 겹치지 않는다(세로로 12px 위)

@@ -201,6 +201,6 @@
 | C-7 임계값 2축 | ⏸ 보류(설계 결정 번복이라 사용자 판단) | TODOS |
 | C-9 공단 공식 출처 | ✅ svoucher/dvoucher.kspo.or.kr 1차 | `e285e22` |
 | C-10 LLM 경로 대표 컷 | ⏳ 프로덕션 `llm=off`(처방 LLM 미설정) — 켜면 재촬영 | TODOS |
-| C-11 HTTPS 도메인 | ⏳ 사용자 DNS 등록 대기(`doenayo.kro.kr` → 193.123.163.215), 코드·DB는 배포 완료(87ac3e3, FREEZE.sha 기록) | |
+| C-11 HTTPS 도메인 | ✅ 2026-08-28 DNS 등록 → Caddy 자동 인증서, https://doenayo.kro.kr 200 (d0d5ba3), launchd 업타임 프로브 설치 | |
 | C-12 사람 게이트 4건 | ⏳ | |
 | 이름 변경 | ✅ 스포내비 → **되나요**, 화자 이름 폐지 | `182c961`·`8b964a6` |

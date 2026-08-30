@@ -93,7 +93,7 @@ test('P2 성인 → PAR-Q → 동적 폼 → 판정 칩·비교문·출처 배�
   await shot(page, 'e2e-shots/F1-fitness-prescription.png')
 })
 
-// FR-08 AC8 — 처방 항목의 "왜 이 운동?" 펼침(그래프 근거 경로 + 출처 배지 + FITT 출처).
+// FR-08 AC8 v1.12 — 처방 항목의 근거 블록(그래프 근거 경로 + 출처 배지 + FITT 출처), 항상 노출.
 // 목모드 처방은 요인당 상위 2개라, 아래 4개 값이 4티어 배지·목적 경유·근거 없음을 모두 만든다:
 //   반응시간(민첩성) = 정부·국제 지침 A + 전문가 큐레이션(검증 중) B
 //   체공시간(순발력) = fitness_map 폴백(근거 없음)
@@ -111,15 +111,6 @@ async function submitFourWeaknesses(page: Page) {
   await expect(page.getByTestId('fitness-result')).toBeVisible()
 }
 
-// 처방 1항목의 펼침 3인방. summary 의 aria-label 이 항목별로 유일해서 운동명으로 집는다.
-function rxWhy(page: Page, exercise: string) {
-  const toggle = page.getByLabel(`왜 이 운동? ${exercise}`, { exact: true })
-  return {
-    toggle,
-    details: toggle.locator('xpath=..'),
-    panel: toggle.locator('xpath=following-sibling::ul[@data-testid="rx-why-panel"]'),
-  }
-}
 
 test('추천 블록 — 신체조성 약점·연결 종목 배지·목적 경유 한국어 표기 (FR-08 AC8)', async ({ page }) => {
   await startPersona(page, 'P2')
@@ -146,7 +137,7 @@ test('추천 블록 — 신체조성 약점·연결 종목 배지·목적 경유
   await assertNoHorizontalScroll(page)
 })
 
-test('AI 처방 "왜 이 운동?" 펼침 — 근거 경로·출처 배지·FITT 출처, 키보드 완주 (FR-08 AC8)', async ({
+test('AI 처방 — 항목별 근거 블록은 없다(v1.12 사용자 결정: 완성품으로만), 출처는 추천 행 배지·provider 라벨로 (FR-08 AC8)', async ({
   page,
 }) => {
   await startPersona(page, 'P2')
@@ -156,46 +147,10 @@ test('AI 처방 "왜 이 운동?" 펼침 — 근거 경로·출처 배지·FITT 
   await page.getByTestId('ai-prescribe-btn').click()
   const ai = page.getByTestId('ai-result')
   await expect(ai).toBeVisible()
-
-  // 근거 있는 항목에는 펼침, 없는 항목에는 "근거 정보 없음"(P-1 — 배지를 지어내지 않는다)
-  await expect(ai.getByTestId('rx-why-toggle').first()).toBeVisible()
-  await expect(ai.getByTestId('rx-why-none').first()).toContainText('근거 정보 없음')
-  expect(await ai.getByTestId('rx-why-none').count()).toBe(2) // 순발력 2건(fitness_map)
-
-  // ① 직접 근거(S) — 펼치기 전에는 닫혀 있고, 키보드만으로 Enter 열기 / Space 닫기(A11Y-1)
-  const flex = rxWhy(page, '스트레칭')
-  await expect(flex.details).toHaveJSProperty('open', false)
-  await flex.toggle.focus()
-  await page.keyboard.press('Enter')
-  await expect(flex.details).toHaveJSProperty('open', true)
-  await expect(flex.panel).toBeVisible()
-  await expect(flex.panel).toContainText('근거 경로: 약점 유연성 ← 스트레칭')
-  await expect(flex.panel.getByTestId('rx-why-badge')).toHaveText('공단 공식 기준')
-  await expect(flex.panel).toContainText('FITT 수치: 정부·국제 지침')
-  await page.keyboard.press('Space')
-  await expect(flex.details).toHaveJSProperty('open', false)
-
-  // ② 목적 경유(멀티홉): 경로 문장 + 최약 링크 고지 + 경로 등급 배지(V)
-  const via = rxWhy(page, '어깨 돌리기')
-  await via.toggle.click()
-  await expect(via.panel).toContainText('어깨 돌리기 → 스트레칭 목적 운동 → 유연성')
-  await expect(via.panel).toContainText('스트레칭 목적 경유')
-  await expect(via.panel).toContainText('두 홉 중 약한 쪽')
-  await expect(via.panel.getByTestId('rx-why-badge')).toHaveText('공단 콘텐츠')
-
-  // ③ 검증 대기(B티어)는 펼침 안에서도 "검증 중"으로 그대로 표기된다
-  const pending = rxWhy(page, '방향전환 훈련')
-  await pending.toggle.click()
-  await expect(pending.panel.getByTestId('rx-why-badge')).toHaveText('전문가 큐레이션(검증 중)')
-
-  // ④ 4티어 배지가 처방 안에서 모두 등장한다(S·A·V·B)
-  for (const label of ['공단 공식 기준', '정부·국제 지침', '공단 콘텐츠', '전문가 큐레이션(검증 중)']) {
-    expect(
-      await ai.getByTestId('rx-why-badge').filter({ hasText: label }).count(),
-      `${label} 배지 없음`,
-    ).toBeGreaterThan(0)
-  }
-
+  await expect(page.getByTestId('rx-why-toggle')).toHaveCount(0)
+  await expect(page.getByTestId('rx-why-panel')).toHaveCount(0)
+  await expect(page.getByTestId('rx-why-none')).toHaveCount(0)
+  await expect(ai).toContainText('provider:')
   await assertNoHorizontalScroll(page)
 })
 
@@ -222,7 +177,7 @@ test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + �
   await expect(tab).toBeVisible()
   await expect(tab).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByTestId('context-panel').getByText(/운동 필터:/)).toBeVisible()
-  await expect(stream(page).getByText(/종목만 남겨서 시설 목록을 옆 패널에/)).toBeVisible()
+  await expect(stream(page).getByText(/종목만 남겨서 시설 목록을 패널에/)).toBeVisible()
   // 카드 안 버튼도 사용자 말풍선을 남긴다(고아 봇 문장 방지)
   await expect(stream(page).getByText(/^이 운동 되는 근처 강좌 보기 · /).last()).toBeVisible() // 카드 버튼(첫 매치) 뒤의 사용자 버블
 })

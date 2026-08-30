@@ -1,12 +1,11 @@
 // 판정 결과 턴 (FR-08·09) — 등급 라벨·비교문·참고 등급(추정)·그래프 추천(근거 표기·연결 종목)·
-// 영상 카드·"이 운동 되는 근처 강좌" 필터·AI 처방(정직 라벨 + 항목별 "왜 이 운동?" 펼침).
+// 영상 카드·"이 운동 되는 근처 강좌" 필터·AI 처방(정직 라벨 + 항목별 근거 블록 항상 노출).
 // 사실은 전부 엔진 출력이다 — 이 컴포넌트는 서버가 준 문장을 그대로 표시만 한다(P-2).
 //
 // B · 종이 메모: 카드 상자 없이 2px 잉크 괘선으로 나뉜 섹션 + 항목 점선.
 
 import { useMemo, useState } from 'react'
 import type {
-  AiPrescription,
   FitnessAiResponse,
   FitnessRecommendation,
   FitnessResponse,
@@ -452,7 +451,6 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
               <p className="mt-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark">
                 강도: {rx.강도} · 빈도: {rx.주당빈도}
               </p>
-              <RxWhy rx={rx} />
             </li>
           ))}
         </ul>
@@ -463,82 +461,3 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
   )
 }
 
-// 강도·빈도 수치의 출처 — ai.py FITT 수치사전의 하드코드 원천 그대로(창작 아님).
-const FITT_SOURCE = 'FITT 수치: 정부·국제 지침(보건복지부 2023 · WHO 2020 · ACSM)'
-
-// 근거 경로 한 줄. 그래프가 실제로 지나온 홉만 문장으로 옮긴다.
-//   직접  : "약점 {요인} ← {운동}"
-//   멀티홉: "{운동} → {목적} 목적 운동 → {요인}"
-function evidencePath(rx: AiPrescription): string {
-  const factor = rx.목표체력요인 || '약점 요인'
-  const goal = rx.provenance?.via_goal
-  return goal ? `${rx.운동} → ${goal} 목적 운동 → ${factor}` : `약점 ${factor} ← ${rx.운동}`
-}
-
-// FR-08 AC8 "왜 이 운동?" 펼침. 자격 카드의 사유(FR-02)와 같은 UX 문법 —
-// 아이콘+문장 행을 <ul> 로 쌓고 상태는 색+아이콘+텍스트 삼중으로 표기(A11Y-3).
-// 근거(provenance)가 없는 항목은 펼치지 않고 "근거 정보 없음"이라고 말한다(P-1).
-function RxWhy({ rx }: { rx: AiPrescription }) {
-  const prov = rx.provenance ?? undefined
-  const badge = sourceBadge(prov)
-  const rowCls = 'flex items-start gap-2 text-[12px] leading-[1.6] text-ink dark:text-ink-dark'
-
-  if (!prov || !badge) {
-    return (
-      <p
-        data-testid="rx-why-none"
-        className="mt-1.5 flex items-start gap-1.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
-      >
-        <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        근거 정보 없음 — 이 항목에 연결된 그래프 근거를 확인할 수 없습니다.
-      </p>
-    )
-  }
-
-  const pending = prov.curated_status === 'pending'
-  const via = viaGoalLabel(prov)
-  return (
-    <details data-testid="rx-why" className="mt-1">
-      <summary
-        data-testid="rx-why-toggle"
-        aria-label={`왜 이 운동? ${rx.운동}`}
-        className="inline-flex min-h-11 cursor-pointer items-center text-[12.5px] font-bold text-ink underline decoration-1 underline-offset-4 dark:text-ink-dark"
-      >
-        왜 이 운동?
-      </summary>
-      <ul data-testid="rx-why-panel" className="mt-1 flex flex-col gap-1.5">
-        <li className={rowCls}>
-          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
-          <span>근거 경로: {evidencePath(rx)}</span>
-        </li>
-        <li className={`${rowCls} flex-wrap`}>
-          {pending ? (
-            <WarnIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
-          ) : (
-            <CheckIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ok dark:text-ok-dark" />
-          )}
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            출처
-            <span data-testid="rx-why-badge" className="font-bold">
-              {badge.label}
-            </span>
-            {/* 표기에 이미 "검증 중"이 없는데 pending 이면 상태를 따로 붙인다(숨기지 않음) */}
-            {pending && !badge.label.includes('검증 중') && (
-              <span className="text-mute dark:text-mute-dark">· 검증 중</span>
-            )}
-          </span>
-        </li>
-        {via && (
-          <li className={rowCls}>
-            <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
-            <span>{via} — 경로 등급은 두 홉 중 약한 쪽으로 표기합니다.</span>
-          </li>
-        )}
-        <li className={rowCls}>
-          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
-          <span>{FITT_SOURCE}</span>
-        </li>
-      </ul>
-    </details>
-  )
-}

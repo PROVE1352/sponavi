@@ -220,132 +220,147 @@ def data_date(conn: sqlite3.Connection, db: Path) -> tuple[str, str]:
 CSS = """
 :root{
   color-scheme:light;
-  --bg:#f8fafc; --card:#ffffff; --ink:#020617; --muted:#475569; --line:#e2e8f0;
-  --brand:#0369a1; --brand-800:#0c4a6e; --navy:#0f172a;
-  --dv:#7c3aed; --pub:#047857; --zebra:#f8fafc; --chip:#f1f5f9;
+  /* B · 종이 메모 — 카드·그림자·알약 없이 괘선(rule)만으로 층을 만든다. */
+  --paper:#f7f3ea; --ink:#1f2a44; --muted:#6b6357; --rule:#d9d0c1; --tint:#ebe4d4;
+  --accent:#c0532b; --accent-dk:#8f3a1c; --ok:#3d6b3a;
+  --serif:'Nanum Myeongjo','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+  --sans:'Gowun Dodum','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0;padding:0;background:var(--bg);color:var(--ink);
-  font-family:'Atkinson Hyperlegible','Pretendard','Pretendard Variable',-apple-system,
-    BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',system-ui,sans-serif;
-  line-height:1.6;font-size:16px;
+  margin:0;padding:0;background:var(--paper);color:var(--ink);
+  font-family:var(--sans);line-height:1.7;font-size:15px;
 }
-.page{max-width:1080px;margin:0 auto;padding:20px 16px 64px}
-a{color:var(--brand);text-underline-offset:3px}
-.back{display:inline-block;font-size:14px;font-weight:700;text-decoration:none;margin-bottom:14px}
-.back:hover{text-decoration:underline}
-h1{font-size:22px;line-height:1.35;margin:0 0 8px;letter-spacing:-.01em}
-h1 .sub{display:block;font-size:15px;font-weight:600;color:var(--muted);margin-top:4px}
-.lede{margin:0 0 14px;font-size:14px;color:var(--muted)}
-.summary{
-  margin:0 0 16px;padding:12px 14px;background:var(--card);border:1px solid var(--line);
-  border-radius:12px;font-size:14px;
+a{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+a:hover{color:var(--accent-dk)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,'DejaVu Sans Mono',monospace;
+  font-size:12px;background:var(--tint);padding:1px 4px;border-radius:2px}
+/* 한 단 흐름(모바일) = 제목 → 안내 → 표. 900px 부터 왼쪽 안내 + 오른쪽 표 2단. */
+.page{
+  max-width:1440px;margin:0 auto;padding:20px 16px 56px;
+  display:grid;grid-template-columns:minmax(0,1fr);gap:22px;
 }
-.summary b{font-variant-numeric:tabular-nums;font-size:17px;color:var(--brand-800)}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.main{display:flex;flex-direction:column;min-width:0}
+.back{display:inline-block;font-size:13.5px;text-underline-offset:4px}
+h1{
+  font-family:var(--serif);font-size:26px;font-weight:800;line-height:1.28;letter-spacing:-.01em;
+  margin:0;padding-top:10px;border-top:2px solid var(--ink);
+}
+h1 .sub{
+  display:block;margin-top:9px;font-family:var(--sans);font-size:13.5px;font-weight:400;
+  line-height:1.65;color:var(--muted);letter-spacing:0;
+}
+.lede{margin:0;font-size:13.5px;line-height:1.7;color:var(--muted)}
+.lede b{color:var(--ink)}
+/* 제안 규칙·한계 — 표 위(모바일)/표 왼쪽(데스크톱) 첫 화면에서 읽힌다. 상자가 아니라 점선 괘선. */
+.brief{
+  margin:0;padding:14px 0;font-size:13px;line-height:1.7;color:var(--muted);
+  border-top:1px dashed var(--rule);border-bottom:1px dashed var(--rule);
+}
+.brief p{margin:0}
+.brief p+p{margin-top:9px;padding-top:9px;border-top:1px dashed var(--rule)}
+.brief b{color:var(--ink)}
+.brief .k{color:var(--accent);font-weight:700;font-variant-numeric:tabular-nums}
+/* 기본 정렬(장애인 가맹 오름차순)이 "최하위 목록"으로 읽히지 않게 표 가까이 둔다. */
+.disclaim{margin:0;font-size:13px;line-height:1.7;color:var(--muted)}
+.disclaim b{color:var(--ink)}
+.controls{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;margin:0 0 10px}
+.summary{margin:0;flex:1 1 auto;font-size:13px;color:var(--muted)}
+.summary b{color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums}
+/* 검색은 상자가 아니라 밑줄 한 줄. */
 #q{
-  flex:1 1 220px;min-width:0;padding:10px 12px;font:inherit;font-size:15px;
-  border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;
+  flex:1 1 260px;min-width:0;min-height:40px;padding:9px 2px;font:inherit;font-size:14px;
+  border:0;border-bottom:1.5px solid var(--ink);border-radius:0;background:transparent;color:inherit;
 }
-#q:focus-visible{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+#q::placeholder{color:var(--muted)}
+#q:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .vh{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
 .sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
   clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.tnote{margin:0 0 10px;font-size:13px;color:var(--muted)}
-.tnote code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:12px}
-/* 표 위 요약 — 규칙(임계값 공개)과 한계를 첫 화면에서 읽히게 한다.
-   각주에만 두면 228행 아래라 스크롤 없이는 보이지 않는다(심사단 지적). */
-.brief{
-  margin:0 0 10px;padding:12px 14px;background:var(--card);border:1px solid var(--line);
-  border-left:4px solid var(--brand);border-radius:12px;font-size:13.5px;color:var(--muted);
-}
-.brief p{margin:0}
-.brief p+p{margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
-.brief b{color:var(--ink)}
-.brief .k{font-weight:800;color:var(--brand-800);font-variant-numeric:tabular-nums}
-/* 기본 정렬(장애인 가맹 오름차순)이 "최하위 목록"으로 읽히지 않게 헤더 바로 위에 둔다. */
-.disclaim{
-  margin:0 0 8px;padding:9px 12px;font-size:13px;line-height:1.5;color:var(--brand-800);
-  background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;
-}
-.disclaim b{color:var(--brand-800)}
-.hint{
-  margin:0 0 6px;text-align:center;font-size:12.5px;font-weight:700;color:var(--muted);
-}
+.tnote{margin:0 0 10px;font-size:12.5px;line-height:1.65;color:var(--muted)}
+.hint{margin:0 0 6px;text-align:center;font-size:12.5px;color:var(--muted)}
 @media (min-width:768px){.hint{display:none}}
+/* 접기 버튼도 알약이 아니라 밑줄 글자. */
 .toggle{
-  display:inline-flex;align-items:center;gap:6px;padding:9px 12px;font-size:14px;
-  border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;
-  user-select:none;white-space:nowrap;
+  flex:0 0 100%;display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:2px 0;
+  font-size:13.5px;color:var(--accent);background:none;border:0;cursor:pointer;user-select:none;
+  text-decoration:underline;text-underline-offset:4px;white-space:nowrap;align-self:flex-start;
 }
 .toggle::before{content:"＋"}
-#det:checked ~ .controls .toggle{background:var(--brand);border-color:var(--brand);color:#fff}
+.toggle:hover{color:var(--accent-dk)}
+#det:checked ~ .controls .toggle{color:var(--ink)}
 #det:checked ~ .controls .toggle::before{content:"−"}
-#det:focus-visible ~ .controls .toggle{outline:2px solid var(--brand);outline-offset:2px}
-.wrap{
-  overflow-x:auto;-webkit-overflow-scrolling:touch;background:var(--card);
-  border:1px solid var(--line);border-radius:12px;
-}
+#det:focus-visible ~ .controls .toggle{outline:2px solid var(--accent);outline-offset:3px}
 /* 가로 스크롤 영역은 키보드로도 밀 수 있어야 한다(tabindex="0" + 포커스 표시). */
-.wrap:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
-table{border-collapse:separate;border-spacing:0;width:100%;min-width:600px;font-size:14px}
-th,td{padding:7px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
-td{line-height:1.3}
+.wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wrap:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:560px}
+th,td{text-align:left;white-space:nowrap}
 thead th{
-  position:sticky;top:0;z-index:2;background:var(--navy);color:#fff;font-size:13px;
-  font-weight:700;cursor:pointer;border-bottom:0;
+  position:sticky;top:0;z-index:2;background:var(--paper);color:var(--ink);
+  font-size:13px;font-weight:700;padding:10px 12px;border-bottom:2px solid var(--ink);cursor:pointer;
 }
-thead th:hover{background:var(--brand-800)}
-thead th:focus-visible{outline:2px solid #7dd3fc;outline-offset:-2px}
-thead th::after{content:"";opacity:.55;font-size:11px;margin-left:5px}
-thead th[aria-sort="ascending"]::after{content:"▲";opacity:1}
-thead th[aria-sort="descending"]::after{content:"▼";opacity:1}
+thead th:hover{color:var(--accent)}
+thead th:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+thead th::after{content:"";margin-left:5px;font-size:11px}
+thead th[aria-sort="none"]:hover::after{content:"▲";opacity:.35}
+thead th[aria-sort="ascending"]::after{content:"▲"}
+thead th[aria-sort="descending"]::after{content:"▼"}
+tbody td{
+  font-size:14px;padding:7px 12px;line-height:1.35;background:var(--paper);
+  border-bottom:1px dashed var(--rule);
+}
 .num{text-align:right;font-variant-numeric:tabular-nums}
-tbody tr:nth-child(even) td{background:var(--zebra)}
-tbody tr:hover td{background:#eff6ff}
-tbody td:first-child,thead th:first-child{position:sticky;left:0;z-index:1;background:var(--card)}
-thead th:first-child{z-index:3;background:var(--navy)}
-tbody tr:nth-child(even) td:first-child{background:var(--zebra)}
-tbody tr:hover td:first-child{background:#eff6ff}
-tbody tr[hidden]{display:none}
-.sido{display:block;font-size:11.5px;line-height:1.25;font-weight:600;color:var(--muted)}
-.nm{font-weight:700}
-/* 0 은 "잘못"이 아니라 "다음에 할 수 있는 일"의 표시다 — 경고 빨강 대신 중립 강조. */
-.zero{
-  color:var(--navy);font-weight:800;background:var(--chip);
-  padding:1px 7px;border-radius:6px;
+tbody tr:hover td{background:var(--tint)}
+/* 첫 열 고정 — 가로로 밀어도 시군구 이름이 남는다(C-8). */
+tbody td:first-child,thead th:first-child{
+  position:sticky;left:0;z-index:1;background:var(--paper);border-right:1px solid var(--rule);
 }
-.c-dv{color:var(--dv)}
-.c-pub{color:var(--pub)}
+/* 세로 괘선은 가로 스크롤이 실제로 일어나는 좁은 화면에서만 — 넓은 화면에선 표를 상자로 보이게 한다. */
+@media (min-width:900px){tbody td:first-child,thead th:first-child{border-right:0}}
+thead th:first-child{z-index:3}
+tbody tr:hover td:first-child{background:var(--tint)}
+tbody tr[hidden]{display:none}
+.sido{display:block;font-size:11px;line-height:1.25;color:var(--muted)}
+.nm{color:var(--ink)}
+/* 0 은 "잘못"이 아니라 "다음에 할 수 있는 일"의 표시다 — 상자 없이 색과 굵기로만. */
+.zero{color:var(--accent);font-weight:700}
+.s-cv{color:var(--accent)}
+.s-ex{color:var(--ok)}
+.s-no{color:var(--muted)}
 .col-det{display:none}
 #det:checked ~ .wrap .col-det{display:table-cell}
-.pill{
-  display:inline-block;padding:2px 9px;border-radius:999px;font-size:12.5px;font-weight:700;
-  white-space:nowrap;
+.empty{margin:14px 2px 0;font-size:14px;color:var(--muted)}
+.notes{
+  margin:26px 0 0;padding-top:16px;border-top:1px dashed var(--rule);
+  font-size:13px;line-height:1.7;color:var(--muted);
 }
-.p1{background:#ede9fe;color:#5b21b6}
-.p2{background:#e0f2fe;color:#075985}
-.p3{background:var(--chip);color:var(--muted);font-weight:600}
-.notes{margin-top:22px;font-size:13px;color:var(--muted)}
-.notes h2{font-size:14px;color:var(--ink);margin:0 0 8px}
+.notes h2{font-family:var(--serif);font-size:16px;font-weight:800;color:var(--ink);margin:0 0 10px}
 .notes ol{margin:0;padding-left:20px}
-.notes li{margin-bottom:7px}
-.notes code{background:var(--chip);padding:1px 5px;border-radius:5px;font-size:12px}
-.empty{padding:18px 14px;font-size:14px;color:var(--muted)}
+.notes li{margin-bottom:9px}
+.notes b{color:var(--ink)}
+@media (min-width:900px){
+  .page{
+    grid-template-columns:380px minmax(0,1fr);gap:36px;padding:32px 28px 64px;align-items:start;
+  }
+  .side{position:sticky;top:32px;align-self:start;gap:16px}
+  h1{font-size:34px;padding-top:12px}
+  h1 .sub{font-size:14px}
+  .lede,.brief,.disclaim{font-size:13.5px}
+  #q{flex:0 1 260px}
+  .notes{grid-column:1 / -1;margin-top:8px}
+}
+@media (min-width:1180px){
+  .page{gap:48px;padding:36px 48px 72px}
+}
 @media (max-width:520px){
-  .page{padding:16px 12px 48px}
-  h1{font-size:19px}
-  th,td{padding:8px 10px}
-  /* 표 위 안내가 길어져 표가 화면 밖으로 밀리지 않게 좁은 화면에서만 조인다. */
-  .lede{font-size:13px;margin-bottom:12px}
-  .summary{padding:10px 12px;margin-bottom:12px}
-  .controls{margin-bottom:10px}
-  .brief{font-size:12.5px;padding:10px 12px;line-height:1.55}
-  .brief p+p{margin-top:6px;padding-top:6px}
-  .tnote{margin-bottom:8px}
-  .disclaim{font-size:12.5px;padding:8px 10px;line-height:1.5}
+  .page{padding:16px 14px 48px}
+  h1{font-size:23px}
+  th,td{padding:9px 10px}
+  .brief{font-size:12.5px;line-height:1.65}
+  .disclaim,.lede{font-size:12.5px}
 }
 """
 
@@ -379,25 +394,27 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
     body: list[str] = []
     for i, r in enumerate(rows):
         text, rank = suggest(r.dvoucher, r.public, threshold)
-        pill = ""
+        # 알약(배지) 없이 색만으로 구분한다 — 전환=주홍, 확대=초록, '—'=흐린 회색.
+        sug = ""
         if rank == RANK_CONVERT:
-            pill = f'<span class="pill p1">{_esc(text)}</span>'
+            sug = f'<span class="s-cv">{_esc(text)}</span>'
         elif rank == RANK_EXPAND:
-            pill = f'<span class="pill p2">{_esc(text)}</span>'
+            sug = f'<span class="s-ex">{_esc(text)}</span>'
         elif rank == RANK_NO_SEED:
-            pill = f'<span class="pill p3">{_esc(text)}</span>'
-        dv_cls = ' class="zero"' if r.dvoucher == 0 else ' class="c-dv"'
+            sug = f'<span class="s-no">{_esc(text)}</span>'
+        dv = (f'<span class="zero">{r.dvoucher:,}</span>' if r.dvoucher == 0
+              else f"{r.dvoucher:,}")
         body.append(
             f'<tr data-i="{i}" data-q="{_esc(_q_text(r))}">'
             f'<td data-v="{_esc(r.sido_nm + r.name)}">'
             f'<span class="sido">{_esc(r.sido_nm)}</span>'
             f'<span class="nm">{_esc(r.name)}</span></td>'
-            f'<td class="num" data-v="{r.dvoucher}"><span{dv_cls}>{r.dvoucher:,}</span></td>'
+            f'<td class="num" data-v="{r.dvoucher}">{dv}</td>'
             f'<td class="num" data-v="{r.voucher}">{r.voucher:,}</td>'
-            f'<td class="num" data-v="{r.public}"><span class="c-pub">{r.public:,}</span></td>'
+            f'<td class="num" data-v="{r.public}">{r.public:,}</td>'
             f'<td class="num col-det" data-v="{r.reported}">{r.reported:,}</td>'
             f'<td class="num col-det" data-v="{r.registered}">{r.registered:,}</td>'
-            f'<td data-v="{rank}">{pill}</td>'
+            f'<td data-v="{rank}">{sug}</td>'
             "</tr>"
         )
 
@@ -412,22 +429,22 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#f7f3ea">
 <meta name="description" content="되나요 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
 <meta name="robots" content="index,follow">
 <title>{_esc(PAGE_TITLE)} · 되나요</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230369a1'/%3E%3Ctext x='32' y='46' font-family='sans-serif' font-size='42' font-weight='800' fill='white' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f3ea'/%3E%3Ctext x='32' y='46' font-family='serif' font-size='42' font-weight='800' fill='%231f2a44' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
 <style>
-@font-face{{font-family:'Atkinson Hyperlegible';font-style:normal;font-weight:400;font-display:swap;
-  src:url('/fonts/AtkinsonHyperlegible-Regular-latin.woff2') format('woff2');
-  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2212,U+FEFF,U+FFFD;}}
-@font-face{{font-family:'Atkinson Hyperlegible';font-style:normal;font-weight:700;font-display:swap;
-  src:url('/fonts/AtkinsonHyperlegible-Bold-latin.woff2') format('woff2');
-  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2212,U+FEFF,U+FFFD;}}
+/* 자체 호스팅 웹폰트(외부 CDN 0 — CSP 가 구글 폰트를 막는다). web/src/index.css 와 같은 파일. */
+@font-face{{font-family:'Nanum Myeongjo';font-style:normal;font-weight:800;font-display:swap;
+  src:url('/fonts/NanumMyeongjo-ExtraBold.woff2') format('woff2');}}
+@font-face{{font-family:'Gowun Dodum';font-style:normal;font-weight:400;font-display:swap;
+  src:url('/fonts/GowunDodum-Regular.woff2') format('woff2');}}
 {CSS}</style>
 </head>
 <body>
 <div class="page">
+<div class="side">
 <a class="back" href="/">← 되나요로 돌아가기</a>
 <h1>{_esc(SHORT_TITLE)}<span class="sub">시군구별 장애인스포츠강좌이용권 가맹 현황과 공공체육시설 후보</span></h1>
 <p class="lede">
@@ -435,18 +452,6 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
   공공데이터포털 <b>전국 공공체육시설</b> 자료를 시군구 단위로 맞춘 표입니다.
   데이터 기준 <b>{_esc(date_label)}</b> (KST, {_esc(date_basis)}).
 </p>
-<p class="summary">
-  전국 <b>{total:,}</b>개 시군구 ·
-  장애인 가맹 0곳 <b>{zero_dv:,}</b>개 ·
-  제안이 붙은 곳 <b>{suggested:,}</b>개 ·
-  표시 중 <b id="shown">{total:,}</b>개
-</p>
-<input class="vh" type="checkbox" id="det">
-<div class="controls">
-  <label class="sr" for="q">시군구 검색</label>
-  <input id="q" type="search" placeholder="시군구 검색 (예: 고성, 강원, 서해구)" autocomplete="off">
-  <label class="toggle" for="det">신고·등록 시설 수 함께 보기</label>
-</div>
 <div class="brief">
   <p><b>제안 규칙</b>(임계값까지 공개합니다) — ① 장애인 가맹 <b>0곳</b>이고 공공시설 <b>1곳 이상</b>이면
      <b>전환 후보</b>, ③ 장애인 가맹 <b>2곳 이하</b>이고 공공시설이
@@ -458,10 +463,24 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
      확인 대상을 좁히는 용도입니다 — 정의·출처·합산 규칙은
      <a href="#notes">표 아래 “표 읽는 법 · 출처”</a>에 그대로 적어 두었습니다.</p>
 </div>
-<p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 <code>faci_gb_nm='공공'</code>만 셉니다(신고·등록 제외).</p>
 <p class="disclaim">지역을 줄 세우려는 표가 아니라, <b>다음에 할 수 있는 일</b>(가맹 전환·확대 대상)을
   고르기 위한 목록입니다. 기본 정렬이 장애인 가맹 오름차순이라 <b>0곳</b>이 맨 위에 오지만
   이는 순위가 아니라 <b>먼저 확인해 볼 곳</b>이라는 뜻입니다. 열 제목을 누르면 다시 정렬됩니다.</p>
+</div>
+<div class="main">
+<input class="vh" type="checkbox" id="det">
+<div class="controls">
+  <p class="summary">
+    전국 <b>{total:,}</b>개 시군구 ·
+    장애인 가맹 0곳 <b>{zero_dv:,}</b>개 ·
+    제안이 붙은 곳 <b>{suggested:,}</b>개 ·
+    표시 중 <b id="shown">{total:,}</b>개
+  </p>
+  <label class="sr" for="q">시군구 검색</label>
+  <input id="q" type="search" placeholder="시군구 검색 (예: 고성, 강원, 서해구)" autocomplete="off">
+  <label class="toggle" for="det">신고·등록 시설 수 함께 보기</label>
+</div>
+<p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 <code>faci_gb_nm='공공'</code>만 셉니다(신고·등록 제외).</p>
 <p class="hint" aria-hidden="true">← 옆으로 넘겨보세요 →</p>
 <div class="wrap" tabindex="0" role="region" aria-label="시군구별 가맹·공공시설 표 (좌우로 스크롤됩니다)">
 <table id="gap" aria-describedby="tnote">
@@ -481,6 +500,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 </table>
 </div>
 <p class="empty" id="none" hidden>검색어와 맞는 시군구가 없습니다.</p>
+</div>
 <div class="notes" id="notes">
 <h2>표 읽는 법 · 출처</h2>
 <ol>

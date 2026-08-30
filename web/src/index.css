@@ -279,6 +279,34 @@ body {
   }
 }
 
+/* "맨 아래로" 버튼(FAB) 등장·퇴장 — fade + 8px 하강 + 미세 축소, 180ms ease-out.
+   msg-in(200ms) 과 같은 곡선이라 대화 표면 전체가 한 벌로 움직인다.
+   숨김은 visibility 까지 끈다 — 클릭·포커스·낭독 대상에서 완전히 빠진다.
+   (전환이 끝난 뒤에 꺼지도록 visibility 만 지연을 준다.) */
+.fab-pop {
+  transition:
+    opacity 180ms cubic-bezier(0, 0, 0.2, 1),
+    transform 180ms cubic-bezier(0, 0, 0.2, 1),
+    visibility 0s linear 0s;
+}
+.fab-pop[data-visible='false'] {
+  opacity: 0;
+  transform: translateY(8px) scale(0.9);
+  visibility: hidden;
+  pointer-events: none;
+  transition-delay: 0s, 0s, 180ms;
+}
+/* 모션 최소화 선호 → 이동·축소 없이 즉시 나타나고 사라진다(전역 규칙과 이중 방어). */
+@media (prefers-reduced-motion: reduce) {
+  .fab-pop {
+    transition: none;
+  }
+  .fab-pop[data-visible='false'] {
+    transform: none;
+    transition: none;
+  }
+}
+
 /* ── 카드 가로 스와이프 카루셀(FR-12 AC9) ──────────────────────────────
    판정 카드·시설 카드가 세로로 쌓여 스트림이 길어지는 것을 막는다.
    스크롤은 카루셀 컨테이너가 자체적으로 갖는다 — 페이지 가로 스크롤은 0(NFR-4).

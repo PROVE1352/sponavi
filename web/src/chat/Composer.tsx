@@ -5,6 +5,7 @@
 //   남는 것은 강등됐을 때의 정직 라벨뿐이다(FR-12 AC4).
 
 import { useState } from 'react'
+import type { RefObject } from 'react'
 import type { LlmMode } from '../types_chat'
 import { T } from './policy'
 import { InfoIcon } from '../components/ui'
@@ -13,10 +14,13 @@ export function Composer({
   llmMode,
   pending,
   onSend,
+  boxRef,
 }: {
   llmMode: LlmMode
   pending: boolean
   onSend: (text: string) => void
+  // "맨 아래로" 버튼이 자기 위치를 재는 기준(높이가 상황에 따라 자란다 — 칩 모드 고지 한 줄).
+  boxRef?: RefObject<HTMLDivElement | null>
 }) {
   const [text, setText] = useState('')
 
@@ -30,6 +34,7 @@ export function Composer({
 
   return (
     <div
+      ref={boxRef}
       data-testid="composer"
       className="sticky bottom-0 z-30 -mx-4 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-3 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95"
     >

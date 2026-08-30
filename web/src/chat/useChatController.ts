@@ -32,7 +32,7 @@ import { toAppError } from '../components/ErrorPanel'
 import { pickAutoplayPersona, prefillMeasures, type AutoplayCommand } from './autoplay'
 import { useAutoplay } from './useAutoplay'
 import { readDemoRoute } from './route'
-import type { StreamFocus } from './ChatStream'
+import { FOCUS_BOTTOM_NOW_ID, type StreamFocus } from './ChatStream'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
 import {
@@ -154,6 +154,18 @@ export function useChatController(demo = false) {
   const [streamFocus, setStreamFocus] = useState<StreamFocus | null>(null)
   const focusMessage = useCallback((id: string, mode: StreamFocus['mode'] = 'anchor') => {
     setStreamFocus((prev) => ({ id, seq: (prev?.seq ?? 0) + 1, mode }))
+  }, [])
+
+  // "맨 아래로" 버튼(FAB). 같은 focus 통로를 타되 immediate 로 보낸다 —
+  // 덱 대기(DECK_HOLD_MS)도, 개입 취소도 걸지 않는다(사용자가 직접 누른 이동이다).
+  // 스크롤과 바닥 추종 재개는 ChatStream 이 한 벌로 처리한다.
+  const scrollToBottom = useCallback(() => {
+    setStreamFocus((prev) => ({
+      id: FOCUS_BOTTOM_NOW_ID,
+      seq: (prev?.seq ?? 0) + 1,
+      mode: 'bottom',
+      immediate: true,
+    }))
   }, [])
 
   // 자동재생이 화면을 소유하는 구간(딥링크 arm ~ 재생 종료). 이 동안의 바닥 이동은 건너뛴다 —
@@ -997,6 +1009,8 @@ export function useChatController(demo = false) {
     personas,
     // "이 메시지를 화면 안으로" 요청(체력 처방 시작·재진입). 스크롤은 ChatStream 이 한다.
     streamFocus,
+    // "맨 아래로" 버튼이 누르는 액션 — 문서 바닥 + 바닥 추종 재개.
+    scrollToBottom,
     // 3A: 체력 폼이 마운트될 때 쓸 데모 프리필(선택된 페르소나의 측정값).
     fitnessPrefill: lane.initialValues,
     // W2: 자동재생 진행 여부(상태 필) + PAR-Q 프리셋 표기.

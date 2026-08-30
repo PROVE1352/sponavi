@@ -49,7 +49,14 @@ export interface StreamFocus {
   id: string
   seq: number
   mode: 'anchor' | 'bottom'
+  // 사용자가 직접 누른 이동인가("맨 아래로" 버튼). true 면 연출 대기(DECK_HOLD_MS)도,
+  // 개입 취소(TAKEOVER_EVENTS)도 걸지 않는다 — 그 클릭 자체가 이미 사용자의 의사다.
+  // 목적지가 문서 바닥이라 앵커 메시지가 열려 있을 필요도 없다.
+  immediate?: boolean
 }
+
+// immediate 요청이 쓰는 앵커 id. 실제 메시지를 가리키지 않는다(바닥이 목적지다).
+export const FOCUS_BOTTOM_NOW_ID = '__bottom_now__'
 
 function scrollToBottom(behavior: ScrollBehavior) {
   // 컴포저가 sticky 라 "요소를 뷰포트 바닥에 맞추기"로는 마지막 칩이 컴포저에 가린다.
@@ -240,6 +247,8 @@ export function ChatStream({
   //              → 문서 맨 아래(액션 칩)로 한 번 내려가고 바닥 추종을 **재개**한다.
   //              덱 시작점 이동 직후라면 DECK_HOLD_MS 만큼 기다린다 — 덱을 먼저 보여 준 뒤
   //              내려가야 하고, 진행 중인 덱 스크롤과 겹치면 서로를 끊어먹는다.
+  //     bottom + immediate : "맨 아래로" 버튼(FAB). 사용자가 직접 누른 이동이라
+  //              덱 대기도, 개입 취소도, 앵커 대기도 없이 이 자리에서 바로 내려간다.
   //   ※ 덱 훅보다 **뒤에**, 바닥 추종 훅보다 **앞에** 선언돼야 한다(같은 커밋 순서).
   const focusDone = useRef(0)
   // 예약된 바닥 이동. 취소는 이 한 곳으로 모은다 — 사용자가 먼저 움직였거나(개입),
@@ -255,11 +264,21 @@ export function ChatStream({
   useEffect(() => stopBottom, [stopBottom])
   useEffect(() => {
     if (!focus || focus.seq === focusDone.current) return
+    // 사용자가 직접 누른 "맨 아래로"는 앵커를 기다리지 않는다 — 목적지가 문서 바닥이다.
+    const now = focus.mode === 'bottom' && focus.immediate === true
     const el = boxRef.current?.querySelector<HTMLElement>(`[data-focus-anchor="${focus.id}"]`)
-    if (!el) return
+    if (!el && !now) return
     focusDone.current = focus.seq
     stopBottom()
     if (focus.mode === 'bottom') {
+      // 즉시 요청: 예약도 개입 감시도 없이 이 자리에서 내려간다. 예약(setTimeout)을 끼우면
+      // 버튼의 pointerdown·keydown 이 곧바로 자기 이동을 취소해 버린다.
+      if (now) {
+        stick.current = true
+        autoUntil.current = Date.now() + 1400
+        scrollToBottom(prefersReducedMotion() ? 'auto' : 'smooth')
+        return
+      }
       const wait = Math.max(0, deckScrollAt.current + DECK_HOLD_MS - Date.now())
       const onTakeover = () => stopBottom()
       for (const type of TAKEOVER_EVENTS) {
@@ -278,6 +297,7 @@ export function ChatStream({
       }, wait)
       return
     }
+    if (!el) return // anchor 모드는 앵커가 있어야만 여기 온다(위에서 걸러진다)
     stick.current = false
     autoUntil.current = Date.now() + 1400
     const top = el.getBoundingClientRect().top + window.scrollY - DECK_TOP_OFFSET_PX

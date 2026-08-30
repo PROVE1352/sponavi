@@ -61,24 +61,24 @@ export function CardDeck({
 
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-slate-50 to-transparent dark:from-[#0b1220]"
+        className="pointer-events-none absolute top-0 right-0 h-full w-10 bg-gradient-to-l from-paper to-transparent dark:from-paper-dark"
       />
 
       <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-        <p data-testid="carousel-hint" className="text-xs text-slate-600 dark:text-slate-400">
+        <p data-testid="carousel-hint" className="text-[12px] text-mute dark:text-mute-dark">
           {hint}
         </p>
         <p
           data-testid="deck-progress"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300"
+          className="inline-flex items-center gap-1.5 text-[12px] font-bold text-mute dark:text-mute-dark"
         >
           <span aria-hidden="true" className="inline-flex gap-1">
             {Array.from({ length: count }, (_, i) => (
               <span
                 key={i}
                 className={
-                  'h-1.5 w-1.5 rounded-full ' +
-                  (i === index ? 'bg-brand-600 dark:bg-brand-100' : 'bg-slate-300 dark:bg-slate-600')
+                  'h-1.5 w-1.5 ' +
+                  (i === index ? 'bg-ink dark:bg-ink-dark' : 'bg-rule dark:bg-rule-dark')
                 }
               />
             ))}
@@ -110,10 +110,7 @@ export function CardCarousel({
   children: ReactNode
 }) {
   const many = count > 1
-  const fadeFrom =
-    fade === 'card'
-      ? 'from-white dark:from-slate-900'
-      : 'from-slate-50 dark:from-[#0b1220]'
+  const fadeFrom = fade === 'card' ? 'from-paper dark:from-paper-dark' : 'from-paper dark:from-paper-dark'
 
   return (
     <div className="relative">
@@ -140,7 +137,7 @@ export function CardCarousel({
       {many && (
         <p
           data-testid="carousel-hint"
-          className="mt-1 text-center text-xs text-slate-600 lg:hidden dark:text-slate-400"
+          className="mt-1 text-center text-[12px] text-mute lg:hidden dark:text-mute-dark"
         >
           {SWIPE_HINT}
         </p>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { AlternativeFacility, Nearby, VoucherFacility } from '../types'
 import type { AccessibilityMap, FacilityAccessibility } from '../types_accessibility'
 import { accessibilitySourceLine } from '../types_accessibility'
@@ -7,7 +8,16 @@ import { km, walkMinutes, won, wonPlain } from '../lib/format'
 import type { AccessibilityView } from '../lib/accessibility'
 import { LOAD_FAILED_TEXT, NO_INFO_TEXT, accessibilityView } from '../lib/accessibility'
 import { matchesFilter } from '../lib/sports'
-import { ApproxLocationBadge, Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
+import {
+  ApproxLocationBadge,
+  Badge,
+  BTN_TEXT,
+  CheckIcon,
+  InfoIcon,
+  ROW_RULE,
+  TINT_BOX,
+  WarnIcon,
+} from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
 
 // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
@@ -57,6 +67,16 @@ export function useFacilityAccessibility(ids: string[]): {
 
   const reload = useCallback(() => load(key === '' ? [] : key.split(',')), [key, load])
   return { access, loading, error, reload }
+}
+
+// 목록 섹션 제목: 명조 16px 800 + 우측 보조 12px mute (Main.dc "근처 공공·대안 강좌 3곳").
+function ListHeading({ title, aside }: { title: string; aside?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 pb-1">
+      <h3 className="font-serif text-[16px] font-extrabold text-ink dark:text-ink-dark">{title}</h3>
+      {aside && <span className="text-[12px] text-mute dark:text-mute-dark">{aside}</span>}
+    </div>
+  )
 }
 
 export function NearbyList({
@@ -121,10 +141,10 @@ export function NearbyList({
 
   const alternatives = alts.length > 0 && (
     <div>
-      <h3 className="mb-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">공공·대안 시설</h3>
-      <ul className="space-y-2">
-        {alts.map((a) => (
-          <AltRow key={a.id} a={a} />
+      <ListHeading title="공공·대안 시설" />
+      <ul>
+        {alts.map((a, i) => (
+          <AltRow key={a.id} a={a} index={i + 1} />
         ))}
       </ul>
     </div>
@@ -137,18 +157,14 @@ export function NearbyList({
   }
 
   return (
-    <section aria-label="근처 자원 목록" className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-bold text-slate-900 dark:text-white">근처 자원</h2>
+    <section aria-label="근처 자원 목록" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">근처 자원</h2>
         {filterActive && (
-          <div className="flex items-center gap-2 text-xs">
-            <Badge tone="brand">운동 필터: {filterSports!.join(' · ')}</Badge>
+          <div className="flex items-center gap-2">
+            <Badge>운동 필터: {filterSports!.join(' · ')}</Badge>
             {onClearFilter && (
-              <button
-                type="button"
-                onClick={onClearFilter}
-                className="rounded-md px-2 py-1 font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-              >
+              <button type="button" onClick={onClearFilter} className={BTN_TEXT}>
                 필터 해제
               </button>
             )}
@@ -168,7 +184,10 @@ export function NearbyList({
 
       {/* 접근성 조회 로딩/실패 — 실패해도 아래 시설 리스트는 완전히 동작한다(부분 실패 격리) */}
       {hasDvoucher && accessLoading && (
-        <p data-testid="accessibility-loading" className="text-xs text-slate-500 dark:text-slate-400">
+        <p
+          data-testid="accessibility-loading"
+          className="text-[12.5px] text-mute dark:text-mute-dark"
+        >
           접근성 정보를 불러오는 중…
         </p>
       )}
@@ -176,17 +195,17 @@ export function NearbyList({
         <div
           role="status"
           data-testid="accessibility-error"
-          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200"
+          className={`flex flex-wrap items-center justify-between gap-2 text-[13px] text-ink dark:text-ink-dark ${TINT_BOX}`}
         >
-          <span className="inline-flex items-center gap-2">
-            <WarnIcon className="h-4 w-4 shrink-0" />
+          <span className="inline-flex items-start gap-2">
+            <WarnIcon className="mt-0.5 h-4 w-4 shrink-0" />
             접근성 정보를 불러오지 못했습니다. 시설 목록은 정상 표시됩니다.
           </span>
           <button
             type="button"
             data-testid="accessibility-retry"
             onClick={reloadAccess}
-            className="rounded-md px-2 py-1 text-xs font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:hover:text-amber-50"
+            className={BTN_TEXT}
           >
             다시 시도
           </button>
@@ -199,21 +218,27 @@ export function NearbyList({
 
       {vouchers.length > 0 && (
         <div data-testid="voucher-section">
-          <h3 className="mb-2 text-sm font-semibold text-brand-700 dark:text-brand-100">이용권 가맹시설</h3>
+          <ListHeading title="이용권 가맹시설" />
           {/* OV13: 결측을 행마다 반복하지 않고 섹션 상단에서 한 번에 밝힌다 */}
           {feeMissing > 0 && (
             <p
               data-testid="voucher-fee-summary"
-              className="mb-2 text-xs text-slate-600 dark:text-slate-400"
+              className="pb-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark"
             >
               {/* 필터가 걸려 있으면 이 수는 "총"이 아니라 걸러진 뒤의 수다(C-4·P-1) */}
               {filterActive ? '이 종목' : '총'} {vouchers.length}곳 · 수강료 미등록 {feeMissing}곳 —
               시설 문의
             </p>
           )}
-          <ul className="space-y-2">
-            {vouchers.map((v) => (
-              <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={accessError} />
+          <ul>
+            {vouchers.map((v, i) => (
+              <VoucherRow
+                key={v.id}
+                v={v}
+                index={i + 1}
+                accessibility={access[v.id]}
+                accessError={accessError}
+              />
             ))}
           </ul>
         </div>
@@ -225,7 +250,7 @@ export function NearbyList({
         vouchers.filter((v) => v.source === 'dvoucher').length === 0 && (
           <p
             data-testid="amenity-empty"
-            className="rounded-xl bg-violet-50 p-4 text-sm text-violet-800 dark:bg-violet-500/10 dark:text-violet-200"
+            className={`text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
           >
             선택한 편의시설을 모두 갖춘 장애인 가맹시설이 근처에 없습니다. 칩을 해제해 보세요.
           </p>
@@ -235,7 +260,7 @@ export function NearbyList({
       {hasDvoucher && (
         <p
           data-testid="accessibility-source"
-          className="text-xs text-slate-600 dark:text-slate-400"
+          className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
         >
           {accessibilitySourceLine(checkedDate)} · 공단 웹서비스 공개 조회(보조)
         </p>
@@ -244,7 +269,7 @@ export function NearbyList({
       {!altsFirst && alternatives}
 
       {vouchers.length === 0 && alts.length === 0 && !amenityActive && (
-        <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
+        <p className={`text-[13px] leading-[1.6] text-mute dark:text-mute-dark ${TINT_BOX}`}>
           {filterActive
             ? '선택한 운동에 맞는 근처 시설이 없습니다. 필터를 해제해 보세요.'
             : '표시할 근처 자원이 없습니다.'}
@@ -256,7 +281,7 @@ export function NearbyList({
 
 function DistTag({ dist }: { dist: number }) {
   return (
-    <span className="text-xs text-slate-600 dark:text-slate-400">
+    <span className="whitespace-nowrap text-[13px] text-mute dark:text-mute-dark">
       {km(dist)} · 도보 약 {walkMinutes(dist)}분
     </span>
   )
@@ -265,7 +290,9 @@ function DistTag({ dist }: { dist: number }) {
 // 근사좌표(구 중심) 시설: 거리 대신 근사 안내. km 절대 표기 금지(카피 사전).
 function ApproxTag() {
   return (
-    <span className="text-xs text-slate-600 dark:text-slate-400">구 중심 근사 좌표 · 정확한 위치는 시설에 확인</span>
+    <span className="text-[12px] text-mute dark:text-mute-dark">
+      구 중심 근사 좌표 · 정확한 위치는 시설에 확인
+    </span>
   )
 }
 
@@ -285,10 +312,7 @@ function DisabilityTag({ badge }: { badge: AccessibilityView['badge'] }) {
   return (
     <span data-testid={confirmed ? 'support-confirmed' : 'support-unknown-types'}>
       <Badge
-        tone="purple"
-        icon={
-          confirmed ? <CheckIcon className="w-3 h-3" /> : <InfoIcon className="w-3 h-3" />
-        }
+        icon={confirmed ? <CheckIcon className="w-3 h-3" /> : <InfoIcon className="w-3 h-3" />}
       >
         {badge.label}
       </Badge>
@@ -302,47 +326,74 @@ function DisabilityTag({ badge }: { badge: AccessibilityView['badge'] }) {
 function AccessibilityTags({ view }: { view: AccessibilityView }) {
   if (view.note === 'error') {
     return (
-      <p data-testid="access-error-inline" className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+      <p
+        data-testid="access-error-inline"
+        className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
+      >
         {LOAD_FAILED_TEXT}
       </p>
     )
   }
   if (view.note === 'none') {
     return (
-      <p data-testid="access-none" className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+      <p data-testid="access-none" className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
         {NO_INFO_TEXT}
       </p>
     )
   }
   if (view.types.length === 0 && view.amenities.length === 0) return null
   return (
-    <div data-testid="access-tags" className="mt-2 space-y-1.5">
-      {view.types.length > 0 && (
-        <p className="text-xs text-slate-600 dark:text-slate-300">
-          <span className="font-semibold text-violet-700 dark:text-violet-300">지원: </span>
-          {view.types.join(', ')}
-        </p>
-      )}
-      {view.amenities.length > 0 && (
-        <ul className="flex flex-wrap gap-1">
-          {view.amenities.map((a) => (
-            <li key={a.code}>
-              <Badge tone="purple">{a.name}</Badge>
-            </li>
-          ))}
-        </ul>
-      )}
+    <div data-testid="access-tags" className="flex flex-wrap gap-1">
+      {view.types.length > 0 && <Badge>지원: {view.types.join(', ')}</Badge>}
+      {view.amenities.map((a) => (
+        <Badge key={a.code}>{a.name}</Badge>
+      ))}
     </div>
+  )
+}
+
+// 시설 행(종이 메모): 번호 열 + 이름/거리 한 줄 + 유형·종목 + 요금 + 태그.
+// 행 사이는 1px rule — 카드 상자·그림자는 쓰지 않는다.
+function RowShell({
+  testId,
+  index,
+  name,
+  right,
+  children,
+}: {
+  testId: string
+  index?: number
+  name: string
+  right: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <li data-testid={testId} className={`grid grid-cols-[22px_minmax(0,1fr)] gap-x-2 py-3 ${ROW_RULE}`}>
+      <span aria-hidden="true" className="pt-0.5 text-[12px] text-mute dark:text-mute-dark">
+        {index ?? ''}
+      </span>
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="min-w-0 break-keep text-[16px] font-bold text-ink dark:text-ink-dark">
+            {name}
+          </span>
+          {right && <span className="shrink-0">{right}</span>}
+        </div>
+        {children}
+      </div>
+    </li>
   )
 }
 
 // 챗 스트림의 시설 요약 카드가 같은 행 컴포넌트를 재사용한다(§11.4 export 승격).
 export function VoucherRow({
   v,
+  index,
   accessibility,
   accessError,
 }: {
   v: VoucherFacility
+  index?: number
   accessibility?: FacilityAccessibility
   accessError?: boolean
 }) {
@@ -350,71 +401,68 @@ export function VoucherRow({
   // 배지와 하단 태그를 같은 판정에서 뽑는다 — 두 곳이 각자 판단하면 모순이 생긴다(C-3).
   const view = accessibilityView(v.disability_support, accessibility, accessError)
   return (
-    <li
-      data-testid={isDvoucher ? 'dvoucher-facility' : 'voucher-facility'}
-      className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+    <RowShell
+      testId={isDvoucher ? 'dvoucher-facility' : 'voucher-facility'}
+      index={index}
+      name={v.name}
+      right={
+        v.coord_source === 'centroid' ? null : <LocationLine coordSource={v.coord_source} dist={v.dist_km} />
+      }
     >
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-slate-900 dark:text-white">{v.name}</p>
-          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
-            {v.sports.join(' · ')}
-            {v.course_name ? ` · ${v.course_name}` : ''}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge tone={isDvoucher ? 'purple' : 'brand'}>{isDvoucher ? '장애인 가맹' : '이용권 가맹'}</Badge>
-          {v.coord_source === 'centroid' && <ApproxLocationBadge />}
-          <DisabilityTag badge={view.badge} />
-        </div>
-      </div>
-      {v.addr && <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{v.addr}</p>}
+      <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+        <span className="text-ink dark:text-ink-dark">
+          {isDvoucher ? '장애인 가맹' : '이용권 가맹'}
+        </span>
+        {' · '}
+        {v.sports.join(' · ')}
+        {v.course_name ? ` · ${v.course_name}` : ''}
+      </p>
+      {v.addr && <p className="text-[12px] text-mute dark:text-mute-dark">{v.addr}</p>}
+      {v.coord_source === 'centroid' && <LocationLine coordSource={v.coord_source} dist={v.dist_km} />}
 
       {/* 자부담 계산. CQ1A: 수강료가 결측이면 3셀을 만들지 않고 한 줄로 사실만 말한다
           — 0원·'무료'·'−0원' 으로 빈칸을 채우지 않는다(P-1). */}
       {v.fee_month == null ? (
-        <p
-          data-testid="fee-unknown"
-          className="mt-3 rounded-lg bg-slate-50 p-3 text-center text-sm font-semibold text-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
-        >
+        <p data-testid="fee-unknown" className="text-[12.5px] text-mute dark:text-mute-dark">
           수강료 미등록 · 시설 문의
         </p>
       ) : (
-        <dl className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-3 text-center dark:bg-slate-800/60">
+        <dl className={`grid grid-cols-3 gap-2 text-center ${TINT_BOX}`}>
           <div>
-            <dt className="text-[11px] text-slate-600 dark:text-slate-400">월 수강료</dt>
-            <dd className="text-sm font-semibold text-slate-800 dark:text-slate-100">{won(v.fee_month)}</dd>
+            <dt className="text-[11px] text-mute dark:text-mute-dark">월 수강료</dt>
+            <dd className="text-[13px] font-bold text-ink dark:text-ink-dark">{won(v.fee_month)}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-slate-600 dark:text-slate-400">이용권 지원</dt>
+            <dt className="text-[11px] text-mute dark:text-mute-dark">이용권 지원</dt>
             {/* 1A: 비적격이면 서버가 subsidy=0 으로 내려보낸다 — '−0원' 대신 못 받는다고 적는다 */}
             {v.subsidy === 0 ? (
-              <dd className="text-sm font-semibold text-slate-600 dark:text-slate-400">
+              <dd className="text-[13px] font-bold text-mute dark:text-mute-dark">
                 지원 없음(예상 자격 ✗)
               </dd>
             ) : (
-              <dd className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+              <dd className="text-[13px] font-bold text-ok dark:text-ok-dark">
                 −{wonPlain(Math.min(v.subsidy ?? 0, v.fee_month))}
               </dd>
             )}
           </div>
           <div>
-            <dt className="text-[11px] text-slate-600 dark:text-slate-400">내 부담</dt>
+            <dt className="text-[11px] text-mute dark:text-mute-dark">내 부담</dt>
             {/* 자부담 0 은 '무료'가 아니라 '0원'(수강료가 0인 것과 다른 사실) */}
-            <dd className="text-sm font-bold text-brand-700 dark:text-brand-100">
+            <dd className="text-[13px] font-bold text-ink dark:text-ink-dark">
               {v.copay == null ? won(null) : wonPlain(v.copay)}
             </dd>
           </div>
         </dl>
       )}
 
+      <div className="flex flex-wrap items-center gap-1">
+        {v.coord_source === 'centroid' && <ApproxLocationBadge />}
+        <DisabilityTag badge={view.badge} />
+      </div>
+
       {/* FR-10: 장애인 가맹시설엔 접근성 태그(지원유형·편의시설) */}
       {isDvoucher && <AccessibilityTags view={view} />}
-
-      <div className="mt-2">
-        <LocationLine coordSource={v.coord_source} dist={v.dist_km} />
-      </div>
-    </li>
+    </RowShell>
   )
 }
 
@@ -436,35 +484,40 @@ export function faciGbLabel(gb?: '공공' | '신고' | '등록' | null): {
   }
 }
 
-export function AltRow({ a }: { a: AlternativeFacility }) {
+export function AltRow({ a, index }: { a: AlternativeFacility; index?: number }) {
   const gb = faciGbLabel(a.faci_gb)
   // 공공·대안 풀에는 지원유형 조회 소스가 없다 — 원천이 준 불리언만 있으므로
   // "✓ 장애인 지원" 확언 대신 "장애인 지원(유형 미상)"으로 사실 그대로 적는다(C-3).
   const view = accessibilityView(a.disability_support)
   return (
-    <li className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-slate-900 dark:text-white">{a.name}</p>
-          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
-            {/* 서버 type 은 대안 풀 전체가 "공공체육시설"이라 신고·등록 시설도 그렇게 불린다 —
-                faci_gb 를 아는 행은 원천 라벨을 쓴다(FR-04 AC7). */}
-            {a.faci_gb ? gb.label : a.type} · {a.sports.join(' · ')}
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Badge tone={gb.tone}>{gb.label}</Badge>
-          {a.coord_source === 'centroid' && <ApproxLocationBadge />}
-          <DisabilityTag badge={view.badge} />
-        </div>
-      </div>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{a.note}</p>
-      <div className="mt-2 flex items-center justify-between">
-        <LocationLine coordSource={a.coord_source} dist={a.dist_km} />
+    <RowShell
+      testId="alt-facility"
+      index={index}
+      name={a.name}
+      right={a.coord_source === 'centroid' ? null : <LocationLine coordSource={a.coord_source} dist={a.dist_km} />}
+    >
+      <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+        {/* 서버 type 은 대안 풀 전체가 "공공체육시설"이라 신고·등록 시설도 그렇게 불린다 —
+            faci_gb 를 아는 행은 원천 라벨을 쓴다(FR-04 AC7). */}
+        <span className="text-ink dark:text-ink-dark">{a.faci_gb ? gb.label : a.type}</span>
+        {' · '}
+        {a.sports.join(' · ')}
+      </p>
+      <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{a.note}</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {a.coord_source === 'centroid' ? (
+          <LocationLine coordSource={a.coord_source} dist={a.dist_km} />
+        ) : (
+          <span />
+        )}
         {a.fee_month != null && (
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">월 {won(a.fee_month)}</span>
+          <span className="text-[12.5px] text-mute dark:text-mute-dark">월 {won(a.fee_month)}</span>
         )}
       </div>
-    </li>
+      <div className="flex flex-wrap items-center gap-1">
+        {a.coord_source === 'centroid' && <ApproxLocationBadge />}
+        <DisabilityTag badge={view.badge} />
+      </div>
+    </RowShell>
   )
 }

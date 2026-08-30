@@ -1,7 +1,7 @@
 // 정직한 에러 패널. 실패해도 "데이터는 사라지지 않았다"는 안심 + 입력 보존 재시도 +
 // 상세(코드·HTTP status) 접기. 거짓 데이터로 대체하지 않는다(정직 원칙).
 import { ApiCallError, type ApiErrorKind } from '../api/client'
-import { WarnIcon } from './ui'
+import { SECTION_RULE, WarnIcon } from './ui'
 
 export interface AppError {
   kind: ApiErrorKind
@@ -41,17 +41,22 @@ export function ErrorPanel({
     <div
       role="alert"
       data-testid="error-panel"
-      className="rounded-2xl border-2 border-rose-300 bg-rose-50 p-5 dark:border-rose-500/40 dark:bg-rose-500/10"
+      className={SECTION_RULE}
     >
-      <div className="flex items-start gap-3">
-        <WarnIcon className="mt-0.5 h-6 w-6 shrink-0 text-rose-600 dark:text-rose-400" />
+      <div className="flex items-start gap-2.5">
+        <WarnIcon className="mt-1 h-5 w-5 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-rose-900 dark:text-rose-100">{headline(error.kind)}</p>
+          <p className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
+            {headline(error.kind)}
+          </p>
           {/* 429 등은 서버 메시지를 그대로 노출 */}
-          <p data-testid="error-message" className="mt-1 text-sm text-rose-800 dark:text-rose-200/90">
+          <p
+            data-testid="error-message"
+            className="mt-1.5 text-[13.5px] leading-[1.65] text-ink dark:text-ink-dark"
+          >
             {error.message}
           </p>
-          <p className="mt-1 text-xs text-rose-700/80 dark:text-rose-200/70">
+          <p className="mt-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark">
             입력하신 내용은 그대로 남아 있어요. 아래 버튼으로 다시 시도할 수 있습니다.
           </p>
 
@@ -61,14 +66,19 @@ export function ErrorPanel({
               data-testid="assess-retry"
               onClick={onRetry}
               disabled={retrying}
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-[3px] bg-ink px-4 py-2 text-[14px] font-bold text-paper transition-opacity hover:opacity-90 disabled:opacity-60 dark:bg-ink-dark dark:text-paper-dark"
             >
               {retrying ? '다시 시도하는 중…' : '다시 시도'}
             </button>
           </div>
 
-          <details data-testid="error-detail" className="mt-3 text-xs text-rose-700/90 dark:text-rose-200/80">
-            <summary className="cursor-pointer select-none font-medium">자세히</summary>
+          <details
+            data-testid="error-detail"
+            className="mt-3 text-[12px] text-mute dark:text-mute-dark"
+          >
+            <summary className="inline-flex min-h-11 cursor-pointer items-center select-none underline decoration-1 underline-offset-4">
+              자세히
+            </summary>
             <p className="mt-1">
               오류 코드: <span className="font-mono">{error.code}</span>
               {error.status != null && (

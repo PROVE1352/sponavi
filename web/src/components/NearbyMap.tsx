@@ -92,7 +92,7 @@ function markerElement(p: MapPoint): HTMLElement {
   el.title = label
   el.setAttribute('aria-label', label)
   if (p.kind === 'person') {
-    el.style.background = 'var(--color-brand-600)'
+    el.style.background = 'var(--color-ink)'
     el.style.width = '16px'
     el.style.height = '16px'
   } else {
@@ -287,10 +287,10 @@ export function NearbyMap({ personLoc, nearby }: { personLoc: LatLon; nearby: Ne
   }, [])
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-card dark:border-slate-800">
+    <div className="overflow-hidden rounded-[3px] border border-rule dark:border-rule-dark">
       <div ref={boxRef} data-testid="nearby-map" className="relative h-64 w-full sm:h-80">
         {failed && (
-          <p className="absolute inset-0 grid place-items-center px-4 text-center text-xs text-slate-600 dark:text-slate-300">
+          <p className="absolute inset-0 grid place-items-center px-4 text-center text-[12px] text-mute dark:text-mute-dark">
             이 기기에서는 지도를 표시할 수 없어요. 아래 시설 목록에서 같은 정보를 확인하실 수 있어요.
           </p>
         )}
@@ -309,7 +309,7 @@ function MapLegend() {
   return (
     <div
       data-testid="map-legend"
-      className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-white px-4 py-2 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-rule bg-paper px-3 py-2 text-[12px] text-mute dark:border-rule-dark dark:bg-paper-dark dark:text-mute-dark"
     >
       {items.map((it) => (
         <span key={it.label} className="inline-flex items-center gap-1.5">

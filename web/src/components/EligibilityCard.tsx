@@ -1,75 +1,88 @@
 import type { AltEdge, ProgramEligibility, Selection } from '../types'
-import { Badge, CheckIcon, EligibilityMark, InfoIcon, WarnIcon, XIcon } from './ui'
+import {
+  Badge,
+  BTN_INK,
+  CheckIcon,
+  ChevronDownIcon,
+  EligibilityMark,
+  ITEM_RULE,
+  LINK_ACCENT,
+  OkNote,
+  SECTION_RULE,
+  TINT_BOX,
+  WarnIcon,
+  XIcon,
+} from './ui'
 
 // ★ v1.10(6A): 대체경로 블록은 이 카드 안이 아니라 `assess_result` 메시지의 전폭 히어로다.
 // 카드는 판정·사유·신청법·출처만 맡는다.
+//
+// B · 종이 메모: 카드 상자가 아니라 2px 잉크 괘선으로 시작하는 "판정 섹션"이다.
 export function EligibilityCard({ p }: { p: ProgramEligibility }) {
   const eligible = p.eligible
   const failed = p.reasons.filter((r) => !r.ok)
   return (
-    <article
-      className={`rounded-2xl border bg-white p-5 shadow-card dark:bg-slate-900 ${
-        eligible
-          ? 'border-emerald-300 dark:border-emerald-500/40'
-          : 'border-slate-200 dark:border-slate-800'
-      }`}
-      aria-label={`${p.program_name} 예상 자격 결과`}
-    >
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">{p.program_name}</h3>
-          <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{p.benefit}</p>
-        </div>
+    <article className={`flex flex-col ${SECTION_RULE} pb-1`} aria-label={`${p.program_name} 예상 자격 결과`}>
+      <header className="flex items-baseline justify-between gap-2">
+        <h3 className="min-w-0 break-keep font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
+          {p.program_name}
+        </h3>
         <EligibilityMark eligible={eligible} />
       </header>
+      <p className="mt-1 text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark">{p.benefit}</p>
 
       {!p.verified && (
-        <div className="mt-3">
-          <Badge tone="warn" icon={<WarnIcon className="w-3.5 h-3.5" />}>
-            공식 확인 필요 (자격 기준 미검증)
-          </Badge>
-        </div>
+        <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark">
+          <WarnIcon className="mt-0.5 w-3.5 h-3.5 shrink-0" />
+          공식 확인 필요 (자격 기준 미검증)
+        </p>
       )}
 
       {/* 사유 문장 — 각 항목 ✓/✗ 삼중 표기.
           ✗ 카드는 실패 사유를 첫 줄에 전부 이어 붙이고(FR-02 AC1 v1.10 — 27세 P2 는 연령·소득 둘 다),
           전체 목록은 접어 두되 감추지 않는다(AC4: 줄이는 것은 면적이지 정보가 아니다). */}
       {!eligible && failed.length > 0 ? (
-        <div className="mt-4">
-          <p data-testid="fail-reason-line" className="flex items-start gap-2 text-sm">
-            <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-            <span className="font-semibold text-slate-800 dark:text-slate-100">
-              {failed.map((r) => r.message).join(' · ')}
-            </span>
+        <div className="mt-2">
+          <p
+            data-testid="fail-reason-line"
+            className="text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark"
+          >
+            {failed.map((r) => r.message).join(' · ')}
           </p>
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-400">
+          <details className="mt-1.5">
+            <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12.5px] text-mute underline decoration-1 underline-offset-4 dark:text-mute-dark">
               조건별로 자세히 보기
             </summary>
-            <ul className="mt-2 space-y-2">
+            <ul className="mt-1">
               {p.reasons.map((r, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
+                <li
+                  key={i}
+                  className={`flex items-start gap-2 py-2 text-[13.5px] leading-[1.6] ${ITEM_RULE}`}
+                >
                   {r.ok ? (
-                    <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                    <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-ok dark:text-ok-dark" />
                   ) : (
-                    <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
                   )}
-                  <span className="text-slate-700 dark:text-slate-200">{r.message}</span>
+                  <span className="text-ink dark:text-ink-dark">{r.message}</span>
                 </li>
               ))}
             </ul>
           </details>
         </div>
       ) : (
-        <ul className="mt-4 space-y-2">
+        <ul className="mt-2">
           {p.reasons.map((r, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm">
+            <li
+              key={i}
+              className={`flex items-start gap-2 py-2 text-[13.5px] leading-[1.6] ${ITEM_RULE}`}
+            >
               {r.ok ? (
-                <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-ok dark:text-ok-dark" />
               ) : (
-                <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                <XIcon className="mt-0.5 w-4 h-4 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
               )}
-              <span className="text-slate-700 dark:text-slate-200">{r.message}</span>
+              <span className="text-ink dark:text-ink-dark">{r.message}</span>
             </li>
           ))}
         </ul>
@@ -80,19 +93,20 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
 
       {/* 신청법·서류·링크 (예상 자격일 때) */}
       {eligible && (
-        <div className="mt-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
-          <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
-            <InfoIcon className="w-4 h-4 text-brand-600 dark:text-brand-100" />
+        <div className={`mt-3 pt-3 ${ITEM_RULE}`}>
+          <p className="text-[13px] font-bold tracking-[0.04em] text-ink dark:text-ink-dark">
             신청 방법
           </p>
-          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{p.apply.how}</p>
+          <p className="mt-1 text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark">
+            {p.apply.how}
+          </p>
           {p.apply.docs.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">준비 서류</p>
-              <ul className="mt-1 flex flex-wrap gap-1.5">
+            <div className="mt-2.5">
+              <p className="text-[12px] tracking-[0.12em] text-mute dark:text-mute-dark">준비 서류</p>
+              <ul className="mt-1.5 flex flex-wrap gap-1.5">
                 {p.apply.docs.map((d, i) => (
                   <li key={i}>
-                    <Badge tone="neutral">{d}</Badge>
+                    <Badge>{d}</Badge>
                   </li>
                 ))}
               </ul>
@@ -102,7 +116,7 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
             href={p.apply.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-[3px] bg-ink px-4 py-2 text-[14px] font-bold text-paper transition-opacity hover:opacity-90 dark:bg-ink-dark dark:text-paper-dark"
           >
             공식 신청 페이지 열기
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
@@ -114,18 +128,22 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
       )}
 
       {/* 출처·확인일 각주 */}
-      <footer className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
-        출처{' '}
-        <a
-          href={p.source.url}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="underline decoration-dotted underline-offset-2 hover:text-slate-600 dark:hover:text-slate-300"
-        >
-          {p.source.url}
-        </a>{' '}
-        · 확인일 {p.source.checked}
-        {!p.verified && ' · 자격 기준은 공식 신청처에서 최종 확인하세요'}
+      <footer
+        className={`mt-3 flex flex-wrap gap-x-2 gap-y-0.5 pt-2.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark ${ITEM_RULE}`}
+      >
+        <span className="tracking-[0.12em]">출처</span>
+        <span className="min-w-0 break-all">
+          <a
+            href={p.source.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline underline-offset-2 hover:text-ink dark:hover:text-ink-dark"
+          >
+            {p.source.url}
+          </a>{' '}
+          · 확인일 {p.source.checked}
+          {!p.verified && ' · 자격 기준은 공식 신청처에서 최종 확인하세요'}
+        </span>
       </footer>
     </article>
   )
@@ -134,32 +152,30 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
 // 예상 선정순위 블록: "신청은 소득 무관" 강조 + 선정은 우선순위제(대기 가능) 구분.
 // 챗 스트림에서도 단독 임베드할 수 있도록 export (ARCHITECTURE §11.4).
 export function SelectionBlock({ selection }: { selection: Selection }) {
-  const undetermined = selection.expected_rank == null
   return (
-    <div
-      data-testid="selection-block"
-      className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/30 dark:bg-amber-400/10"
-    >
-      <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+    <div data-testid="selection-block" className={`mt-3 ${TINT_BOX}`}>
+      <p className="text-[13.5px] font-bold leading-[1.6] text-ink dark:text-ink-dark">
         신청은 소득과 관계없이 할 수 있어요 · 선정은 우선순위제입니다
       </p>
-      <div className="mt-2">
-        <Badge tone={undetermined ? 'neutral' : 'warn'} icon={<InfoIcon className="w-3.5 h-3.5" />}>
-          {selection.rank_label}
-        </Badge>
-      </div>
-      <p className="mt-2 text-sm text-amber-900/90 dark:text-amber-100/90">{selection.note}</p>
+      <p className="mt-1.5">
+        <Badge>{selection.rank_label}</Badge>
+      </p>
+      <p className="mt-1.5 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+        {selection.note}
+      </p>
       {selection.tiebreak && (
-        <p className="mt-1.5 text-xs text-amber-800 dark:text-amber-200">동점 시: {selection.tiebreak}</p>
+        <p className="mt-1 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+          동점 시: {selection.tiebreak}
+        </p>
       )}
       {selection.source?.url && (
-        <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+        <p className="mt-1.5 text-[12px] text-mute dark:text-mute-dark">
           선정순위 출처{' '}
           <a
             href={selection.source.url}
             target="_blank"
             rel="noreferrer noopener"
-            className="underline decoration-dotted underline-offset-2"
+            className="underline underline-offset-2"
           >
             공식 안내
           </a>
@@ -192,6 +208,9 @@ export function altRouteItems(
   return { items: [...official, ...pending], official, pending, nowAvailable }
 }
 
+// ①②③ — 히어로 항목 번호(명조 인주색 왼쪽 열).
+const CIRCLED = ['①', '②', '③', '④', '⑤']
+
 // 히어로(6A): 자격 충족·저순위(4·5/미정) → '지금 바로 되는 것',
 // 자격 미충족 → "이용권은 대상이 아니지만, 지금 바로 되는 것 N가지".
 // 두 경우 모두 본문 항목은 '공식 확인' 엣지뿐이고, 검증 대기는 아래 한 줄로 정직하게 남는다.
@@ -210,11 +229,20 @@ export function AltRoutesBlock({
 
   // 공식 확인이 하나도 없으면 "지금 바로 된다"고 말하지 않는다(P-1).
   const onlyPending = official.length === 0
-  const heading = onlyPending
-    ? `확인 중인 대안 ${pending.length}건`
-    : card.eligible
-      ? '지금 바로 되는 것'
-      : `이용권은 대상이 아니지만, 지금 바로 되는 것 ${official.length}가지`
+  // 헤딩의 수(N가지 / N건)만 인주색으로 — 화면당 한두 군데 원칙.
+  const heading = onlyPending ? (
+    <>
+      확인 중인 대안{' '}
+      <span className="text-accent-ink dark:text-accent-ink-dark">{pending.length}건</span>
+    </>
+  ) : card.eligible ? (
+    <>지금 바로 되는 것</>
+  ) : (
+    <>
+      이용권은 대상이 아니지만, 지금 바로 되는 것{' '}
+      <span className="text-accent-ink dark:text-accent-ink-dark">{official.length}가지</span>
+    </>
+  )
   const desc = onlyPending
     ? '공식 페이지 확인 전이라 아직 "지금 된다"고 말씀드리지 않습니다.'
     : card.eligible
@@ -224,41 +252,48 @@ export function AltRoutesBlock({
   return (
     <div
       data-testid={nowAvailable ? 'now-available-block' : 'alt-routes-block'}
-      className="rounded-2xl border-2 border-brand-300 bg-brand-50/70 p-4 shadow-card dark:border-brand-500/40 dark:bg-brand-700/20"
+      className={`flex flex-col ${SECTION_RULE}`}
     >
-      <p className="flex items-center gap-1.5 text-base font-bold text-brand-800 dark:text-brand-100">
-        <CheckIcon className="w-5 h-5 shrink-0" />
+      <p className="font-serif text-[24px] font-extrabold leading-[1.35] tracking-[-0.01em] text-ink dark:text-ink-dark">
         {heading}
       </p>
-      <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{desc}</p>
+      <p className="mt-2 text-[13.5px] leading-[1.6] text-mute dark:text-mute-dark">{desc}</p>
 
       {official.length > 0 && (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3.5">
           {official.map((a, i) => (
             <li
               key={`${a.to}-${i}`}
               data-testid={nowAvailable ? 'now-available-item' : 'alt-route-item'}
-              className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900"
+              className={`grid grid-cols-[28px_minmax(0,1fr)] gap-x-2 py-3.5 ${ITEM_RULE}`}
             >
-              <div className="flex flex-wrap items-center justify-between gap-1.5">
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {a.program?.name ?? a.note}
-                </span>
-                <Badge tone="ok" icon={<CheckIcon className="w-3 h-3" />}>
-                  공식 확인
-                </Badge>
+              <span
+                aria-hidden="true"
+                className="font-serif text-[20px] font-extrabold leading-[1.2] text-accent-ink dark:text-accent-ink-dark"
+              >
+                {CIRCLED[i] ?? '·'}
+              </span>
+              <div className="flex min-w-0 flex-col gap-1.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="min-w-0 break-keep font-serif text-[17px] font-extrabold text-ink dark:text-ink-dark">
+                    {a.program?.name ?? a.note}
+                  </span>
+                  <OkNote className="shrink-0">공식 확인</OkNote>
+                </div>
+                <p className="text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark">
+                  {a.program?.benefit ?? a.note}
+                </p>
+                {a.program?.apply_url && (
+                  <a
+                    href={a.program.apply_url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className={`inline-flex min-h-11 items-center text-[13px] ${LINK_ACCENT}`}
+                  >
+                    출처·신청 링크 열기
+                  </a>
+                )}
               </div>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{a.program?.benefit ?? a.note}</p>
-              {a.program?.apply_url && (
-                <a
-                  href={a.program.apply_url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 underline decoration-dotted underline-offset-2 dark:text-brand-200"
-                >
-                  출처·신청 링크 열기
-                </a>
-              )}
             </li>
           ))}
         </ul>
@@ -268,25 +303,22 @@ export function AltRoutesBlock({
       {pending.length > 0 && !onlyPending && (
         <p
           data-testid="alt-route-pending"
-          className="mt-2 flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400"
+          className={`pt-3 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark ${ITEM_RULE}`}
         >
-          <WarnIcon className="mt-0.5 w-3.5 h-3.5 shrink-0" />
-          확인 중 {pending.length}건 — {pending.map((a) => a.program?.name ?? a.note).join(' · ')}
+          ※ 확인 중 {pending.length}건 — {pending.map((a) => a.program?.name ?? a.note).join(' · ')}
         </p>
       )}
       {onlyPending && (
-        <ul data-testid="alt-route-pending" className="mt-3 space-y-2">
+        <ul data-testid="alt-route-pending" className="mt-3">
           {pending.map((a, i) => (
             <li
               key={`${a.to}-${i}`}
-              className="rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+              className={`flex flex-wrap items-baseline gap-x-2 gap-y-1 py-3 ${ITEM_RULE}`}
             >
-              <span className="font-semibold text-slate-900 dark:text-white">
+              <span className="font-serif text-[17px] font-extrabold text-ink dark:text-ink-dark">
                 {a.program?.name ?? a.note}
               </span>
-              <Badge tone="purple" icon={<WarnIcon className="w-3 h-3" />}>
-                큐레이션 · {a.curated}
-              </Badge>
+              <Badge icon={<WarnIcon className="w-3 h-3" />}>큐레이션 · {a.curated}</Badge>
             </li>
           ))}
         </ul>
@@ -297,9 +329,10 @@ export function AltRoutesBlock({
           type="button"
           data-testid="hero-fitness-cta"
           onClick={onStartFitness}
-          className="press mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+          className={`mt-4 justify-between ${BTN_INK}`}
         >
-          내 체력에 맞는 운동까지 보기 ↓
+          내 체력에 맞는 운동까지 보기
+          <ChevronDownIcon className="w-[18px] h-[18px] shrink-0" />
         </button>
       )}
     </div>

@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { PARQ_PRESET_NOTE } from '../chat/autoplay'
-import { CheckIcon, InfoIcon } from './ui'
+import { BTN_INK, CheckIcon, InfoIcon, ROW_RULE, SECTION_RULE } from './ui'
 
 export function ParqGate({
   // 이미 통과한 턴(또는 지난 회차)이면 조작을 잠그고 통과 표시만 남긴다.
@@ -27,11 +27,11 @@ export function ParqGate({
     <section
       data-testid="parq-gate"
       aria-label="측정 전 문진 확인"
-      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
+      className={`flex flex-col ${SECTION_RULE}`}
     >
       <div className="flex items-start gap-2">
-        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-100" />
-        <p className="text-sm text-slate-700 dark:text-slate-200">
+        <InfoIcon className="mt-0.5 h-4 w-4 shrink-0 text-mute dark:text-mute-dark" />
+        <p className="text-[14px] leading-[1.65] text-ink dark:text-ink-dark">
           심장질환·흉통 등 문진 항목에 해당하거나 혈압이 <b>160/100mmHg 이상</b>이면 측정·고강도 운동 전
           전문가와 상담하세요.
         </p>
@@ -39,19 +39,19 @@ export function ParqGate({
       {preset && (
         <p
           data-testid="parq-preset-note"
-          className="mt-2 text-xs font-medium text-brand-700 dark:text-brand-100"
+          className="mt-2 text-[12.5px] text-mute dark:text-mute-dark"
         >
           {PARQ_PRESET_NOTE}
         </p>
       )}
-      <label className="mt-3 flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+      <label className="mt-3 flex min-h-11 items-center gap-2 text-[14px] text-ink dark:text-ink-dark">
         <input
           type="checkbox"
           data-testid="parq-check"
           checked={frozen ? true : checked}
           disabled={frozen}
           onChange={(e) => setChecked(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300"
+          className="h-5 w-5 rounded-none border border-ink accent-ink dark:border-ink-dark dark:accent-ink-dark"
         />
         해당 없음, 계속하기
       </label>
@@ -60,12 +60,12 @@ export function ParqGate({
         data-testid="parq-continue"
         onClick={onContinue}
         disabled={frozen || !checked}
-        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-lg border-2 border-brand-600 px-4 py-2 font-semibold text-brand-700 transition hover:bg-brand-50 disabled:opacity-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
+        className={`mt-3 justify-center ${BTN_INK}`}
       >
         {done && <CheckIcon className="h-4 w-4 shrink-0" />}
         {done ? '확인했어요' : '측정값 입력하기'}
       </button>
-      <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
+      <p className={`mt-3 pt-2.5 text-[12px] text-mute dark:text-mute-dark ${ROW_RULE}`}>
         이 문진 응답은 저장·전송되지 않습니다.
       </p>
     </section>

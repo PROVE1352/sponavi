@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react'
 import type { FitnessItem } from '../types'
 import type { FitnessFormRow, FitnessLaneApi } from '../types_chat'
 import { Skeleton } from './Skeleton'
-import { WarnIcon } from './ui'
+import { BTN_INK, ITEM_RULE, ROW_RULE, SECTION_RULE, TINT_BOX, WarnIcon } from './ui'
 
 function parse(v: string): number | null {
   if (v.trim() === '') return null
@@ -100,16 +100,16 @@ export function FitnessFormCard({
     <section
       data-testid="fitness-form-card"
       aria-label="체력 측정값 입력"
-      className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
+      className={`flex flex-col gap-4 ${SECTION_RULE}`}
     >
       <div>
-        <h3 className="text-base font-bold text-slate-900 dark:text-white">측정값 입력</h3>
-        <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+        <h3 className="font-serif text-[20px] font-extrabold text-ink dark:text-ink-dark">측정값 입력</h3>
+        <p className="mt-1 text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark">
           아는 항목만 넣으셔도 됩니다. 1개 이상 입력하면 판정할 수 있습니다.
         </p>
         {/* 프리필이 있었다는 사실을 숨기지 않는다 — 심사위원이 값의 출처를 알아야 한다 */}
         {!locked && prefilled && (
-          <p data-testid="fit-prefill-note" className="mt-1 text-xs text-brand-700 dark:text-brand-100">
+          <p data-testid="fit-prefill-note" className="mt-1 text-[12.5px] text-mute dark:text-mute-dark">
             데모 페르소나 값으로 미리 채움 — 고쳐서 넣으셔도 됩니다.
           </p>
         )}
@@ -119,7 +119,7 @@ export function FitnessFormCard({
       {!locked && lane.gapMessage && (
         <div
           data-testid="fitness-gap-banner"
-          className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200"
+          className={`flex items-start gap-2 text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
         >
           <WarnIcon className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{lane.gapMessage}</span>
@@ -127,7 +127,7 @@ export function FitnessFormCard({
       )}
 
       {locked ? (
-        <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
+        <p className={`text-[13px] leading-[1.6] text-mute dark:text-mute-dark ${TINT_BOX}`}>
           지난 단계의 입력 화면입니다. 새로 고른 상황은 아래 최신 단계에서 이어서 진행됩니다.
         </p>
       ) : lane.itemsLoading ? (
@@ -135,7 +135,7 @@ export function FitnessFormCard({
       ) : lane.itemsError ? (
         <ItemsRetryPanel onRetry={lane.reloadItems} />
       ) : lane.emptyMessage ? (
-        <p className="rounded-xl bg-slate-100 p-4 text-sm text-slate-600 dark:bg-slate-800/70 dark:text-slate-300">
+        <p className={`text-[13px] leading-[1.6] text-mute dark:text-mute-dark ${TINT_BOX}`}>
           {lane.emptyMessage}
         </p>
       ) : (
@@ -152,7 +152,7 @@ export function FitnessFormCard({
             data-testid="fitness-submit"
             onClick={() => onSubmit(measures)}
             disabled={lane.submitting || !canSubmit}
-            className="min-h-11 w-full rounded-lg bg-brand-600 px-4 py-2.5 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+            className={`justify-center ${BTN_INK}`}
           >
             {lane.submitting ? '분석 중…' : canSubmit ? '체력 판정 받기' : '측정값을 1개 이상 입력하세요'}
           </button>
@@ -160,10 +160,10 @@ export function FitnessFormCard({
             <div
               role="alert"
               data-testid="fitness-submit-error"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-rose-300 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-[3px] border border-rule p-3 text-[13px] text-ink dark:border-rule-dark dark:text-ink-dark"
             >
               <span className="inline-flex items-center gap-2">
-                <WarnIcon className="h-4 w-4 shrink-0" />
+                <WarnIcon className="h-4 w-4 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
                 {lane.submitError.kind === 'ratelimit'
                   ? lane.submitError.message
                   : '체력 판정을 불러오지 못했습니다.'}
@@ -172,7 +172,7 @@ export function FitnessFormCard({
                 type="button"
                 data-testid="fitness-submit-retry"
                 onClick={() => onSubmit(measures)}
-                className="rounded-md px-2 py-1 text-xs font-bold text-rose-700 underline underline-offset-2 hover:text-rose-900 dark:text-rose-200"
+                className="inline-flex min-h-11 items-center text-[13px] font-bold text-ink underline decoration-1 underline-offset-4 dark:text-ink-dark"
               >
                 다시 시도
               </button>
@@ -181,7 +181,7 @@ export function FitnessFormCard({
         </>
       )}
 
-      <p className="border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
+      <p className={`pt-2.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark ${ROW_RULE}`}>
         {FITNESS_DISCLAIMER}
       </p>
     </section>
@@ -196,10 +196,10 @@ function FitnessFormSkeleton() {
       <Skeleton className="h-4 w-24" />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          <Skeleton key={i} className="h-16 w-full" />
         ))}
       </div>
-      <Skeleton className="h-11 w-full rounded-lg" />
+      <Skeleton className="h-11 w-full" />
     </div>
   )
 }
@@ -210,20 +210,20 @@ function ItemsRetryPanel({ onRetry }: { onRetry: () => void }) {
     <div
       role="alert"
       data-testid="fitness-items-error"
-      className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-sm dark:border-rose-500/40 dark:bg-rose-500/10"
+      className="rounded-[3px] border border-rule p-4 text-[13px] dark:border-rule-dark"
     >
-      <p className="flex items-center gap-2 font-semibold text-rose-900 dark:text-rose-100">
-        <WarnIcon className="h-4 w-4 shrink-0" />
+      <p className="flex items-center gap-2 font-bold text-ink dark:text-ink-dark">
+        <WarnIcon className="h-4 w-4 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
         측정항목을 불러오지 못했습니다
       </p>
-      <p className="mt-1 text-rose-800 dark:text-rose-200/90">
+      <p className="mt-1 leading-[1.6] text-mute dark:text-mute-dark">
         잠시 후 다시 시도해 주세요. 결과와 다른 정보는 그대로 유지됩니다.
       </p>
       <button
         type="button"
         data-testid="fitness-items-retry"
         onClick={onRetry}
-        className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700"
+        className="mt-3 inline-flex min-h-11 items-center rounded-[3px] bg-ink px-4 py-2 text-[14px] font-bold text-paper transition-opacity hover:opacity-90 dark:bg-ink-dark dark:text-paper-dark"
       >
         다시 시도
       </button>
@@ -247,16 +247,17 @@ function DynamicForm({
   // ★ text-base(16px) 고정: 모바일 사파리는 16px 미만 입력에 포커스하면 페이지를 확대해 버린다
   //   — 확대되면 폼이 화면 밖으로 밀려 사용자가 손으로 되돌려야 한다(v1.7 실기기 피드백).
   //   min-h-11(44px) 터치 타겟과 함께 폼 전 항목에 같은 클래스를 쓴다.
+  // 입력은 밑줄만(1.5px ink) — 상자·라운드 없음. 16px·44px 규격은 그대로 지킨다.
   const fieldCls =
-    'mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 transition-colors duration-200 hover:border-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:border-slate-600'
-  const labelCls = 'text-sm font-medium break-keep text-slate-700 dark:text-slate-200'
-  const hintCls = 'mt-1 block text-xs leading-snug break-keep text-slate-600 dark:text-slate-400'
+    'mt-1 block min-h-11 w-full rounded-none border-0 border-b-[1.5px] border-ink bg-transparent px-0.5 py-2 text-base text-ink transition-colors dark:border-ink-dark dark:text-ink-dark'
+  const labelCls = 'text-[13.5px] font-bold break-keep text-ink dark:text-ink-dark'
+  const hintCls = 'mt-1 block text-[12px] leading-snug break-keep text-mute dark:text-mute-dark'
 
   return (
     <div data-testid="fitness-form" className="space-y-5">
       {grouped.map(([factor, frows]) => (
         <div key={factor}>
-          <h4 className="mb-2 text-xs font-bold tracking-wide text-slate-600 dark:text-slate-400">
+          <h4 className={`mb-2 pt-2.5 text-[12px] font-bold tracking-[0.12em] text-mute dark:text-mute-dark ${ITEM_RULE}`}>
             {factor}
           </h4>
           {/* 390px 에서는 1열(입력 한 칸이 화면 폭을 온전히 쓴다) — 좁은 2열은 숫자가 잘린다 */}
@@ -270,7 +271,7 @@ function DynamicForm({
                   <fieldset key={it.code} className="min-w-0" data-testid={`fit-derived-field-${it.code}`}>
                     <legend className={labelCls}>
                       {it.name}
-                      <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                      <span className="ml-1 font-normal text-mute dark:text-mute-dark">
                         (자동 계산{it.unit ? ` · ${it.unit}` : ''})
                       </span>
                     </legend>
@@ -278,7 +279,7 @@ function DynamicForm({
                     <div className="mt-1 grid grid-cols-2 gap-2">
                       {it.derived_from!.map((inp) => (
                         <label key={inp.code} className="block min-w-0">
-                          <span className="text-xs text-slate-600 dark:text-slate-400">
+                          <span className="text-[12px] text-mute dark:text-mute-dark">
                             {inp.name} ({inp.unit})
                           </span>
                           <input
@@ -315,7 +316,7 @@ function DynamicForm({
                     <span className={labelCls}>
                       {it.name}
                       {it.unit && (
-                        <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                        <span className="ml-1 font-normal text-mute dark:text-mute-dark">
                           ({it.unit})
                         </span>
                       )}
@@ -361,7 +362,7 @@ function DynamicForm({
                   <label htmlFor={valueId} className={`${labelCls} mt-2 block`}>
                     {active.name}
                     {active.unit && (
-                      <span className="ml-1 font-normal text-slate-600 dark:text-slate-400">
+                      <span className="ml-1 font-normal text-mute dark:text-mute-dark">
                         ({active.unit})
                       </span>
                     )}

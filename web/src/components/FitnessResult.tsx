@@ -1,6 +1,8 @@
-// 판정 결과 턴 (FR-08·09) — 밴드 칩·비교문·참고 등급(추정)·그래프 추천(출처 배지·연결 종목)·
+// 판정 결과 턴 (FR-08·09) — 등급 라벨·비교문·참고 등급(추정)·그래프 추천(근거 표기·연결 종목)·
 // 영상 카드·"이 운동 되는 근처 강좌" 필터·AI 처방(정직 라벨 + 항목별 "왜 이 운동?" 펼침).
 // 사실은 전부 엔진 출력이다 — 이 컴포넌트는 서버가 준 문장을 그대로 표시만 한다(P-2).
+//
+// B · 종이 메모: 카드 상자 없이 2px 잉크 괘선으로 나뉜 섹션 + 항목 점선.
 
 import { useMemo, useState } from 'react'
 import type {
@@ -17,11 +19,23 @@ import type { AppError } from './ErrorPanel'
 import { countMatching, nearbyMatchText } from '../lib/sports'
 import { dedupeDisplayTitles } from '../lib/format'
 import { FITNESS_DISCLAIMER } from './FitnessForm'
-import { Badge, CheckIcon, InfoIcon, WarnIcon } from './ui'
+import {
+  BTN_LINE,
+  BTN_TEXT,
+  CheckIcon,
+  ITEM_RULE,
+  InfoIcon,
+  PlayIcon,
+  ROW_RULE,
+  SECTION_RULE,
+  TINT_BOX,
+  WarnIcon,
+} from './ui'
 
+// 근거 표기 톤: 공식·지침은 초록 체크, 큐레이션·콘텐츠는 뮤트 텍스트(채운 배지 없음).
 type BadgeTone = 'neutral' | 'brand' | 'ok' | 'fail' | 'warn' | 'purple'
 
-// 엣지 출처 → UI 배지(FITNESS_GRAPH §2.3). 근거 없는 추천은 서버가 내보내지 않는다.
+// 엣지 출처 → UI 근거 표기(FITNESS_GRAPH §2.3). 근거 없는 추천은 서버가 내보내지 않는다.
 function sourceBadge(prov?: Provenance): { label: string; tone: BadgeTone } | null {
   if (!prov) return null
   switch (prov.source) {
@@ -42,6 +56,27 @@ function sourceBadge(prov?: Provenance): { label: string; tone: BadgeTone } | nu
   }
 }
 
+// 공식(체크) / 그 외(뮤트 텍스트) — 색맹 안전을 위해 초록에는 항상 체크 아이콘을 붙인다.
+function isVerifiedTone(tone: BadgeTone): boolean {
+  return tone === 'ok' || tone === 'brand'
+}
+
+// 근거 한 줄 표기(배지 아님): ✓ 공단 공식 기준 / 전문가 큐레이션(검증 중)
+function EvidenceNote({ label, tone }: { label: string; tone: BadgeTone }) {
+  const verified = isVerifiedTone(tone)
+  return (
+    <span
+      data-testid="source-badge"
+      className={`inline-flex items-center gap-1 whitespace-nowrap text-[12px] ${
+        verified ? 'text-ok dark:text-ok-dark' : 'text-mute dark:text-mute-dark'
+      }`}
+    >
+      {verified && <CheckIcon className="w-3 h-3 shrink-0" />}
+      {label}
+    </span>
+  )
+}
+
 function named(x: GraphNamed | string): { name: string; prov?: Provenance } {
   return typeof x === 'string' ? { name: x } : { name: x.name, prov: x.provenance }
 }
@@ -52,11 +87,9 @@ function viaGoalLabel(prov?: Provenance): string | null {
   return prov?.via_goal ? `${prov.via_goal} 목적 경유` : null
 }
 
-function bandTone(band: string): BadgeTone {
-  if (band.includes('미달')) return 'fail'
-  if (band.includes('1등급')) return 'ok'
-  if (band.includes('신체조성') || band.includes('참고')) return 'neutral'
-  return 'brand'
+// 기준 미달만 인주색 — 나머지 등급 라벨은 잉크(화면당 강조는 한두 군데).
+function bandIsFail(band: string): boolean {
+  return band.includes('미달')
 }
 
 export function FitnessResultCard({
@@ -93,124 +126,138 @@ export function FitnessResultCard({
   )
 
   return (
-    <section
-      data-testid="fitness-result"
-      aria-label="체력 판정 결과"
-      className="space-y-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="ok" icon={<CheckIcon className="h-3.5 w-3.5" />}>
+    <section data-testid="fitness-result" aria-label="체력 판정 결과" className="flex flex-col">
+      {/* ① 판정 머리: 명조 20px + 연령군, 그 아래 공식 기준·확인일 한 줄 */}
+      <div className={SECTION_RULE}>
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="font-serif text-[20px] font-extrabold text-ink dark:text-ink-dark">
+            체력 판정
+          </h3>
+          {result.age_group && (
+            <span className="text-[12px] text-mute dark:text-mute-dark">{result.age_group}</span>
+          )}
+        </div>
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-ok dark:text-ok-dark">
+          <CheckIcon className="w-3 h-3 shrink-0" />
           국민체력100 공식 인증기준
-        </Badge>
-        {result.basis_checked && (
-          <span data-testid="fitness-basis-checked" className="text-xs text-slate-600 dark:text-slate-400">
-            확인일 {result.basis_checked}
-          </span>
+          {result.basis_checked && (
+            <span data-testid="fitness-basis-checked" className="text-mute dark:text-mute-dark">
+              · 확인일 {result.basis_checked}
+            </span>
+          )}
+        </p>
+
+        {/* 항목별 등급 라벨 + 비교문 */}
+        {items.length > 0 && (
+          <>
+            <ul className="mt-2.5">
+              {items.map((it) => (
+                <li
+                  key={it.code}
+                  data-testid="item-band"
+                  className={`grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-x-2.5 py-2.5 ${ITEM_RULE}`}
+                >
+                  <span
+                    className={`text-[12px] font-bold tracking-[0.04em] ${
+                      bandIsFail(it.band)
+                        ? 'text-accent-ink dark:text-accent-ink-dark'
+                        : 'text-ink dark:text-ink-dark'
+                    }`}
+                  >
+                    {it.band}
+                  </span>
+                  <span className="text-[14px] leading-[1.6] text-ink dark:text-ink-dark">
+                    {it.comparison}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {/* 파생값 출처(FR-07 AC8) — 어디서 온 숫자인지 숨기지 않는다(P-1) */}
+            {(result.derived ?? []).map((d) => (
+              <p
+                key={d.code}
+                data-testid={`derived-note-${d.code}`}
+                className="mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
+              >
+                {d.code.toUpperCase()} {d.value}는 {Object.entries(d.from)
+                  .map(([k, v]) => `${k === 'height_cm' ? '키' : k === 'weight_kg' ? '몸무게' : k} ${v}${k === 'height_cm' ? 'cm' : k === 'weight_kg' ? 'kg' : ''}`)
+                  .join(' · ')}에서 계산한 값입니다({d.formula}).
+              </p>
+            ))}
+          </>
         )}
-        {result.age_group && (
-          <span className="text-xs text-slate-600 dark:text-slate-400">{result.age_group}</span>
+
+        {/* ② 참고등급(추정) + 미입력 요인 + 인증센터 안내 */}
+        {rg && (
+          <div className={`mt-3 ${TINT_BOX}`}>
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[12px] tracking-[0.1em] text-mute dark:text-mute-dark">
+                {rg.label}
+              </span>
+              {rg.grade != null && (
+                <span className="font-serif text-[17px] font-extrabold text-ink dark:text-ink-dark">
+                  {rg.grade}등급 수준(추정)
+                </span>
+              )}
+            </div>
+            {rg.missing.length > 0 && (
+              <p className="mt-1.5 text-[12.5px] leading-[1.55] text-mute dark:text-mute-dark">
+                미입력 요인: {rg.missing.join(', ')} — 전 항목 측정 시에만 공식 등급이 확정됩니다.
+              </p>
+            )}
+            <p className="mt-1 text-[12.5px] leading-[1.55] text-mute dark:text-mute-dark">
+              자가입력 기준 추정값입니다. <b className="text-ink dark:text-ink-dark">공식 인증은 체력인증센터(무료)</b>에서 받을 수 있습니다.
+            </p>
+          </div>
         )}
       </div>
 
-      {/* ① 항목별 band 칩 + 비교문 */}
-      {items.length > 0 && (
-        <div>
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">항목별 판정</h4>
-          <ul className="mt-2 space-y-1.5">
-            {items.map((it) => (
-              <li
-                key={it.code}
-                data-testid="item-band"
-                className="flex flex-wrap items-center gap-2 text-sm"
-              >
-                <Badge tone={bandTone(it.band)}>{it.band}</Badge>
-                <span className="text-slate-600 dark:text-slate-300">{it.comparison}</span>
-              </li>
+      {/* ③ 약점별 추천 (근거 표기 + 영상 카드) */}
+      <div className={`mt-5 ${SECTION_RULE}`}>
+        {result.recommendations.length > 0 ? (
+          <>
+            <h4 className="font-serif text-[22px] font-extrabold leading-[1.35] text-ink dark:text-ink-dark">
+              약점별 추천
+            </h4>
+            <p className="mt-1.5 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+              근거 등급을 숨기지 않아요 — 검증 중인 큐레이션은 그대로 "검증 중"이라고 적습니다.
+            </p>
+            {result.recommendations.map((r, i) => (
+              <RecommendationBlock key={i} rec={r} />
             ))}
-          </ul>
-          {/* 파생값 출처(FR-07 AC8) — 어디서 온 숫자인지 숨기지 않는다(P-1) */}
-          {(result.derived ?? []).map((d) => (
-            <p
-              key={d.code}
-              data-testid={`derived-note-${d.code}`}
-              className="mt-2 text-xs text-slate-600 dark:text-slate-400"
-            >
-              {d.code.toUpperCase()} {d.value}는 {Object.entries(d.from)
-                .map(([k, v]) => `${k === 'height_cm' ? '키' : k === 'weight_kg' ? '몸무게' : k} ${v}${k === 'height_cm' ? 'cm' : k === 'weight_kg' ? 'kg' : ''}`)
-                .join(' · ')}에서 계산한 값입니다({d.formula}).
+          </>
+        ) : (
+          result.weaknesses.length === 0 && (
+            <p className="flex items-start gap-1.5 text-[13.5px] leading-[1.6] text-ok dark:text-ok-dark">
+              <CheckIcon className="mt-0.5 w-4 h-4 shrink-0" />
+              입력한 항목에서는 기준 미달 약점이 발견되지 않았습니다.
             </p>
-          ))}
-        </div>
-      )}
+          )
+        )}
 
-      {/* ② 참고등급(추정) + 미입력 요인 + 인증센터 안내 */}
-      {rg && (
-        <div className="rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
-          <div className="flex items-center gap-2">
-            <Badge tone="warn" icon={<InfoIcon className="h-3.5 w-3.5" />}>
-              {rg.label}
-            </Badge>
-            {rg.grade != null && (
-              <span className="font-semibold text-slate-800 dark:text-slate-100">
-                {rg.grade}등급 수준(추정)
-              </span>
-            )}
-          </div>
-          {rg.missing.length > 0 && (
-            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-              미입력 요인: {rg.missing.join(', ')} — 전 항목 측정 시에만 공식 등급이 확정됩니다.
-            </p>
-          )}
-          <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            자가입력 기준 추정값입니다. <b>공식 인증은 체력인증센터(무료)</b>에서 받을 수 있습니다.
-          </p>
-        </div>
-      )}
-
-      {/* ③ 약점별 추천 블록 (출처 배지 + 영상 카드) */}
-      {result.recommendations.length > 0 ? (
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">약점별 추천</h4>
-          {result.recommendations.map((r, i) => (
-            <RecommendationBlock key={i} rec={r} />
-          ))}
-        </div>
-      ) : (
-        result.weaknesses.length === 0 && (
-          <p className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
-            입력한 항목에서는 기준 미달 약점이 발견되지 않았습니다.
-          </p>
-        )
-      )}
-
-      {/* ④ 이 운동 되는 근처 강좌 — 시설 리스트 필터 연동 */}
-      {sports.length > 0 && (
-        <button
-          type="button"
-          data-testid="facility-filter-apply"
-          onClick={() => onApplyFilter(sports)}
-          className="min-h-11 w-full rounded-lg border-2 border-brand-600 px-4 py-2.5 text-left font-semibold text-brand-700 transition hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-brand-700/20"
-        >
-          이 운동 되는 근처 강좌 보기 · {sports.join(' · ')}
-          <span
-            data-testid="facility-filter-count"
-            className="ml-1 font-normal text-brand-700 dark:text-brand-100"
+        {/* ④ 이 운동 되는 근처 강좌 — 시설 리스트 필터 연동 */}
+        {sports.length > 0 && (
+          <button
+            type="button"
+            data-testid="facility-filter-apply"
+            onClick={() => onApplyFilter(sports)}
+            className="press mt-4 flex min-h-[48px] w-full items-center justify-center rounded-[3px] bg-ink px-4 py-2 text-center font-serif text-[15px] font-extrabold text-paper transition-opacity hover:opacity-90 dark:bg-ink-dark dark:text-paper-dark"
           >
-            ({nearbyMatchText(counts)})
-          </span>
-        </button>
-      )}
+            <span>
+              이 운동 되는 근처 강좌 보기 · {sports.join(' · ')}
+              <span data-testid="facility-filter-count" className="ml-1 font-sans text-[13px] font-normal">
+                ({nearbyMatchText(counts)})
+              </span>
+            </span>
+          </button>
+        )}
+      </div>
 
       {/* ⑤ AI 처방 — 진행 문구("최대 1분") + 취소, 실패 시(429 등) 정직한 안내 */}
       {showAi && (
-        <div className="space-y-2">
+        <div className="mt-4 flex flex-col gap-2">
           {!aiLoading && (
-            <button
-              type="button"
-              data-testid="ai-prescribe-btn"
-              onClick={onRequestAi}
-              className="min-h-11 w-full rounded-lg bg-slate-800 px-4 py-2.5 font-semibold text-white transition hover:bg-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600"
-            >
+            <button type="button" data-testid="ai-prescribe-btn" onClick={onRequestAi} className={BTN_LINE}>
               {ai || aiError ? 'AI 처방 다시 받기' : 'AI 처방 받기'}
             </button>
           )}
@@ -218,46 +265,40 @@ export function FitnessResultCard({
             <div
               role="status"
               data-testid="ai-progress"
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200"
+              className={`flex flex-wrap items-center justify-between gap-2 text-[13px] text-ink dark:text-ink-dark ${TINT_BOX}`}
             >
               <span className="inline-flex items-center gap-2">
                 <span
                   aria-hidden="true"
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600 dark:border-slate-600 dark:border-t-slate-300"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-rule border-t-ink dark:border-rule-dark dark:border-t-ink-dark"
                 />
                 처방 문장을 만드는 중 — 최대 1분
               </span>
-              <button
-                type="button"
-                data-testid="ai-cancel"
-                onClick={onCancelAi}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700"
-              >
+              <button type="button" data-testid="ai-cancel" onClick={onCancelAi} className={BTN_TEXT}>
                 취소
               </button>
             </div>
           )}
           {aiError && !aiLoading && (
-            <div
+            <p
               role="alert"
               data-testid="ai-error"
-              className={`rounded-lg border p-3 text-sm ${
-                aiError.kind === 'ratelimit'
-                  ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-200'
-                  : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200'
-              }`}
+              className="flex items-start gap-1.5 rounded-[3px] border border-rule p-3 text-[13px] leading-[1.6] text-ink dark:border-rule-dark dark:text-ink-dark"
             >
+              <WarnIcon className="mt-0.5 w-4 h-4 shrink-0 text-accent-ink dark:text-accent-ink-dark" />
               {aiError.kind === 'ratelimit'
                 ? aiError.message
                 : 'AI 처방을 불러오지 못했어요. 위 규칙 기반 추천을 참고하시고, 잠시 후 다시 시도해 주세요.'}
-            </div>
+            </p>
           )}
           {ai && <AiResult ai={ai} />}
         </div>
       )}
 
       {/* 하단 고정 고지(FR-08 AC5) */}
-      <p className="border-t border-slate-100 pt-3 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
+      <p
+        className={`mt-4 pt-2.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark ${ROW_RULE}`}
+      >
         {FITNESS_DISCLAIMER}
       </p>
     </section>
@@ -276,13 +317,15 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
   // 근거가 없다고 말한다(P-1). 없는 추천을 지어내지 않는다.
   const empty = exercises.length === 0 && sports.length === 0 && videos.length === 0
   return (
-    <div data-testid="rec-block" className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
-      <p className="font-semibold text-slate-800 dark:text-slate-100">{rec.weakness}</p>
+    <div data-testid="rec-block" className="mt-4">
+      <p className="font-serif text-[18px] font-extrabold text-accent-ink dark:text-accent-ink-dark">
+        {rec.weakness}
+      </p>
 
       {empty && (
         <p
           data-testid="rec-empty"
-          className="mt-2 flex items-start gap-1.5 text-sm text-slate-600 dark:text-slate-400"
+          className="mt-1.5 flex items-start gap-1.5 text-[13px] leading-[1.6] text-mute dark:text-mute-dark"
         >
           <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" />
           이 요인에 연결된 그래프 근거가 아직 없습니다 — 근거 없는 추천은 만들지 않습니다.
@@ -290,23 +333,27 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
       )}
 
       {exercises.length > 0 && (
-        <ul className="mt-2 space-y-1.5">
+        <ul className="mt-2">
           {exercises.map((e, i) => {
             const badge = sourceBadge(e.prov)
             const via = viaGoalLabel(e.prov)
             return (
-              <li key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="text-slate-700 dark:text-slate-200">{e.name}</span>
-                {badge && (
-                  <span data-testid="source-badge">
-                    <Badge tone={badge.tone}>{badge.label}</Badge>
-                  </span>
-                )}
-                {via && (
-                  <span data-testid="rec-via-goal" className="text-xs text-slate-600 dark:text-slate-400">
-                    {via}
-                  </span>
-                )}
+              <li
+                key={i}
+                className={`flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 py-2 ${ITEM_RULE}`}
+              >
+                <span className="text-[15px] font-bold text-ink dark:text-ink-dark">{e.name}</span>
+                <span className="flex flex-wrap items-center gap-x-2">
+                  {badge && <EvidenceNote label={badge.label} tone={badge.tone} />}
+                  {via && (
+                    <span
+                      data-testid="rec-via-goal"
+                      className="text-[12px] text-mute dark:text-mute-dark"
+                    >
+                      {via}
+                    </span>
+                  )}
+                </span>
               </li>
             )
           })}
@@ -316,23 +363,19 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
       {/* 연결 종목 — 필터 버튼에는 이름만 남지만, 검증 상태는 여기서 그대로 보인다(P-1).
           B티어(유도·주짓수 등)가 "전문가 큐레이션(검증 중)" 인 사실을 화면에서 감추지 않는다. */}
       {sports.length > 0 && (
-        <div className="mt-2">
-          <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">연결 종목</p>
-          <ul data-testid="rec-sports" className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="mt-2.5">
+          <p className="text-[12px] tracking-[0.12em] text-mute dark:text-mute-dark">연결 종목</p>
+          <ul data-testid="rec-sports">
             {sports.map((s, i) => {
               const badge = sourceBadge(s.prov)
               return (
                 <li
                   key={i}
                   data-testid="rec-sport"
-                  className="flex flex-wrap items-center gap-1.5 text-sm"
+                  className={`flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 py-2 ${ITEM_RULE}`}
                 >
-                  <span className="text-slate-700 dark:text-slate-200">{s.name}</span>
-                  {badge && (
-                    <span data-testid="source-badge">
-                      <Badge tone={badge.tone}>{badge.label}</Badge>
-                    </span>
-                  )}
+                  <span className="text-[14px] text-ink dark:text-ink-dark">{s.name}</span>
+                  {badge && <EvidenceNote label={badge.label} tone={badge.tone} />}
                 </li>
               )
             })}
@@ -341,19 +384,13 @@ function RecommendationBlock({ rec }: { rec: FitnessRecommendation }) {
       )}
 
       {shownVideos.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-3">
+        <ul className="mt-3 grid grid-cols-3 gap-2.5">
           {shownVideos.map((v, i) => (
-            <li key={i} data-testid="video-card" data-raw-title={v.title} className="w-32">
-              <a
-                href={v.url ?? '#'}
-                target="_blank"
-                rel="noreferrer noopener"
-                title={v.title}
-                className="block"
-              >
+            <li key={i} data-testid="video-card" data-raw-title={v.title} className="min-w-0">
+              <a href={v.url ?? '#'} target="_blank" rel="noreferrer noopener" title={v.title} className="block">
                 {/* 썸네일 alt 는 원천 제목 그대로 — 표시용 다듬기는 화면 문자열에만 적용한다 */}
                 <VideoThumb src={v.img_url} title={v.title} />
-                <span className="mt-1 block truncate text-xs text-brand-700 underline underline-offset-2 dark:text-brand-100">
+                <span className="mt-1.5 block text-[13px] leading-[1.35] font-bold text-ink underline decoration-1 underline-offset-2 dark:text-ink-dark">
                   {videoNames[i]}
                 </span>
               </a>
@@ -373,9 +410,9 @@ function VideoThumb({ src, title }: { src?: string | null; title: string }) {
     return (
       <div
         data-testid="video-thumb-fallback"
-        className="grid h-[72px] w-32 place-items-center rounded-md bg-slate-100 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+        className="grid aspect-video w-full place-items-center rounded-[3px] border border-rule bg-tint text-ink dark:border-rule-dark dark:bg-tint-dark dark:text-ink-dark"
       >
-        영상
+        <PlayIcon className="h-5 w-5" />
       </div>
     )
   }
@@ -384,7 +421,7 @@ function VideoThumb({ src, title }: { src?: string | null; title: string }) {
       src={src}
       alt={title}
       onError={() => setFailed(true)}
-      className="h-[72px] w-32 rounded-md object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+      className="aspect-video w-full rounded-[3px] border border-rule object-cover dark:border-rule-dark"
     />
   )
 }
@@ -393,25 +430,26 @@ function VideoThumb({ src, title }: { src?: string | null; title: string }) {
 function AiResult({ ai }: { ai: FitnessAiResponse }) {
   const isAi = ai.provider === 'claude' || ai.provider === 'gemini'
   return (
-    <div data-testid="ai-result" className="mt-3 space-y-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
-      <div className="flex items-center gap-2">
-        <Badge tone={isAi ? 'purple' : 'brand'}>
-          <span data-testid="ai-provider-label">{isAi ? 'AI 보조 처방' : '기본 규칙 처방'}</span>
-        </Badge>
-        <span className="text-xs text-slate-600 dark:text-slate-400">provider: {ai.provider}</span>
+    <div data-testid="ai-result" className={`mt-2 ${TINT_BOX}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span
+          data-testid="ai-provider-label"
+          className="font-serif text-[16px] font-extrabold text-ink dark:text-ink-dark"
+        >
+          {isAi ? 'AI 보조 처방' : '기본 규칙 처방'}
+        </span>
+        <span className="text-[12px] text-mute dark:text-mute-dark">provider: {ai.provider}</span>
       </div>
 
       {ai.처방.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="mt-1">
           {ai.처방.map((rx, i) => (
-            <li key={i} data-testid="ai-rx" className="rounded-lg bg-white p-3 text-sm dark:bg-slate-900">
-              <p className="font-semibold text-slate-800 dark:text-slate-100">
-                {rx.운동}
-                <span className="ml-2 text-xs font-normal text-slate-600 dark:text-slate-400">
-                  {rx.목표체력요인}
-                </span>
+            <li key={i} data-testid="ai-rx" className={`py-2.5 ${ITEM_RULE}`}>
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-[15px] font-bold text-ink dark:text-ink-dark">{rx.운동}</span>
+                <span className="text-[12px] text-mute dark:text-mute-dark">{rx.목표체력요인}</span>
               </p>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
+              <p className="mt-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark">
                 강도: {rx.강도} · 빈도: {rx.주당빈도}
               </p>
               <RxWhy rx={rx} />
@@ -420,7 +458,7 @@ function AiResult({ ai }: { ai: FitnessAiResponse }) {
         </ul>
       )}
 
-      <p className="text-xs text-slate-600 dark:text-slate-400">{ai.주의}</p>
+      <p className="mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">{ai.주의}</p>
     </div>
   )
 }
@@ -443,13 +481,13 @@ function evidencePath(rx: AiPrescription): string {
 function RxWhy({ rx }: { rx: AiPrescription }) {
   const prov = rx.provenance ?? undefined
   const badge = sourceBadge(prov)
-  const rowCls = 'flex items-start gap-2 text-xs text-slate-700 dark:text-slate-200'
+  const rowCls = 'flex items-start gap-2 text-[12px] leading-[1.6] text-ink dark:text-ink-dark'
 
   if (!prov || !badge) {
     return (
       <p
         data-testid="rx-why-none"
-        className="mt-2 flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-400"
+        className="mt-1.5 flex items-start gap-1.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
       >
         <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         근거 정보 없음 — 이 항목에 연결된 그래프 근거를 확인할 수 없습니다.
@@ -460,42 +498,44 @@ function RxWhy({ rx }: { rx: AiPrescription }) {
   const pending = prov.curated_status === 'pending'
   const via = viaGoalLabel(prov)
   return (
-    <details data-testid="rx-why" className="mt-2">
+    <details data-testid="rx-why" className="mt-1">
       <summary
         data-testid="rx-why-toggle"
         aria-label={`왜 이 운동? ${rx.운동}`}
-        className="inline-flex min-h-11 cursor-pointer items-center text-xs font-semibold text-brand-800 underline decoration-dotted underline-offset-2 dark:text-brand-100"
+        className="inline-flex min-h-11 cursor-pointer items-center text-[12.5px] font-bold text-ink underline decoration-1 underline-offset-4 dark:text-ink-dark"
       >
         왜 이 운동?
       </summary>
-      <ul data-testid="rx-why-panel" className="mt-1 space-y-1.5">
+      <ul data-testid="rx-why-panel" className="mt-1 flex flex-col gap-1.5">
         <li className={rowCls}>
-          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600 dark:text-brand-100" />
+          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
           <span>근거 경로: {evidencePath(rx)}</span>
         </li>
         <li className={`${rowCls} flex-wrap`}>
           {pending ? (
-            <WarnIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-300" />
+            <WarnIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
           ) : (
-            <CheckIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <CheckIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ok dark:text-ok-dark" />
           )}
           <span className="inline-flex flex-wrap items-center gap-1.5">
             출처
-            <span data-testid="rx-why-badge">
-              <Badge tone={badge.tone}>{badge.label}</Badge>
+            <span data-testid="rx-why-badge" className="font-bold">
+              {badge.label}
             </span>
-            {/* 배지 문구에 이미 "검증 중"이 없는데 pending 이면 상태를 따로 붙인다(숨기지 않음) */}
-            {pending && !badge.label.includes('검증 중') && <Badge tone="warn">검증 중</Badge>}
+            {/* 표기에 이미 "검증 중"이 없는데 pending 이면 상태를 따로 붙인다(숨기지 않음) */}
+            {pending && !badge.label.includes('검증 중') && (
+              <span className="text-mute dark:text-mute-dark">· 검증 중</span>
+            )}
           </span>
         </li>
         {via && (
           <li className={rowCls}>
-            <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+            <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
             <span>{via} — 경로 등급은 두 홉 중 약한 쪽으로 표기합니다.</span>
           </li>
         )}
         <li className={rowCls}>
-          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-500 dark:text-slate-400" />
+          <InfoIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-mute dark:text-mute-dark" />
           <span>{FITT_SOURCE}</span>
         </li>
       </ul>

@@ -14,7 +14,7 @@
 set -euo pipefail
 HOST=stockllm
 REMOTE_DIR='~/sponavi'
-DOMAIN=doenayo.kro.kr
+DOMAIN=sponavi.kro.kr
 DB_REL='data/sponavi.db'
 FREEZE_REL='data/FREEZE.sha'
 HEALTH_URL='http://127.0.0.1:8100/api/health'

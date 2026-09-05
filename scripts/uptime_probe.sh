@@ -3,7 +3,7 @@
 # 워치독(systemd)은 컨테이너 헬스만 재시작하고 VM 프리즈(8/3 stockllm 사례)는 못 잡으므로 외부에서 찌른다.
 # 실패 시: macOS 알림 + 로그 1줄. 성공 시: 로그 1줄(조용). 연속 실패 3회부터 알림(깜빡임 억제).
 set -u
-URL="${SPONAVI_PROBE_URL:-https://doenayo.kro.kr/api/health}"
+URL="${SPONAVI_PROBE_URL:-https://sponavi.kro.kr/api/health}"
 LOG="${HOME}/Library/Logs/sponavi-uptime.log"
 STATE="${HOME}/Library/Logs/sponavi-uptime.state"
 mkdir -p "$(dirname "$LOG")"

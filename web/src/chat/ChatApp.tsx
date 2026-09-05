@@ -30,9 +30,9 @@ function Header({
     // 제호 아래 2px 잉크 괘선 — 화면에서 가장 굵은 선이 여기 하나다(B·종이 메모).
     <header className="sticky top-0 z-40 border-b-2 border-ink bg-paper dark:border-ink-dark dark:bg-paper-dark">
       <div className="mx-auto flex max-w-7xl items-baseline justify-between gap-3 px-5 pt-4 pb-2.5">
-        <a href="#top" className="flex min-w-0 items-baseline gap-2.5" aria-label="되나요 맨 위로">
+        <a href="#top" className="flex min-w-0 items-baseline gap-2.5" aria-label="스포내비 맨 위로">
           <span className="font-serif shrink-0 text-[22px] leading-none font-extrabold tracking-[-0.02em] text-ink dark:text-ink-dark">
-            되나요
+            스포내비
           </span>
           <span className="min-w-0 truncate text-[12px] text-mute dark:text-mute-dark">
             스포츠 복지, 되는지 바로 확인
@@ -207,7 +207,7 @@ function ChatShell({ demo }: { demo: boolean }) {
         )}
 
         <main className="order-2 flex min-w-0 flex-1 flex-col lg:order-1">
-          <h1 className="sr-only">되나요 — 스포츠 복지 자격·시설·체력, 되는지 바로 확인하기</h1>
+          <h1 className="sr-only">스포내비 — 스포츠 복지 자격·시설·체력, 되는지 바로 확인하기</h1>
           <ChatStream
             messages={state.messages}
             pending={state.pending}

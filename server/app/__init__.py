@@ -1,1 +1,1 @@
-"""Doenayo server application package."""
+"""SpoNavi server application package."""

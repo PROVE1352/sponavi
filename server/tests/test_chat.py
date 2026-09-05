@@ -505,7 +505,7 @@ def test_request_payload_shape_and_no_prompt_injection_into_system():
     assert payload["messages"][1]["content"] == text
     assert text not in payload["messages"][0]["content"], "발화는 시스템 프롬프트에 삽입 금지"
     assert "eligible" not in payload["messages"][0]["content"], "비화이트리스트 슬롯 미전송"
-    assert "되나요" in payload["messages"][0]["content"] and "안내 화자" in payload["messages"][0]["content"], "봇 화자 페르소나 지시(PRD §2.5)"
+    assert "스포내비" in payload["messages"][0]["content"] and "안내 화자" in payload["messages"][0]["content"], "봇 화자 페르소나 지시(PRD §2.5)"
     schema = payload["response_format"]["json_schema"]
     assert payload["response_format"]["type"] == "json_schema"
     assert schema["strict"] is True

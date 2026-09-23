@@ -42,10 +42,15 @@ test('P2 · 27세 낀 계층 → 대체경로 스텝 다이어그램(전문가 �
   await expect(path.getByText(/전문가 큐레이션/)).toBeVisible()
   await expect(path.getByText('공공 프로그램')).toBeVisible()
 
-  // 복수 대체경로 히어로(FR-02 AC5 v1.10) — 항목은 '공식 확인' 2개, 검증 대기는 "확인 중 1건"
+  // 복수 대체경로 히어로(FR-02 AC5 v1.10) — 성북구는 체육시설 조례 감면 원문 확인 지역이라
+  // 공공시설이 '공식 확인(조례)'으로 올라와 공식 확인 3개, 검증 대기 0건(2026-09-23).
   await expect(stream(page).getByTestId('alt-routes-block')).toBeVisible()
-  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(2)
-  await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
+  await expect(stream(page).getByTestId('alt-route-pending')).toHaveCount(0)
+  // 27세 비저소득에게 맞는 감면은 없다 — 없는 할인을 만들지 않고 일반 요금이라고 말한다
+  await expect(stream(page).getByTestId('public-fee-summary')).toHaveText(
+    '성북구 구립 체육시설 · 해당 감면 없음 · 일반 요금',
+  )
 
   // 이용권 ✗ → 근처 요약도 가맹 숫자를 앞세우지 않는다(FR-04 AC6: 못 쓰는 수를 강조하지 않음)
   const summary = page.getByTestId('facility-summary')
@@ -119,18 +124,19 @@ test('P3 · 14세 지체장애 → 장애인스포츠강좌이용권 예상 자�
   await shot(page, 'e2e-shots/P3-dvoucher-eligible.png')
 })
 
-test('P4 · 72세 청각장애(인천 서구) → 공급공백 배너 + 최근접 안내', async ({ page }) => {
+test('P4 · 72세 청각장애(강원 고성군) → 공급공백 배너 + 최근접 안내', async ({ page }) => {
   await startPersona(page, 'P4')
 
   const alert = stream(page).getByRole('alert').filter({ hasText: '가맹시설이 없습니다' })
   await expect(alert).toBeVisible()
-  await expect(alert).toContainText('서구')
+  await expect(alert).toContainText('고성군')
   await expect(stream(page).getByText(/가장 가까운 곳은/)).toBeVisible()
   // 커버리지(수급률)는 서울 15구 실측분뿐 — 인천은 데이터가 없으므로 그 줄을 만들지 않는다(P-1).
   await expect(stream(page).getByText(/수급률은/)).toHaveCount(0)
-  // 연령 초과 → 어르신 특화 대체경로(공식 확인 2 = 상품권·무료강좌, 공공프로그램 1은 검증 대기)
-  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(2)
-  await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+  // 연령 초과 → 공공시설(고성군 조례: 등록 장애인 50%) + 어르신 상품권·무료강좌 = 공식 확인 3
+  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
+  await expect(stream(page).getByTestId('alt-route-pending')).toHaveCount(0)
+  await expect(stream(page).getByTestId('public-fee-summary')).toHaveText('고성군 군립 체육시설 · 장애인 50%')
 
   await shot(page, 'e2e-shots/P4-supply-gap.png')
 })

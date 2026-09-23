@@ -14,8 +14,9 @@ import os
 import subprocess
 import time
 import traceback
+from typing import Literal, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -421,3 +422,35 @@ def get_accessibility(ids: str = "") -> dict:
         }
         for fid, v in data.items()
     }
+
+
+# 시설 키워드 검색(이름·주소) — 이용권 가맹시설 대부분이 구 중심 폴백 좌표라 지도 이동으로는
+# 다른 동의 시설을 찾을 수 없다(대구 북구 실측: 가맹 273곳 전부 centroid). 자격 판정 없음 —
+# 이용권 행은 subsidy/copay=null(자격 미상), fee_month 만 싣는다. docs/API.md 참조.
+_SIGUNGU_CD_RE = r"^\d{5}$"
+
+
+@app.get("/api/facilities/search")
+def get_facilities_search(
+    sigungu_cd: str = Query(..., pattern=_SIGUNGU_CD_RE),
+    q: str = Query(...),
+    program: Literal["svoucher", "dvoucher", "public"] = "svoucher",
+    limit: int = Query(engine.SEARCH_LIMIT_DEFAULT, ge=1),
+    lat: Optional[float] = Query(None, ge=-90, le=90),
+    lon: Optional[float] = Query(None, ge=-180, le=180),
+    age: Optional[int] = Query(None, ge=0, le=120),
+) -> dict:
+    qs = " ".join(q.split())  # trim + 연속 공백 1칸 (IME 전각 공백도 split 대상)
+    if not qs or len(qs) > engine.SEARCH_Q_MAX:
+        return _error(
+            "INVALID_REQUEST",
+            f"입력값 오류(q): 검색어는 1~{engine.SEARCH_Q_MAX}자로 입력해 주세요.",
+            status=422,
+        )
+    if (lat is None) != (lon is None):
+        return _error("INVALID_REQUEST", "입력값 오류(lat,lon): 위도·경도는 함께 보내야 합니다.",
+                      status=422)
+    return engine.search_facilities(
+        get_store(), sigungu_cd=sigungu_cd, q=qs, program=program,
+        limit=min(limit, engine.SEARCH_LIMIT_MAX), lat=lat, lon=lon, age=age,
+    )

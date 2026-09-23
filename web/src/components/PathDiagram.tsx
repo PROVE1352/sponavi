@@ -8,7 +8,12 @@ function nodeLabel(id: string): { title: string; sub?: string } {
   if (id === 'person') return { title: '나', sub: '입력한 상황' }
   if (id === 'svoucher') return { title: '스포츠강좌이용권' }
   if (id === 'dvoucher') return { title: '장애인 이용권' }
-  if (id === 'public_program') return { title: '공공 프로그램', sub: '무료/저가' }
+  if (id === 'public_program') return { title: '공공 프로그램', sub: '구립·군립 시설' }
+  // 장소가 없는 제도 — 경로는 여기서 끝난다(시설 홉을 잇지 않는다, 서버 _PLACE_BASED_PROGRAMS).
+  if (id === 'tteuntteun') return { title: '튼튼머니', sub: '포인트 적립' }
+  if (id === 'culture_deduction') return { title: '문화비 소득공제', sub: '연말정산' }
+  if (id === 'senior_voucher') return { title: '어르신 상품권', sub: '기초연금 수급' }
+  if (id === 'senior_free_class') return { title: '어르신 무료강좌', sub: '65세+' }
   if (id.startsWith('facility:')) return { title: '시설 연결', sub: '근처 자원' }
   return { title: id }
 }

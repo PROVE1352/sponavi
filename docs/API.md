@@ -11,10 +11,14 @@
   "sigungu_cd": "11290", "sigungu_nm": "성북구",
   "income_class": "기초생활수급 | 차상위 | 한부모 | 그외",
   "disability": { "has": false, "type": null },
-  "location": { "lat": 37.60, "lon": 127.02 }
+  "location": { "lat": 37.60, "lon": 127.02 },
+  "special": ["multichild"]
 }
 ```
-`location` 없으면 시군구 중심좌표 사용.
+`location` 없으면 시군구 중심좌표 사용. 둘 다 없거나 시군구코드가 무효면 400 `LOCATION_UNRESOLVED`.
+`special`(선택, 기본 `[]`): 2027 예산안 확대 대상 자가선언 — `multichild`(3자녀 이상 다자녀가구) ·
+`defector`(북한이탈주민). 어휘 밖 값은 422. **2026 판정에는 쓰이지 않고** svoucher 카드의
+`next_year` 블록에만 쓰인다. 인구감소지역은 자가선언이 아니라 서버가 시군구코드로 대조한다.
 
 응답:
 ```json
@@ -55,6 +59,30 @@
 **첫 항목**(= 아래 dedupe·공식확인 우선 정렬의 1순위)으로 멀티홉 경로 구성 — 경로 그림의 대체 홉과
 `alt_edges[0].to`는 항상 같다. `supply_gap`은 항상 포함(있어도 통계 노출). 이용권 카운트는 구 단위(`voucher_scope:"sigungu"`)이며 행정구역 개편 전환기 영역그룹(FR-05 AC4, 예: 인천 서해구·검단구 ← 옛 서구)이면 `scope_codes`에 합산한 코드들, `scope_label`에 "○○ 일대(옛 △△)", `scope_reason`에 사유가 실린다(그룹이 아니면 자기 코드 1개·null).
 
+### `eligibility[].next_year` — 2027 예산안 확대 대상 (2026-09-23)
+
+svoucher 카드에만, **2026 판정이 소득 사유 하나로만 ✗**(= 연령이 5~18세 안, 비장애)일 때만 붙는다.
+2026 판정(`eligible`)은 그대로 두고 나란히 보여 주는 블록이다. 2026 ✓·연령 ✗·dvoucher 카드면 키 자체가 없다.
+```json
+"next_year": {
+  "year": 2027, "basis": "2027년 정부 예산안(국회 심의 전)",
+  "eligible": true,
+  "matched": [ { "id": "multichild", "label": "3자녀 이상 다자녀가구", "detail": "3자녀 이상 다자녀가구 — 본인 응답" } ],
+  "possible_if": ["북한이탈주민", "인구감소지역 거주 유·청소년"],
+  "note": "구체적인 신청 자격과 방법은 추후 국민체육진흥공단과 각 지방자치단체가 안내 (2026-09-09 발표 기준)",
+  "age_assumed": true, "age_note": "2027년 지원 연령은 발표되지 않아 현행(5~18세)과 같다고 가정한 것 — 확정 기준 아님",
+  "apply_hint": "2027년 지원분 신청 시기는 공단 공고 확인 (참고: 2026년 지원분은 2025.11.10~11.28)",
+  "sources": [ { "url": "…", "label": "머니투데이(2026-09-04)", "checked": "2026-09-23" } ],
+  "curated": "예산안 발표(2026-09-09)", "subsidy_month": 105000
+}
+```
+- 정적 필드 원천 = `data/rules.json` `programs[svoucher].next_year`. 판정은 결정론: `special` 자가선언 +
+  `data/depopulation_regions.json`(행안부 인구감소지역, 현행·구 코드 `alias_codes` 모두) 대조. LLM 무관(P-2).
+- `matched[].id = "depop_region"`이면 `detail`은 "강원 고성군 — 인구감소지역", `basis`에 지정 고시 근거가
+  함께 실리고, 지정 고시의 공식(go.kr) 출처가 `sources` 뒤에 붙는다.
+- `eligible`은 **예산안 기준 예상**이다 — 국회 확정 전이므로 화면은 "될 수 있어요"로만 말한다(P-1·P-4).
+- **히어로 N·`alt_edges`에 절대 포함되지 않는다**(카드 부속 블록, 경로 그림에도 없음).
+
 ### `alt_edges` — 복수 대체경로 (FR-02 AC3 · 2026-08-27 결정 CQ2A)
 
 자격 ✗(또는 dvoucher 자격 ✓ + 예상 4·5순위·미정)일 때 "지금 바로 되는 것" 목록.
@@ -69,8 +97,29 @@
 - `path`의 `대체경로` 홉은 이 목록의 **첫 항목**과 같다(OV4).
 - 헤딩의 N(“지금 바로 되는 것 N가지”)은 **`공식 확인` 항목 수만** 센다 — `검증 대기`는
   헤딩 밖 "확인 중 1건"으로 뺀다(P-1).
-- 실측(P2 = 27세·비장애·그외): `["tteuntteun"(공식), "culture_deduction"(공식),
-  "public_program"(검증 대기)]` — 3줄, dedupe 전에는 5줄이었다.
+- **대상 제도 자체의 연령 범위**(`eligibility.age_min/age_max`, null=무제한)가 사람의 나이를 벗어나면
+  그 엣지는 빠진다(2026-09-23). 예: 문화비 소득공제는 `age_min: 19`(근로소득자 요건 — 설계 결정)라
+  16세에게는 안 나오고, 3세에게는 튼튼머니(만 4세+)도 안 나온다. `path`의 대체 홉도 같은 목록을 쓴다.
+- 실측(27세·비장애·그외, 조례 미확인 지역 예: 강남구): `["tteuntteun"(공식), "culture_deduction"(공식),
+  "public_program"(검증 대기)]` — 3줄, dedupe 전에는 5줄이었다. P2(성북구)는 아래 조례 승격으로
+  `["public_program"(공식 확인(조례 2026-09-17)), "tteuntteun", "culture_deduction"]` — N=3.
+- **`public_program` 조례 승격 (2026-09-23)**: 사람의 시군구(구 코드는 `sigungu_alias`로 현행 해석)가
+  `data/public_fee_reductions.json`(시군구 체육시설 조례 감면 원문 확인분 — 현재 성북·송파·노원·대구 북구·
+  강원 고성)에 있으면 `curated`를 `"공식 확인(조례 {시행일})"`로 올리고 아래 필드를 붙인다. 없으면
+  `검증 대기` 그대로이고 필드도 없다(파일 자체가 없어도 같다).
+  - `region{sigungu_cd,sigungu_nm,sido}` · `law{title,article,url,effective}` · `operator{name,url}` · `scope`
+  - `reductions[]`: **이 사람에게 맞는** 감면만 `{target,label,rate,condition,quote,source_url,
+    age_definition?,caveat?}`. youth=조례의 청소년·어린이 나이 범위(정의가 없으면 18세 이하로 보고
+    `caveat`), basic_livelihood=기초생활수급, single_parent=한부모, multichild=`special` 다자녀(3자녀 행이
+    있으면 그것만 · 서울은 다둥이카드 기준 미검증 `caveat`), disability=장애. near_poor·defector 는
+    데이터에 조항이 있을 때만(현재 없음). `other`(중복 불가 등)는 감면이 아니라 싣지 않는다.
+  - `no_reduction_for[]`: 이 사람에게 해당하는데 조례에 조항이 없는 정직한 공백(예: 차상위 →
+    `"차상위 전용 감면 없음(조례 확인)"`).
+  - `caveats[]`: 지역 `unverified` 중 이 사람과 관련된 문장(대상 키워드가 없으면 지역 공통) + 서로 다른
+    사유 2개 이상 매칭 시 중복 불가 안내. 인용 표기 메모는 싣지 않는다.
+- **경로 시설 홉은 장소 기반 대안(`public_program`)일 때만** 잇는다. 대체 홉이 튼튼머니·문화비
+  소득공제·어르신 상품권이면 경로는 그 제도 노드에서 끝난다(적립·등록 시설 데이터가 없으므로 근처
+  공공시설을 붙이면 거짓 연결이다).
 
 ### `nearby` (2026-08-27 · 결정 1A·OV1·OV3·OV6)
 
@@ -92,6 +141,53 @@
 - **`alternatives[].faci_gb`**: `"공공" | "신고" | "등록" | null` — 시설 구분(원천
   `faci_cd` 조인, `facilities.faci_gb` 컬럼). AltRow 배지·`gap.html`·성공기준이 같은
   컬럼을 쓴다. 컬럼이 없는 옛 DB에서는 `null`(없는 배지를 만들지 않는다).
+
+## GET /api/facilities/search (2026-09-23 · 동·도로명·시설명 검색)
+
+`?sigungu_cd=27230&q=구암로&program=svoucher&limit=30[&lat=…&lon=…][&age=…]`
+
+배경: 이용권 가맹시설 28,772곳 중 실좌표(`coord_source=geocoded`)는 약 538곳뿐이고 나머지는
+시군구 중심 폴백이라, 지도를 옮겨도 목록이 바뀌지 않는다(대구 북구 실측: 가맹 273곳 전부 `centroid`).
+그래서 **그 시군구 안에서 이름·주소 키워드**로 찾는다.
+
+| 파라미터 | 규칙 |
+|---|---|
+| `sigungu_cd` | 필수, 숫자 5자리(아니면 422). assess 와 같은 정규화 — 구 코드는 `sigungu_alias`로 현행 코드로 해석하고, 영역그룹(`region.SIGUNGU_GROUPS`, 인천 서해·검단 등)이면 그룹 전 코드를 검색한다. 좌표 없는/모르는 코드는 400 `LOCATION_UNRESOLVED`. |
+| `q` | 필수. 앞뒤 공백 제거·연속 공백 1칸으로 접은 뒤 **1~30자**(아니면 422 `INVALID_REQUEST`). |
+| `program` | `svoucher`(기본) · `dvoucher` · `public`. 밖의 값은 422. |
+| `limit` | 기본 30, 1 미만 422, **50 초과는 50으로 자른다**. |
+| `lat`,`lon` | 선택(둘 다 또는 둘 다 없음, 한쪽만이면 422). 거리 원점 — 없으면 시군구 중심(assess 와 같은 폴백). 실좌표 행의 `dist_km`·거리순 정렬에 쓴다. |
+| `age` | 선택(0~120). 대표 수강료(`fee_month`)를 그 나이 강좌 중 최저로 고른다. 없으면 전체 강좌 중 최저. |
+
+매칭: `q`를 공백으로 나눈 **모든 토큰**이 `name` 또는 `addr`에 부분일치(AND). 파라미터 바인딩 +
+`LIKE … ESCAPE '\'`라 `%`·`_`·`\`는 글자 그대로 찾는다. ASCII 대소문자 무시(한글은 해당 없음).
+정렬: 실좌표(`api`·`geocoded`) 행 먼저(원점에서 거리순) → 구 중심 폴백 행(이름순).
+
+응답(실측, 대구 북구 `q=구암로`, `limit=2`):
+```json
+{
+  "sigungu_cd": "27230", "sigungu_nm": "북구", "scope_codes": ["27230"], "scope_label": null,
+  "program": "svoucher", "q": "구암로", "tokens": ["구암로"], "match_fields": ["name", "addr"],
+  "eligibility_applied": false, "total": 27, "truncated": true,
+  "facilities": [
+    { "id": "voucher-5479700149-25830", "name": "GOOD BOXING 굿복싱", "source": "voucher",
+      "sports": ["복싱"], "lat": 35.9241, "lon": 128.5629, "coord_source": "centroid", "dist_km": null,
+      "sigungu_nm": "북구", "fee_month": 100000, "subsidy": null, "copay": null,
+      "disability_support": null, "addr": "대구광역시 북구 구암로32길 6-16" }
+  ]
+}
+```
+- **행 모양 = assess `nearby`와 같은 직렬화기**(`engine._voucher_row` / `_alt_row`) + `addr`(매칭 근거).
+  `program=public`이면 `alternatives[]` 모양(`type`·`faci_gb`·`note`).
+- **자격 판정 없음(`eligibility_applied:false`)** — 이용권 행은 `subsidy = null`, `copay = null`,
+  `fee_month`만 사실로 싣는다. 지원금을 빼면 거짓 금액, `0`을 넣으면 "지원 없음(자격 ✗)"이라는
+  거짓 판정이 되기 때문이다(P-1·P-2). 웹은 수강료만 보여 주고 지원·자부담은 위 자격 판정을 따르라고 적는다.
+- 근사 행(`centroid`)은 `dist_km:null`(FR-04) — 웹은 "위치 근사(구 중심)" 배지, 지도 확대 불가.
+- `total` = 잘라내기 전 일치 수, `truncated = total > facilities.length`.
+- **알려진 한계**: 도로명 주소(예: "구암로32길 6-16")에는 법정동 이름이 없어서 동 이름으로는 일부 시설이
+  빠진다. 지번 주소("팔달동 52번지")·괄호 동 표기("(구암동)")가 있는 행만 동 이름으로 잡힌다 —
+  웹은 0건일 때 도로명·시설 이름으로도 찾아보라고 안내한다.
+- 레이트리밋: 일반 `api` 버킷(120/min). 쿼리스트링(검색어)은 액세스 로그에 남지 않는다(P-3).
 
 ## GET /api/fitness/items?age=N
 
@@ -228,7 +324,8 @@ SPEC §5의 P1~P5를 assess 요청 바디 배열로 반환. 웹은 이걸 페르
   "text": "저 14살이고 성북구 살아요",
   "slots": {
     "age": null, "sex": null, "sigungu_cd": null,
-    "income_class": null, "disability": { "has": null, "type": null }
+    "income_class": null, "disability": { "has": null, "type": null },
+    "special": []
   },
   "phase": "collect"
 }
@@ -259,6 +356,10 @@ SPEC §5의 P1~P5를 assess 요청 바디 배열로 반환. 웹은 이걸 페르
 - LLM은 지역을 **원문 문자열까지만** 추출한다. 시군구 코드 확정은 서버가 sigungu 테이블 대조로
   결정론 수행(정확 1건→확정, 복수→region_candidates, 0건→미갱신). LLM이 코드를 고르지 않는다.
 - `slot_updates`는 AssessRequest 필드 검증(pydantic) 통과분만 반영. enum 밖 값은 버린다.
+- `special`(2026-09-23): LLM 이 `multichild`/`defector` 배열로 추출하되, 어휘 밖 값은 버리고 **발화에
+  해당 단서가 있을 때만** 채택한다(다자녀: "다자녀·셋째·세 자녀·아이가 셋·삼남매…", 북한이탈주민:
+  "탈북·북한이탈·새터민…"). 자가선언이 곧 판정 재료라 LLM 창작을 결정론으로 한 번 더 막는다.
+  `rules` 폴백에서는 다른 슬롯과 같이 비어 있다(규칙 슬롯 추출 경로 없음).
 - `reply` 후필터: 숫자·금액·%·프로그램명·자격 단정 표현 감지 시 폐기(null). 사실 문장은 전부
   클라 템플릿+엔진 출력(P-2).
 - `reply` **정합 보정**(2026-08-27 · 결정 CQ5A · ⚠#14): 후필터 통과 후, `slot_updates`와

@@ -74,7 +74,7 @@ def _edge_shape(edges) -> list[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 # alt_edges — to 유일 · '공식 확인' 우선 (CQ2A)
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("pid", ["P1", "P2", "P5"])
+@pytest.mark.parametrize("pid", ["P1", "P2", "P4", "P5"])
 def test_alt_edges_match_contract(db_store, pid):
     expected = _edge_shape(_contract("alt_edges")[pid])
     actual = _edge_shape(_assess(db_store, pid)["alt_edges"])
@@ -239,3 +239,67 @@ def test_p5_prefill_weak_item(personas_by_id):
     )
     unknown = [k for k in actual if k not in expected]
     assert not unknown, f"P5 프리필에 계약에 없는 항목 코드: {unknown} (계약: {sorted(expected)})"
+
+
+# ---------------------------------------------------------------------------
+# svoucher.next_year (2027 예산안) — 목 정적 필드 ↔ rules.json · 16세 다자녀 판정 모양
+# ---------------------------------------------------------------------------
+_NY_STATIC = (
+    "year", "basis", "added_categories", "age_min", "age_max", "age_assumed",
+    "age_note", "subsidy_month", "note", "apply_hint", "curated",
+)
+
+
+def test_next_year_contract_matches_rules(store):
+    contract = _contract("next_year")
+    ny = store.program("svoucher")["next_year"]
+    for k in _NY_STATIC:
+        assert contract[k] == ny[k], f"next_year.{k} 불일치: 계약 {contract[k]!r} · rules {ny[k]!r}"
+    rules_src = [(s["url"], s["label"], s["checked"]) for s in ny["sources"]]
+    contract_src = [(s["url"], s["label"], s["checked"]) for s in contract["sources"]]
+    assert contract_src == rules_src
+
+
+def test_next_year_16_multichild_shape(store):
+    expected = _contract("next_year")["P16_seongbuk_multichild"]
+    body = {"age": 16, "sex": "M", "sigungu_cd": "11290", "sigungu_nm": "성북구",
+            "income_class": "그외", "disability": {"has": False}, "special": ["multichild"]}
+    ny = assess(store, body)["eligibility"][0]["next_year"]
+    assert ny["eligible"] is expected["eligible"]
+    assert [m["id"] for m in ny["matched"]] == expected["matched"]
+    assert ny["possible_if"] == expected["possible_if"]
+
+
+# ---------------------------------------------------------------------------
+# public_program 조례 감면 — 목(서울 3구 사본·TS 포트) ↔ data 원본 · 서버 출력
+# ---------------------------------------------------------------------------
+def test_public_fee_contract_regions_are_verbatim_copy():
+    contract = _contract("public_fee")
+    data_path = Path(__file__).resolve().parents[2] / "data" / "public_fee_reductions.json"
+    src = json.loads(data_path.read_text(encoding="utf-8"))
+    by_cd = {r["sigungu_cd"]: r for r in src["regions"]}
+    assert contract["checked"] == src["checked"]
+    assert [r["sigungu_cd"] for r in contract["regions"]] == [
+        r["sigungu_cd"] for r in src["regions"] if r["sido"] == "서울특별시"
+    ]
+    for r in contract["regions"]:
+        assert r == by_cd[r["sigungu_cd"]], f"{r['sigungu_nm']} 사본이 원본과 다르다"
+
+
+def test_public_fee_contract_cases_match_server(store):
+    for name, case in _contract("public_fee")["cases"].items():
+        res = assess(store, case["body"])
+        pp = next(e for e in res["alt_edges"] if e["to"] == "public_program")
+        for k, v in case["expected"].items():
+            assert pp.get(k) == v, f"{name}.{k} 불일치\n  계약: {v}\n  서버: {pp.get(k)}"
+        official = [e["to"] for e in res["alt_edges"] if e["curated"].startswith(OFFICIAL_PREFIX)]
+        assert official == case["hero_official_tos"], name
+
+
+@pytest.mark.parametrize("pid", ["P2", "P4", "P5"])
+def test_public_program_contract_block_matches_db(db_store, pid):
+    """계약 alt_edges 의 public_program 블록(목 페르소나가 그대로 렌더) = 실DB 출력."""
+    expected = next(e for e in _contract("alt_edges")[pid] if e["to"] == "public_program")
+    actual = next(e for e in _assess(db_store, pid)["alt_edges"] if e["to"] == "public_program")
+    for k in ("curated", "reductions", "no_reduction_for", "caveats", "law", "region", "checked"):
+        assert expected.get(k) == actual.get(k), f"{pid}.{k} 불일치"

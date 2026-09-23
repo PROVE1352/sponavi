@@ -37,7 +37,12 @@ export interface AssessRequest {
   income_class: IncomeClass
   disability: Disability
   location?: LatLon | null
+  // 2027 확대 대상 자가선언(3자녀 이상 다자녀가구 / 북한이탈주민). 서버 기본값 [].
+  // 5~18세 · 소득 '그외' 일 때만 묻는다 — 나머지는 [] 로 보낸다.
+  special?: SpecialCategory[]
 }
+
+export type SpecialCategory = 'multichild' | 'defector'
 
 export interface EligibilityReason {
   field: string
@@ -83,6 +88,37 @@ export interface ProgramEligibility {
   verified: boolean
   // dvoucher 자격 카드에만 부착.
   selection?: Selection
+  // svoucher 카드에만, 2026 소득 사유 ✗ + 5~18세일 때만 부착(2027 정부 예산안 · 국회 심의 전).
+  next_year?: NextYear
+}
+
+export interface NextYearMatched {
+  id: string
+  label: string
+  detail: string
+}
+
+export interface NextYearSource {
+  url: string
+  label: string
+  checked: string
+}
+
+// ★ 제안(예산안)이지 확정 사실이 아니다 — 화면은 "될 수 있어요 · 국회 확정 전"으로만 말한다.
+export interface NextYear {
+  year: number
+  basis: string
+  eligible: boolean
+  matched: NextYearMatched[]
+  possible_if: string[]
+  note: string
+  apply_hint: string
+  sources: NextYearSource[]
+  curated: string
+  subsidy_month: number
+  // 2027 지원 연령이 발표되지 않아 현행(5~18세)으로 가정했는지 + 그 고지 문장.
+  age_assumed?: boolean
+  age_note?: string
 }
 
 export type EdgeResult = 'ok' | 'fail'
@@ -185,12 +221,44 @@ export interface AltEdgeProgram {
   apply_url: string | null
 }
 
+// 공공체육시설 사용료 감면(시군구 조례 원문) — public_program 대체경로에만, 조례 확인 지역에서만 붙는다.
+export type FeeTarget =
+  | 'youth'
+  | 'basic_livelihood'
+  | 'near_poor'
+  | 'single_parent'
+  | 'multichild'
+  | 'disability'
+  | 'defector'
+  | 'other'
+
+export interface FeeReduction {
+  target: FeeTarget
+  label: string
+  rate: string
+  condition: string | null
+  quote: string
+  source_url: string
+  age_definition?: string
+  // 이 행에 대한 미확인 주의(예: 청소년 나이 정의 없음 · 서울 다둥이카드 기준 미검증).
+  caveat?: string
+}
+
 export interface AltEdge {
   to: string
   note: string
-  // 전문가 큐레이션 상태: "공식 확인(...)" | "검증 대기".
+  // 전문가 큐레이션 상태: "공식 확인(...)" | "공식 확인(조례 YYYY-MM-DD)" | "검증 대기".
   curated: string
   program: AltEdgeProgram | null
+  // ↓ public_program + 조례 확인 지역일 때만(docs/API.md alt_edges).
+  region?: { sigungu_cd: string; sigungu_nm: string; sido: string }
+  law?: { title: string; article: string; url: string; effective: string | null }
+  operator?: { name: string; url: string | null }
+  scope?: string
+  checked?: string | null
+  reductions?: FeeReduction[]
+  no_reduction_for?: string[]
+  caveats?: string[]
 }
 
 export interface AssessResponse {

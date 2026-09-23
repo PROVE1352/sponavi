@@ -25,7 +25,7 @@ import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
 import { CardCarousel, CardDeck } from '../components/Carousel'
-import { BOT_NAME, T, primaryProgramId } from './policy'
+import { BOT_NAME, T, primaryProgramId, specialAnswerChip, toggleSpecialSelection } from './policy'
 import { Typewriter } from './Typewriter'
 
 // 데스크톱(lg = 64rem) 여부. 결과는 이 한 가지로 두 형태 중 하나만 마운트한다 —
@@ -122,6 +122,66 @@ function isEmphasizedAction(c: Chip): boolean {
   return c.action.kind === 'start_fitness'
 }
 
+// 답 칩의 네모 모양(고름 = 잉크 채움). 단일·다중 선택이 같은 문법을 쓴다.
+function answerChipCls(chosen: boolean): string {
+  return (
+    'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-[3px] border-[1.5px] px-3.5 py-2 text-left text-sm disabled:opacity-60 ' +
+    (chosen
+      ? 'border-ink bg-ink text-paper dark:border-ink-dark dark:bg-ink-dark dark:text-paper-dark'
+      : 'border-ink bg-transparent text-ink hover:bg-tint dark:border-ink-dark dark:text-ink-dark dark:hover:bg-tint-dark')
+  )
+}
+
+// 다중 선택(체크박스 묶음) + "선택 완료". 고른 것들은 이 컴포넌트의 로컬 상태이고,
+// 완료를 눌렀을 때만 합친 답 칩 하나로 컨트롤러에 넘긴다(LLM 0회 · 칩 경로 그대로).
+// "해당 없음"은 배타 선택(policy.toggleSpecialSelection).
+function MultiChipRow({
+  chips,
+  ariaLabel,
+  onPick,
+}: {
+  chips: Chip[]
+  ariaLabel: string
+  onPick: (chip: Chip) => void
+}) {
+  const [selected, setSelected] = useState<string[]>([])
+  if (chips.length === 0) return null
+  return (
+    <div className="space-y-2.5">
+      <div role="group" aria-label={ariaLabel} className="flex flex-wrap gap-2">
+        {chips.map((c) => {
+          const chosen = selected.includes(c.id)
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="checkbox"
+              aria-checked={chosen}
+              data-testid={`chip-${c.id}`}
+              onClick={() => setSelected((cur) => toggleSpecialSelection(cur, c.id))}
+              className={answerChipCls(chosen)}
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {chosen && <CheckIcon className="h-4 w-4 shrink-0" />}
+                <span className="break-keep">{c.label}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <button
+        type="button"
+        data-testid="chip-special-confirm"
+        disabled={selected.length === 0}
+        onClick={() => onPick(specialAnswerChip(selected))}
+        className="press inline-flex min-h-11 items-center rounded-[3px] bg-ink px-4 py-2 text-[14px] font-bold text-paper transition-opacity hover:opacity-90 disabled:opacity-40 dark:bg-ink-dark dark:text-paper-dark"
+      >
+        {T.specialConfirm}
+      </button>
+    </div>
+  )
+}
+
 // 칩 그룹. 단일 선택은 radiogroup 시맨틱, 즉시 실행 버튼은 group.
 export function ChipRow({
   chips,
@@ -151,10 +211,7 @@ export function ChipRow({
         const style = chipStyleOf(c)
         const cls =
           style === 'answer'
-            ? 'press inline-flex min-h-11 max-w-full flex-col justify-center rounded-[3px] border-[1.5px] px-3.5 py-2 text-left text-sm disabled:opacity-60 ' +
-              (chosen
-                ? 'border-ink bg-ink text-paper dark:border-ink-dark dark:bg-ink-dark dark:text-paper-dark'
-                : 'border-ink bg-transparent text-ink hover:bg-tint dark:border-ink-dark dark:text-ink-dark dark:hover:bg-tint-dark')
+            ? answerChipCls(chosen)
             : 'press inline-flex min-h-11 max-w-full flex-col justify-center border-0 bg-transparent px-0.5 text-left text-[15px] underline decoration-[1.5px] underline-offset-[5px] disabled:opacity-60 ' +
               (isEmphasizedAction(c)
                 ? 'font-bold text-ink hover:text-mute dark:text-ink-dark dark:hover:text-mute-dark'
@@ -216,7 +273,8 @@ function ChipQuestion({
     if (!typing) setDone(true)
   }, [typing])
 
-  const locked = msg.select === 'single' && msg.id !== h.activeQuestionId
+  // 단일·다중 선택 질문은 답하면 잠긴다(지나간 질문의 칩으로 상태가 꼬이지 않게).
+  const locked = msg.select !== 'action' && msg.id !== h.activeQuestionId
 
   return (
     <BotLane showSender={showSender}>
@@ -240,13 +298,21 @@ function ChipQuestion({
           : done && (
               // msg-in = 버블 타이핑 완료 뒤의 fade+상승 등장(reduced-motion 에서는 비활성).
               <div data-testid="inline-chips" className="msg-in mt-2">
-                <ChipRow
-                  chips={msg.chips}
-                  select={msg.select}
-                  ariaLabel={msg.text}
-                  answeredLabel={msg.answeredLabel}
-                  onPick={(c) => h.onChip(c, msg.id)}
-                />
+                {msg.select === 'multi' ? (
+                  <MultiChipRow
+                    chips={msg.chips}
+                    ariaLabel={msg.text}
+                    onPick={(c) => h.onChip(c, msg.id)}
+                  />
+                ) : (
+                  <ChipRow
+                    chips={msg.chips}
+                    select={msg.select}
+                    ariaLabel={msg.text}
+                    answeredLabel={msg.answeredLabel}
+                    onPick={(c) => h.onChip(c, msg.id)}
+                  />
+                )}
               </div>
             )}
       </div>

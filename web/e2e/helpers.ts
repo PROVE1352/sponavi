@@ -54,15 +54,34 @@ export async function pickRegion(page: Page, regionCd: string): Promise<void> {
 // 메인에서 칩만으로 슬롯 5개를 채워 판정까지 간다(퀵스타트 없이 실사용 경로 완주).
 export async function fillMainSlots(
   page: Page,
-  opts: { age?: number; sex?: string; regionCd?: string; income?: string; disability?: string } = {},
+  opts: {
+    age?: number
+    sex?: string
+    regionCd?: string
+    income?: string
+    disability?: string
+    // 2027 확대 대상(5~18세 · 그외에게만 묻는다). 칩 id 꼬리: 'multichild' | 'defector' | 'none'
+    special?: string[]
+  } = {},
 ): Promise<void> {
-  await pickAge(page, opts.age ?? 27)
+  const age = opts.age ?? 27
+  const income = opts.income ?? '기초생활수급'
+  await pickAge(page, age)
   await page.getByTestId(`chip-sex-${opts.sex ?? 'M'}`).click()
   await pickRegion(page, opts.regionCd ?? '11290')
-  await page.getByTestId(`chip-income-${opts.income ?? '기초생활수급'}`).click()
+  await page.getByTestId(`chip-income-${income}`).click()
+  if (age >= 5 && age <= 18 && (income === '그외' || income === 'unknown')) {
+    await pickSpecial(page, opts.special ?? ['none'])
+  }
   await page.getByTestId(`chip-dis-${opts.disability ?? 'no'}`).click()
   await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
   await expect(page.getByTestId('chip-act-restart')).toBeVisible()
+}
+
+// 2027 확대 대상 다중 선택 → "선택 완료".
+export async function pickSpecial(page: Page, ids: string[]): Promise<void> {
+  for (const id of ids) await page.getByTestId(`chip-special-${id}`).click()
+  await page.getByTestId('chip-special-confirm').click()
 }
 
 // 퀵스타트 칩 1회 클릭 → 판정 턴 완료(카드 + 후속 칩)까지 대기.

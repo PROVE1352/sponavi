@@ -19,6 +19,14 @@ import {
   WarnIcon,
 } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
+import type { FacilitySearchScope, SearchMapPoint } from '../types_search'
+import {
+  FacilitySearchForm,
+  SearchNotice,
+  SearchStatus,
+  ZERO_HINT,
+  useFacilitySearch,
+} from './FacilitySearch'
 
 // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
 // 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
@@ -84,14 +92,60 @@ export function NearbyList({
   filterSports,
   onClearFilter,
   onLocate,
+  search,
+  onSearchHits,
 }: {
   nearby: Nearby
   filterSports?: string[]
   onClearFilter?: () => void
   // 시설 이름을 누르면 지도 탭으로 바꾸고 그 좌표로 확대한다(패널 전용).
   onLocate?: (id: string) => void
+  // 동·도로명·시설명 검색 범위(현재 결과의 시군구). 없으면 검색창을 그리지 않는다.
+  search?: FacilitySearchScope
+  // 검색 결과 중 실좌표 행을 지도에 얹는다(근사 행은 지도에 찍지 않는다 — P-1).
+  onSearchHits?: (points: SearchMapPoint[]) => void
 }) {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
+  const { state: searchState, run: runSearch, clear: clearSearch } = useFacilitySearch(
+    search,
+    nearby,
+  )
+  const searchActive = searchState.status !== 'idle'
+
+  useEffect(() => {
+    if (!onSearchHits) return
+    if (searchState.status !== 'done') {
+      onSearchHits([])
+      return
+    }
+    const r = searchState.result
+    const pts: SearchMapPoint[] = []
+    for (const v of r.vouchers) {
+      if (v.coord_source === 'centroid' || v.lat == null || v.lon == null) continue
+      pts.push({
+        id: v.id,
+        name: v.name,
+        lat: v.lat,
+        lon: v.lon,
+        kind: v.source === 'dvoucher' ? 'dvoucher' : 'voucher',
+        dist_km: v.dist_km,
+        detail: v.sports.join(' · '),
+      })
+    }
+    for (const a of r.alts) {
+      if (a.coord_source === 'centroid' || a.lat == null || a.lon == null) continue
+      pts.push({
+        id: a.id,
+        name: a.name,
+        lat: a.lat,
+        lon: a.lon,
+        kind: 'public',
+        dist_km: a.dist_km,
+        detail: a.sports.join(' · '),
+      })
+    }
+    onSearchHits(pts)
+  }, [searchState, onSearchHits])
 
   const dvoucherIds = useMemo(
     () =>
@@ -175,6 +229,28 @@ export function NearbyList({
         )}
       </div>
 
+      {search && (
+        <div className="flex flex-col gap-2">
+          <FacilitySearchForm
+            sigunguLabel={search.sigungu_nm}
+            busy={searchState.status === 'loading'}
+            active={searchActive}
+            onSubmit={runSearch}
+            onClear={clearSearch}
+          />
+          <SearchStatus state={searchState} />
+        </div>
+      )}
+
+      {/* 검색 중이면 결과가 아래 목록을 대신한다("검색 지우기"로 돌아온다) */}
+      {searchActive ? (
+        <SearchResults
+          state={searchState}
+          altsFirst={altsFirst}
+          onLocate={onLocate}
+        />
+      ) : (
+      <>
       {/* FR-10: 편의시설 칩 필터 — 장애 있음(dvoucher 가맹) 결과에서만 노출 */}
       {hasDvoucher && (
         <AccessibilityFilter
@@ -279,7 +355,90 @@ export function NearbyList({
             : '표시할 근처 자원이 없습니다.'}
         </p>
       )}
+      </>
+      )}
     </section>
+  )
+}
+
+// 검색 결과 — 기존 행 컴포넌트를 그대로 쓴다(배지·근사 표기·지도 확대 규칙이 한 벌).
+function SearchResults({
+  state,
+  altsFirst,
+  onLocate,
+}: {
+  state: ReturnType<typeof useFacilitySearch>['state']
+  altsFirst: boolean
+  onLocate?: (id: string) => void
+}) {
+  if (state.status !== 'done') return null
+  const r = state.result
+  const total = r.voucherTotal + r.altTotal
+  const shownAside = (n: number, t: number, cut: boolean) =>
+    cut ? `${t}곳 중 ${n}곳 표시` : `${t}곳`
+
+  const vouchers = r.vouchers.length > 0 && (
+    <div data-testid="search-voucher-section">
+      <ListHeading
+        title="이용권 가맹시설"
+        aside={shownAside(r.vouchers.length, r.voucherTotal, r.voucherTruncated)}
+      />
+      {/* 검색은 자격 판정을 거치지 않는다 — 지원·자부담 칸을 지어내지 않고 수강료만 보인다(P-1) */}
+      <p
+        data-testid="search-fee-note"
+        className="pb-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark"
+      >
+        수강료만 보여요 · 이용권 지원·내 부담은 위 자격 판정 결과를 따라요
+      </p>
+      <ul>
+        {r.vouchers.map((v, i) => (
+          <VoucherRow key={v.id} v={v} index={i + 1} onLocate={onLocate} feeOnly />
+        ))}
+      </ul>
+    </div>
+  )
+  const alts = r.alts.length > 0 && (
+    <div data-testid="search-alt-section">
+      <ListHeading
+        title="공공·대안 시설"
+        aside={shownAside(r.alts.length, r.altTotal, r.altTruncated)}
+      />
+      <ul>
+        {r.alts.map((a, i) => (
+          <AltRow key={a.id} a={a} index={i + 1} onLocate={onLocate} />
+        ))}
+      </ul>
+    </div>
+  )
+
+  return (
+    <div data-testid="facility-search-results" className="flex flex-col gap-4">
+      {r.partialError && (
+        <SearchNotice>
+          {r.partialError === 'voucher'
+            ? '이용권 가맹시설 검색이 실패해 공공·대안 시설만 보여요.'
+            : '공공·대안 시설 검색이 실패해 이용권 가맹시설만 보여요.'}
+        </SearchNotice>
+      )}
+      {total === 0 ? (
+        <p
+          data-testid="facility-search-zero"
+          className={`text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
+        >
+          {ZERO_HINT}
+        </p>
+      ) : (
+        <>
+          {altsFirst ? alts : vouchers}
+          {altsFirst ? vouchers : alts}
+          {(r.voucherTruncated || r.altTruncated) && (
+            <p className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+              앞쪽 일부만 보여요 — 검색어를 더 구체적으로 넣어 보세요.
+            </p>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
@@ -425,6 +584,7 @@ export function VoucherRow({
   accessibility,
   accessError,
   onLocate,
+  feeOnly,
 }: {
   v: VoucherFacility
   index?: number
@@ -432,6 +592,8 @@ export function VoucherRow({
   accessError?: boolean
   // 패널 목록에서만 넘어온다 — 스트림 요약 카드의 행은 지도를 소유하지 않는다.
   onLocate?: (id: string) => void
+  // 시설 검색 행: 자격 판정 없이 왔으므로(subsidy/copay=null) 수강료 한 줄만 그린다.
+  feeOnly?: boolean
 }) {
   const isDvoucher = v.source === 'dvoucher'
   // 배지와 하단 태그를 같은 판정에서 뽑는다 — 두 곳이 각자 판단하면 모순이 생긴다(C-3).
@@ -464,6 +626,11 @@ export function VoucherRow({
       {v.fee_month == null ? (
         <p data-testid="fee-unknown" className="text-[12.5px] text-mute dark:text-mute-dark">
           수강료 미등록 · 시설 문의
+        </p>
+      ) : feeOnly ? (
+        <p data-testid="fee-only" className="text-[12.5px] text-mute dark:text-mute-dark">
+          월 수강료 <span className="font-bold text-ink dark:text-ink-dark">{won(v.fee_month)}</span>
+          {' '}(최저 강좌)
         </p>
       ) : (
         <dl className={`grid grid-cols-3 gap-2 text-center ${TINT_BOX}`}>
@@ -553,6 +720,7 @@ export function AltRow({
         {' · '}
         {a.sports.join(' · ')}
       </p>
+      {a.addr && <p className="text-[12px] text-mute dark:text-mute-dark">{a.addr}</p>}
       <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{a.note}</p>
       <div className="flex flex-wrap items-center justify-between gap-2">
         {a.coord_source === 'centroid' ? (

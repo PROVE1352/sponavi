@@ -103,7 +103,8 @@ def test_alt_edges_p2_unique_and_official_first(store):
     결정 CQ2A — 같은 `to` 로 가는 엣지가 사유별로 여럿이라도 한 줄로 합친다
     (svoucher→public_program 은 income_fail·age_fail 두 벌, →tteuntteun 도 두 벌).
     """
-    res = assess(store, _body(27, "그외"))
+    # 조례 미확인 지역(강남구) 기준 — 성북구 승격 케이스는 test_public_fee.py.
+    res = assess(store, _body(27, "그외", sigungu="11680"))
     alts = res["alt_edges"]
 
     # ① to 는 유일하다
@@ -133,7 +134,7 @@ def test_alt_edges_p2_unique_and_official_first(store):
 
 def test_alt_edges_dedupe_keeps_first_note_and_best_curated(store):
     """중복 병합 규칙: note 는 rules 순서상 첫 매칭 엣지, curated 는 가장 강한 값."""
-    res = assess(store, _body(27, "그외"))
+    res = assess(store, _body(27, "그외", sigungu="11680"))  # 조례 미확인 지역
     by_to = {a["to"]: a for a in res["alt_edges"]}
     sv = store.edges_from("svoucher")
 

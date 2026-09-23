@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Disability(BaseModel):
@@ -27,6 +27,15 @@ class AssessRequest(BaseModel):
     income_class: Literal["기초생활수급", "차상위", "한부모", "그외"] = "그외"
     disability: Disability = Field(default_factory=Disability)
     location: Optional[Location] = None
+    # 2027 예산안 확대 대상 자가선언(3자녀 이상 다자녀가구 / 북한이탈주민). 2026 판정에는
+    # 쓰이지 않고 svoucher 카드의 next_year 블록에만 쓰인다(engine._next_year).
+    special: list[Literal["multichild", "defector"]] = Field(default_factory=list)
+
+    @field_validator("special", mode="before")
+    @classmethod
+    def _special_null_is_empty(cls, v):
+        # 챗 슬롯 초기값이 null 이다(web types_chat) — 미응답은 빈 목록과 같다.
+        return [] if v is None else v
 
 
 class ChatNluRequest(BaseModel):

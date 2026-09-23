@@ -16,6 +16,7 @@ import type {
   LatLon,
   Sex,
   Sigungu,
+  SpecialCategory,
 } from '../types'
 import type { Chip, ChatSlots, ChipQuestionMsg, QuestionId, RegionCandidate } from '../types_chat'
 
@@ -97,6 +98,49 @@ export function ageBandForAge(age: number): string | null {
 }
 
 export const SEX_LABEL: Record<Sex, string> = { F: '여성', M: '남성' }
+
+// ── 2027 확대 대상 자가선언(다중 선택) ─────────────────────────────────
+// 2027년 정부 예산안(국회 심의 전)이 스포츠강좌이용권 대상에 넣겠다고 한 사람들 중
+// "스스로 고를 수 있는" 두 가지만 묻는다(인구감소지역은 시군구로 서버가 판정).
+// ★ 묻는 이유를 사실로 단정하지 않는다 — "들어갈 예정"(예산안)이지 확정이 아니다(SPEC §0).
+//   5~18세 · 소득 '그외'(2026 에 소득 사유로 ✗ 가 되는 사람)에게만 묻는다.
+export const SPECIAL_AGE_MIN = 5
+export const SPECIAL_AGE_MAX = 18
+export const SPECIAL_NONE_ID = 'special-none'
+export const SPECIAL_CONFIRM_ID = 'special-confirm'
+
+export const SPECIAL_OPTIONS: { value: SpecialCategory; label: string }[] = [
+  { value: 'multichild', label: '3자녀 이상 가구' },
+  { value: 'defector', label: '북한이탈주민' },
+]
+
+export function needsSpecial(slots: Pick<ChatSlots, 'age' | 'income_class'>): boolean {
+  return (
+    slots.age != null &&
+    slots.age >= SPECIAL_AGE_MIN &&
+    slots.age <= SPECIAL_AGE_MAX &&
+    slots.income_class === '그외'
+  )
+}
+
+// 다중 선택 토글. "해당 없음"은 배타 — 고르면 나머지를 비우고, 다른 것을 고르면 "해당 없음"이 풀린다.
+export function toggleSpecialSelection(selected: string[], chipId: string): string[] {
+  if (selected.includes(chipId)) return selected.filter((id) => id !== chipId)
+  if (chipId === SPECIAL_NONE_ID) return [SPECIAL_NONE_ID]
+  return [...selected.filter((id) => id !== SPECIAL_NONE_ID), chipId]
+}
+
+// 고른 칩 id 들 → 요청 값. "해당 없음"(혹은 아무것도 아님)은 [].
+export function specialFromSelection(selected: string[]): SpecialCategory[] {
+  return SPECIAL_OPTIONS.filter((o) => selected.includes(`special-${o.value}`)).map((o) => o.value)
+}
+
+export function specialLabel(list: SpecialCategory[]): string {
+  if (list.length === 0) return '해당 없음'
+  return SPECIAL_OPTIONS.filter((o) => list.includes(o.value))
+    .map((o) => o.label)
+    .join(' · ')
+}
 
 // ── 지역 2단계 칩(FR-12 AC1 v1.7) ──────────────────────────────────────
 //   1단계 시도(시군구 코드 앞 2자리) → 2단계 그 시도의 시군구
@@ -189,6 +233,9 @@ export const T = {
   askIncome: '소득 구분을 골라 주세요. 심사가 아니라 스스로 고르는 항목이고, 저장하지 않아요.',
   askDisability: '장애 등록이 되어 있으신가요?',
   askDisabilityType: '장애 유형을 골라 주세요. 등급이나 진단명은 묻지 않아요.',
+  // 2027 확대 대상(다중 선택). "예정"까지만 말한다 — 예산안이지 확정이 아니다.
+  askSpecial: '혹시 아래에 해당하나요? 내년(2027)부터 새로 지원 대상에 들어갈 예정이에요.',
+  specialConfirm: '선택 완료',
 
   // 소득 "잘 모르겠어요"(FR-12 AC6) — 어떤 기준으로 계산했는지 밝히고 확인 방법을 안내한다.
   incomeUnknownNotice:
@@ -420,6 +467,32 @@ export function incomeChips(): Chip[] {
   return base
 }
 
+// 다중 선택 칩. 각 칩의 slots 는 "그 칩 하나만 골랐을 때"의 값이고,
+// 실제 답은 ChipRow(multi)가 고른 것들을 합쳐 specialAnswerChip 으로 한 번에 보낸다.
+export function specialChips(): Chip[] {
+  const chips: Chip[] = SPECIAL_OPTIONS.map((o) => ({
+    id: `special-${o.value}`,
+    label: o.label,
+    action: { kind: 'answer', question: 'special', slots: { special: [o.value] } },
+  }))
+  chips.push({
+    id: SPECIAL_NONE_ID,
+    label: '해당 없음',
+    action: { kind: 'answer', question: 'special', slots: { special: [] } },
+  })
+  return chips
+}
+
+// 다중 선택 확정 칩(LLM 0회 — 슬롯을 직접 채운다).
+export function specialAnswerChip(selected: string[]): Chip {
+  const special = specialFromSelection(selected)
+  return {
+    id: SPECIAL_CONFIRM_ID,
+    label: specialLabel(special),
+    action: { kind: 'answer', question: 'special', slots: { special } },
+  }
+}
+
 export function disabilityChips(): Chip[] {
   return [
     {
@@ -545,10 +618,13 @@ export function questionSpec(
         chips: disabilityTypeChips(),
         select: 'single',
       }
+    case 'special':
+      return { question: 'special', text: T.askSpecial, chips: specialChips(), select: 'multi' }
   }
 }
 
-// 질문 순서: 나이(연령대 → 세부 나이) → 성별 → 지역(시도 → 시군구) → 소득 → 장애(유무 → 유형).
+// 질문 순서: 나이(연령대 → 세부 나이) → 성별 → 지역(시도 → 시군구) → 소득
+//   → [5~18세 · 그외만] 2027 확대 대상 → 장애(유무 → 유형).
 // ★ age 가 채워지기 전에는 절대 다음으로 넘어가지 않는다 — 정확 나이 없이 판정 금지.
 //   자유 입력("32살")이 age 를 바로 채우면 2단계는 통째로 건너뛴다. 지역도 같다 —
 //   "성북구"가 시군구를 바로 채우면 시도 질문은 건너뛴다(FR-12 AC1 v1.7).
@@ -557,6 +633,7 @@ export function nextQuestion(slots: ChatSlots): QuestionId | null {
   if (slots.sex == null) return 'sex'
   if (slots.sigungu_cd == null) return slots.sido_cd == null ? 'region_sido' : 'region'
   if (slots.income_class == null) return 'income'
+  if (needsSpecial(slots) && slots.special == null) return 'special'
   if (slots.disability_has == null) return 'disability'
   if (slots.disability_has && slots.disability_type == null) return 'disability_type'
   return null
@@ -569,6 +646,7 @@ export function missingLabels(slots: ChatSlots): string[] {
   if (slots.sex == null) out.push('성별')
   if (slots.sigungu_cd == null) out.push('지역')
   if (slots.income_class == null) out.push('소득 구분')
+  else if (needsSpecial(slots) && slots.special == null) out.push('2027 지원 대상 해당 여부')
   if (slots.disability_has == null) out.push('장애 여부')
   else if (slots.disability_has && slots.disability_type == null) out.push('장애 유형')
   return out
@@ -593,6 +671,8 @@ export function toAssessRequest(slots: ChatSlots, sigungu: Sigungu[]): AssessReq
       type: slots.disability_has ? slots.disability_type : null,
     },
     location: sg ? { lat: sg.lat, lon: sg.lon } : null,
+    // 묻지 않은 사람(나이·소득 조건 밖, 나중에 정정된 경우 포함)은 항상 [].
+    special: needsSpecial(slots) ? [...(slots.special ?? [])] : [],
   }
 }
 
@@ -608,6 +688,8 @@ export function slotsFromRequest(req: AssessRequest): ChatSlots {
     income_unknown: false,
     disability_has: req.disability.has,
     disability_type: req.disability.type,
+    // 페르소나·프리필은 이 질문을 거치지 않는다 — 값이 없으면 "해당 없음"으로 본다.
+    special: req.special ?? [],
   }
 }
 
@@ -629,6 +711,8 @@ export function answerEcho(q: QuestionId, chip: Chip): string {
       return chip.label
     case 'disability_type':
       return `장애 유형: ${chip.label}`
+    case 'special':
+      return `2027 대상: ${chip.label}`
     case 'greet':
       return chip.label
   }
@@ -659,6 +743,8 @@ export function slotEditChips(changed: QuestionId[], slots: ChatSlots): Chip[] {
             : '비장애'
       case 'disability_type':
         return slots.disability_type ? `유형 ${slots.disability_type}장애` : null
+      case 'special':
+        return slots.special ? `2027 대상 ${specialLabel(slots.special)}` : null
       case 'greet':
         return null
     }

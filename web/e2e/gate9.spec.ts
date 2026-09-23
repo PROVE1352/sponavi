@@ -29,9 +29,9 @@ const EXPECTED: Record<string, (page: Page) => Promise<void>> = {
   },
   P5: async (page) => {
     await expect(stream(page).getByTestId('selection-block')).toContainText('우선순위제')
-    // 계약 JSON: 공식 확인 2 + 검증 대기 1 → 항목 2 + "확인 중 1건" 한 줄
-    await expect(stream(page).getByTestId('now-available-item')).toHaveCount(2)
-    await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+    // 계약 JSON: 공식 확인 3(성북 조례 감면 공공시설 포함) → 항목 3, 확인 중 없음
+    await expect(stream(page).getByTestId('now-available-item')).toHaveCount(3)
+    await expect(stream(page).getByTestId('alt-route-pending')).toHaveCount(0)
   },
 }
 

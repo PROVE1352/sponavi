@@ -8,6 +8,7 @@ import type {
   AssessRequest,
   AssessResponse,
   IncomeClass,
+  NextYear,
   PathEdge,
   ProgramEligibility,
   Selection,
@@ -22,6 +23,8 @@ import {
   distKm,
   type RawFacility,
 } from './fixtures'
+import NEXT_YEAR_JSON from './contract/next_year.json'
+import { publicFeeBlock, publicFeeCurated, publicFeeRegion } from './publicFee'
 
 const SVOUCHER_SUBSIDY = 105000
 const DVOUCHER_SUBSIDY = 110000
@@ -64,17 +67,97 @@ function buildSelection(age: number, income: IncomeClass): Selection {
 }
 
 // ---- 복수 대체경로(alt_edges) — 목적지 제도 메타(data/rules.json 요약) ----
+// rules.json public_program.benefit 과 같은 문구 — '무료/저가'로 단정하지 않는다.
+export const PUBLIC_BENEFIT =
+  '지자체 공공체육시설 이용료 — 감면 기준은 시군구 조례마다 달라요(청소년·수급자·장애인·다자녀 등). 이용 자격 제한은 없음.'
 const OFFICIAL = '공식 확인(2026-07-21)'
 const PENDING = '검증 대기'
 const ALT_PROG = {
-  public_program: { id: 'public_program', name: '공공체육시설 프로그램(무료/저가)', benefit: '무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음', apply_url: 'https://www.kspo.or.kr' },
+  public_program: { id: 'public_program', name: '공공체육시설 프로그램', benefit: PUBLIC_BENEFIT, apply_url: 'https://www.kspo.or.kr' },
   tteuntteun: { id: 'tteuntteun', name: '튼튼머니(스포츠활동 인센티브)', benefit: '만 4세+ 누구나 · 소득 무관 · 연 최대 5만 포인트 적립', apply_url: 'https://nfa.kspo.or.kr/spoint/selectSpointIntro.kspo' },
   culture_deduction: { id: 'culture_deduction', name: '체육시설 문화비 소득공제', benefit: '헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)', apply_url: 'https://www.culture.go.kr/deduction' },
   senior_voucher: { id: 'senior_voucher', name: '어르신 스포츠 상품권', benefit: '기초연금 수급 65세+ · 상품권 최대 15만원(제로페이 스포츠시설)', apply_url: 'https://ssvoucher.co.kr' },
   senior_free_class: { id: 'senior_free_class', name: '어르신 스포츠강좌 프로그램(무료 강좌)', benefit: '65세+ 누구나 · 소득 무관 무료 강좌', apply_url: 'https://www.mcst.go.kr' },
 }
 
+// 대상 제도 자체의 연령 범위(서버 engine._program_age_ok 와 같은 규칙, rules.json age_min/max).
+// 대체경로도 '그 제도의 대상'일 때만 안내한다 — 16세에게 근로소득자용 소득공제 ✗.
+const ALT_AGE: Record<string, [number | null, number | null]> = {
+  public_program: [0, 200],
+  tteuntteun: [4, null],
+  culture_deduction: [19, null],
+  senior_voucher: [65, null],
+  senior_free_class: [65, null],
+}
+
+function altAgeOk(to: string, age: number): boolean {
+  const [min, max] = ALT_AGE[to] ?? [null, null]
+  return (min == null || age >= min) && (max == null || age <= max)
+}
+
+const isOfficial = (e: AltEdge) => e.curated.startsWith('공식 확인')
+
+// 서버 _matching_alt_edges + _collect_alt_edges 미러: 연령 게이트 → public_program 조례 승격
+// (조례 확인 지역만) → '공식 확인' 먼저(안정 정렬).
 function buildAltEdges(o: {
+  disabled: boolean
+  eligible: boolean
+  ageOk: boolean
+  incomeOk: boolean
+  rank: number | null
+  age: number
+  req: AssessRequest
+}): AltEdge[] {
+  const region = publicFeeRegion(o.req.sigungu_cd)
+  const promoted = publicFeeCurated(region)
+  const edges = buildAltEdgesUngated(o)
+    .filter((e) => altAgeOk(e.to, o.age))
+    .map((e) => {
+      if (e.to !== 'public_program' || !promoted) return e
+      const block = publicFeeBlock(region, {
+        age: o.req.age,
+        income_class: o.req.income_class,
+        special: o.req.special ?? [],
+        disability_has: o.req.disability.has,
+      })
+      return { ...e, curated: isOfficial(e) ? e.curated : promoted, ...block }
+    })
+  return [...edges.filter(isOfficial), ...edges.filter((e) => !isOfficial(e))]
+}
+
+// 경로 그림에서 시설 홉을 이을 수 있는 대체 제도(장소 기반). 서버 _PLACE_BASED_PROGRAMS 와 같다.
+const PLACE_BASED = new Set(['public_program'])
+
+// ---- 내년(2027) 예산안 확대 대상 — 서버 engine._next_year 미러 ----
+// 정적 필드는 contract/next_year.json(= rules.json svoucher.next_year 사본, parity 테스트로 동기).
+// 목 fixtures 는 서울 25구뿐이라 인구감소지역은 매칭되지 않는다(서울엔 지정 지역이 없다).
+function buildNextYear(special: string[]): NextYear & { age_assumed: boolean; age_note: string } {
+  const matched: NextYear['matched'] = []
+  const possibleIf: string[] = []
+  for (const cat of NEXT_YEAR_JSON.added_categories) {
+    if (cat.id !== 'depop_region' && special.includes(cat.id)) {
+      matched.push({ id: cat.id, label: cat.label, detail: `${cat.label} — 본인 응답` })
+    } else {
+      possibleIf.push(cat.label)
+    }
+  }
+  return {
+    year: NEXT_YEAR_JSON.year,
+    basis: NEXT_YEAR_JSON.basis,
+    eligible: matched.length > 0,
+    matched,
+    possible_if: possibleIf,
+    note: NEXT_YEAR_JSON.note,
+    age_assumed: NEXT_YEAR_JSON.age_assumed,
+    age_note: NEXT_YEAR_JSON.age_note,
+    apply_hint: NEXT_YEAR_JSON.apply_hint,
+    sources: NEXT_YEAR_JSON.sources,
+    curated: NEXT_YEAR_JSON.curated,
+    subsidy_month: NEXT_YEAR_JSON.subsidy_month,
+  }
+}
+
+function buildAltEdgesUngated(o: {
   disabled: boolean
   eligible: boolean
   ageOk: boolean
@@ -84,7 +167,7 @@ function buildAltEdges(o: {
   const edges: AltEdge[] = []
   if (!o.disabled) {
     // svoucher: 소득·연령 미달 매칭 엣지 전부
-    if (!o.incomeOk) edges.push({ to: 'public_program', note: '이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램', curated: PENDING, program: ALT_PROG.public_program })
+    if (!o.incomeOk) edges.push({ to: 'public_program', note: '이용권 소득기준 미달 → 공공체육시설 프로그램(요금 감면은 시군구 조례)', curated: PENDING, program: ALT_PROG.public_program })
     else if (!o.ageOk) edges.push({ to: 'public_program', note: '이용권 지원연령(5~18) 초과 → 공공체육시설 프로그램', curated: PENDING, program: ALT_PROG.public_program })
     if (!o.incomeOk || !o.ageOk) edges.push({ to: 'tteuntteun', note: '만 4세+ 소득무관 포인트 적립', curated: OFFICIAL, program: ALT_PROG.tteuntteun })
     if (!o.incomeOk) edges.push({ to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 30% 소득공제', curated: OFFICIAL, program: ALT_PROG.culture_deduction })
@@ -99,7 +182,8 @@ function buildAltEdges(o: {
   }
   if (o.eligible && (o.rank === 4 || o.rank === 5 || o.rank == null)) {
     // dvoucher 자격 ✓ 이나 예상 4·5순위/미정 → '지금 바로 되는 것'(공식 확인 대안)
-    edges.push({ to: 'public_program', note: '장애인 접근성 지원 공공체육시설 — 지금 등록 가능', curated: OFFICIAL, program: ALT_PROG.public_program })
+    // 조례 확인 지역(목: 성북·송파·노원)에서만 buildAltEdges 가 '공식 확인(조례 …)'으로 승격한다.
+    edges.push({ to: 'public_program', note: '→ 장애인 지원 공공체육시설(요금 감면은 시군구 조례)', curated: PENDING, program: ALT_PROG.public_program })
     edges.push({ to: 'tteuntteun', note: '만 4세+ 소득무관 포인트 적립', curated: OFFICIAL, program: ALT_PROG.tteuntteun })
     edges.push({ to: 'culture_deduction', note: '근로소득자면 헬스장·수영장 이용료 30% 소득공제', curated: OFFICIAL, program: ALT_PROG.culture_deduction })
   }
@@ -222,10 +306,10 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
-      benefit: '무료 또는 저가(월 0~4만원대) 프로그램',
+      benefit: PUBLIC_BENEFIT,
       apply: { how: '각 구민체육센터·공공체육시설에 직접 등록(전화·방문·홈페이지)', url: 'https://www.seoul.go.kr', docs: ['신분증'] },
       source: { url: 'https://www.seoul.go.kr', checked: '2026-07-20' },
       verified: true,
@@ -241,7 +325,13 @@ export function mockAssess(req: AssessRequest): AssessResponse {
     ageOk: disabled ? ageOkDvoucher : ageOkVoucher,
     incomeOk,
     rank: dvoucherRank,
+    age: req.age,
+    req,
   })
+  // 2027 예산안(국회 심의 전) — svoucher 가 소득 사유 하나로만 ✗ 일 때만. 2026 판정·alt_edges 와 별개.
+  if (!disabled && ageOkVoucher && !incomeOk) {
+    eligibility[0].next_year = buildNextYear(req.special ?? [])
+  }
 
   // --- 근처 자원 ---
   const inSigungu = FACILITIES.filter((f) => f.sigungu_cd === req.sigungu_cd)
@@ -285,12 +375,17 @@ export function mockAssess(req: AssessRequest): AssessResponse {
   } else {
     const failed = disabled ? 'dvoucher' : 'svoucher'
     const failLabel = disabled ? '연령 초과' : incomeOk ? '연령 초과' : '소득 미달'
+    // 대체 홉 = alt_edges 1순위(서버 OV4). 시설 홉은 장소 기반 대안(public_program)일 때만 —
+    // 튼튼머니·소득공제 뒤에 근처 공공시설을 붙이면 '그 시설이 적립·등록 시설'이라는 거짓 연결이다.
+    const alt = altEdges[0]
     const top = alternatives[0]
-    path = [
-      { from: 'person', to: failed, edge: '자격', result: 'fail', label: failLabel },
-      { from: failed, to: 'public_program', edge: '대체경로', result: 'ok', label: wantDisabilitySupport ? '접근성 지원 공공프로그램' : '무료/저가 공공프로그램', curated: '검증 대기' },
-      ...(top ? [{ from: 'public_program', to: `facility:${top.id}`, edge: '적합·접근', result: 'ok' as const, label: facHopLabel(top) }] : []),
-    ]
+    path = [{ from: 'person', to: failed, edge: '자격', result: 'fail', label: failLabel }]
+    if (alt) {
+      path.push({ from: failed, to: alt.to, edge: '대체경로', result: 'ok', label: alt.note, curated: alt.curated })
+      if (PLACE_BASED.has(alt.to) && top) {
+        path.push({ from: alt.to, to: `facility:${top.id}`, edge: '적합·접근', result: 'ok', label: facHopLabel(top) })
+      }
+    }
   }
 
   // --- 공급공백 (좌표 정직성 FR-04/FR-05) ---

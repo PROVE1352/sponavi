@@ -1,7 +1,7 @@
 // 표기 헬퍼 스모크 테스트(T1A). 지금은 기존 동작만 고정한다 —
 // won()/CQ1A(결측 null) 케이스는 Lane W(T8)가 구현과 함께 붙였다.
 import { describe, expect, it } from 'vitest'
-import { dedupeDisplayTitles, displayTitle, km, percent, weekdays, won, wonPlain } from './format'
+import { dedupeDisplayTitles, displayTitle, km, percent, weekdays, won, wonKorean, wonPlain } from './format'
 
 describe('km', () => {
   it('소수 첫째 자리로 반올림해 km 를 붙인다', () => {
@@ -99,5 +99,18 @@ describe('dedupeDisplayTitles', () => {
   it('겹치지 않으면 접미사를 붙이지 않는다', () => {
     expect(dedupeDisplayTitles(['스텝검사', '걷기 운동'])).toEqual(['스텝검사', '걷기 운동'])
     expect(dedupeDisplayTitles([])).toEqual([])
+  })
+})
+
+describe('wonKorean', () => {
+  it('만·천 단위로 읽는다', () => {
+    expect(wonKorean(105000)).toBe('10만 5천 원')
+    expect(wonKorean(110000)).toBe('11만 원')
+    expect(wonKorean(5000)).toBe('5천 원')
+  })
+
+  it('딱 떨어지지 않거나 0 이하면 숫자 그대로', () => {
+    expect(wonKorean(105500)).toBe('105,500원')
+    expect(wonKorean(0)).toBe('0원')
   })
 })

@@ -32,6 +32,8 @@ import {
   resolveMockAssess,
 } from '../mocks'
 import { resolveMockAccessibility } from '../mocks/accessibility'
+import { MockSearchError, mockFacilitySearch } from '../mocks/search'
+import type { FacilitySearchParams, FacilitySearchResponse } from '../types_search'
 
 export const IS_MOCK = import.meta.env.VITE_MOCK === '1'
 
@@ -295,4 +297,33 @@ export function getAccessibility(ids: string[]): Promise<AccessibilityMap> {
   if (useMockData()) return delay(resolveMockAccessibility(clean), 0)
   const q = clean.map(encodeURIComponent).join(',')
   return get<AccessibilityMap>(`/accessibility?ids=${q}`, 10_000)
+}
+
+// 시설 이름·주소(동·도로명) 키워드 검색 — 현재 시군구 안에서만. 자격 판정 없음(docs/API.md).
+// 목 모드는 mocks/search 가 같은 규칙으로 응답한다(422 도 같은 봉투로 흉내낸다).
+export function searchFacilities(
+  params: FacilitySearchParams,
+  signal?: AbortSignal,
+): Promise<FacilitySearchResponse> {
+  if (useMockData()) {
+    try {
+      return delay(mockFacilitySearch(params), 120)
+    } catch (e) {
+      const code = e instanceof MockSearchError ? e.code : 'INVALID_REQUEST'
+      const msg = e instanceof Error ? e.message : '요청을 처리할 수 없습니다.'
+      return Promise.reject(new ApiCallError('client', code, msg, { status: 422 }))
+    }
+  }
+  const qs = new URLSearchParams({
+    sigungu_cd: params.sigungu_cd,
+    q: params.q,
+    program: params.program,
+  })
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  if (params.lat != null && params.lon != null) {
+    qs.set('lat', String(params.lat))
+    qs.set('lon', String(params.lon))
+  }
+  if (params.age != null) qs.set('age', String(params.age))
+  return get<FacilitySearchResponse>(`/facilities/search?${qs.toString()}`, 10_000, signal)
 }

@@ -32,7 +32,8 @@ def test_p1_svoucher_eligible(store):
 
 
 def test_p2_svoucher_income_fail_routes_to_alternative(store):
-    res = assess(store, _body(27, "그외"))
+    # 조례 미확인 지역(강남구) — public_program 은 '검증 대기' 그대로.
+    res = assess(store, _body(27, "그외", sigungu="11680"))
     c = _card(res)
     assert c["eligible"] is False
     assert any(r["field"] == "income_class" and not r["ok"] for r in c["reasons"])
@@ -41,8 +42,24 @@ def test_p2_svoucher_income_fail_routes_to_alternative(store):
     assert edges and edges[0]["to"] == res["alt_edges"][0]["to"]
     assert edges[0]["to"] == "tteuntteun"
     assert edges[0]["curated"].startswith("공식 확인")
+    # 튼튼머니는 장소 기반 제도가 아니다 — 경로는 제도 노드에서 끝나고 시설을 잇지 않는다.
+    assert res["path"][-1]["to"] == "tteuntteun"
+    assert not any(p["to"].startswith("facility:") for p in res["path"])
     # 검증 대기인 공공체육시설 대안은 사라지지 않고 alt_edges 에 남는다
     assert "public_program" in {a["to"] for a in res["alt_edges"]}
+
+
+def test_p2_seongbuk_public_program_promoted_by_ordinance(store):
+    # 성북구는 체육시설 조례 감면 원문 확인 지역 → public_program 이 공식 확인 1순위.
+    res = assess(store, _body(27, "그외"))
+    first = res["alt_edges"][0]
+    assert first["to"] == "public_program"
+    assert first["curated"] == "공식 확인(조례 2026-09-17)"
+    hops = [p for p in res["path"] if p["edge"] == "대체경로"]
+    assert hops[0]["to"] == "public_program" and hops[0]["curated"] == first["curated"]
+    # 장소 기반 대안이므로 시설 홉의 from 은 public_program
+    fac = [p for p in res["path"] if p["to"].startswith("facility:")]
+    assert fac and fac[0]["from"] == "public_program"
 
 
 def test_p3_dvoucher_eligible_but_gap(store):

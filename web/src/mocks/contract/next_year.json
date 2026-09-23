@@ -1,0 +1,54 @@
+{
+  "_comment": "T2A 계약 데이터 1본 — svoucher.next_year(2027 예산안) 정적 필드. 웹 목(mocks/engine.ts)과 server/tests/test_mock_parity.py 가 같은 파일을 읽는다. 정본은 data/rules.json programs[svoucher].next_year — 바뀌면 이 파일도 같이 고친다(parity 테스트가 잡는다).",
+  "year": 2027,
+  "basis": "2027년 정부 예산안(국회 심의 전)",
+  "added_categories": [
+    {
+      "id": "multichild",
+      "label": "3자녀 이상 다자녀가구"
+    },
+    {
+      "id": "defector",
+      "label": "북한이탈주민"
+    },
+    {
+      "id": "depop_region",
+      "label": "인구감소지역 거주 유·청소년"
+    }
+  ],
+  "age_min": 5,
+  "age_max": 18,
+  "age_assumed": true,
+  "age_note": "2027년 지원 연령은 발표되지 않아 현행(5~18세)과 같다고 가정한 것 — 확정 기준 아님",
+  "subsidy_month": 105000,
+  "note": "구체적인 신청 자격과 방법은 추후 국민체육진흥공단과 각 지방자치단체가 안내 (2026-09-09 발표 기준)",
+  "apply_hint": "2027년 지원분 신청 시기는 공단 공고 확인 (참고: 2026년 지원분은 2025.11.10~11.28)",
+  "curated": "예산안 발표(2026-09-09)",
+  "sources": [
+    {
+      "url": "https://www.mt.co.kr/sports/2026/09/04/2026090409242544409",
+      "label": "머니투데이(2026-09-04)",
+      "checked": "2026-09-23"
+    },
+    {
+      "url": "https://www.fnnews.com/news/202609090641452036",
+      "label": "파이낸셜뉴스(2026-09-09)",
+      "checked": "2026-09-23"
+    },
+    {
+      "url": "https://www.newspim.com/news/view/20260909000154",
+      "label": "뉴스핌(2026-09-09)",
+      "checked": "2026-09-23"
+    }
+  ],
+  "P16_seongbuk_multichild": {
+    "eligible": true,
+    "matched": [
+      "multichild"
+    ],
+    "possible_if": [
+      "북한이탈주민",
+      "인구감소지역 거주 유·청소년"
+    ]
+  }
+}

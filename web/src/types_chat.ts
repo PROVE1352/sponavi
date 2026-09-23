@@ -10,6 +10,7 @@ import type {
   FitnessResponse,
   IncomeClass,
   Nearby,
+  SpecialCategory,
   PathEdge,
   Sex,
 } from './types'
@@ -35,6 +36,9 @@ export interface ChatSlots {
   income_unknown: boolean
   disability_has: boolean | null
   disability_type: DisabilityType | null
+  // 2027 확대 대상 자가선언(다중 선택). null = 아직 안 물음 · [] = 해당 없음.
+  // 5~18세 · 소득 '그외' 일 때만 묻는다(policy.needsSpecial). 그 밖에는 요청에 [] 로 나간다.
+  special: SpecialCategory[] | null
 }
 
 export const EMPTY_SLOTS: ChatSlots = {
@@ -48,6 +52,7 @@ export const EMPTY_SLOTS: ChatSlots = {
   income_unknown: false,
   disability_has: null,
   disability_type: null,
+  special: null,
 }
 
 // 대화 단계. NLU 요청에 실리는 값은 collect|fitness|qa (API.md).
@@ -134,6 +139,8 @@ export type QuestionId =
   | 'income'
   | 'disability'
   | 'disability_type'
+  // 2027 확대 대상(다자녀·북한이탈주민) — 5~18세 · 소득 '그외' 에게만, 다중 선택
+  | 'special'
 
 // 칩 1개가 하는 일. 칩 입력은 외부 API로 전송되지 않는다(FR-12 AC7).
 export type ChipAction =
@@ -192,7 +199,8 @@ export interface ChipQuestionMsg extends MsgBase {
   text: string
   chips: Chip[]
   // single = 단일 선택 그룹(radiogroup, 답하면 잠김) · action = 즉시 실행 버튼 그룹(계속 살아 있음)
-  select: 'single' | 'action'
+  // multi = 체크박스 묶음 + "선택 완료" 버튼(답하면 잠김). 칩 값은 합쳐서 한 번에 답한다.
+  select: 'single' | 'action' | 'multi'
   answeredLabel?: string
 }
 

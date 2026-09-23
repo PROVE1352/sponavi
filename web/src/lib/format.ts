@@ -12,6 +12,17 @@ export function wonPlain(n: number): string {
   return n.toLocaleString('ko-KR') + '원'
 }
 
+// 한국어 읽기식 금액(105000 → "10만 5천 원"). 만·천 단위로 딱 떨어지지 않으면 숫자 그대로.
+export function wonKorean(n: number): string {
+  if (!Number.isFinite(n) || n <= 0 || n % 1000 !== 0) return wonPlain(n)
+  const man = Math.floor(n / 10000)
+  const cheon = (n % 10000) / 1000
+  const parts: string[] = []
+  if (man > 0) parts.push(`${man.toLocaleString('ko-KR')}만`)
+  if (cheon > 0) parts.push(`${cheon}천`)
+  return `${parts.join(' ')} 원`
+}
+
 export function km(n: number): string {
   return `${n.toFixed(1)}km`
 }

@@ -1,0 +1,450 @@
+{
+ "basis": "시군구 자치법규(조례·규칙) 원문 확인",
+ "checked": "2026-09-23",
+ "source_note": "본문은 국가법령정보센터 자치법규 DRF(k-skill-proxy 경유, MST=ordinSeq)로, 별표는 law.go.kr flDownload(ELIS) hwp/pdf 원문을 kordoc/pdftotext로 추출. url의 ordinSeq는 조회 시점의 현행 일련번호",
+ "regions": [
+  {
+   "sigungu_cd": "11290",
+   "sigungu_nm": "성북구",
+   "sido": "서울특별시",
+   "law": {
+    "title": "서울특별시 성북구 체육시설 관리 운영 및 사용료 징수 조례",
+    "article": "제10조(사용료의 감면 등)",
+    "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525",
+    "effective": "2026-09-17",
+    "mst": "2168525"
+   },
+   "related_sources": [
+    {
+     "title": "같은 조례 [별표 2] 체육시설 사용료 기준액(제9조 관련)",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=169392131"
+    }
+   ],
+   "operator": {
+    "name": "성북구도시관리공단 (조례 제17조 위탁 근거, 공단 페이지에서 감면표 원문은 미확인)",
+    "url": "https://www.gongdan.go.kr/"
+   },
+   "scope": "구립 체육시설(별표 1). 감면은 사용료 전반, 청소년·어린이 20%는 '전용 프로그램 제외'. 별표 2에 성인/청소년/어린이 별도 기준액(수영장 1회 성인 5,000·청소년 4,000·어린이 3,000원 등) 존재",
+   "reductions": [
+    {
+     "target": "basic_livelihood",
+     "label": "국민기초생활보장 수급자(성북구 주소)",
+     "rate": "100%(전액)",
+     "condition": "성북구에 주소를 둔 자에 한함. 급여 종류 제한 없음",
+     "quote": "① 구청장은 다음 각 호의 기준에 따라 사용료를 전액 감면할 수 있다. … 2. 「국민기초생활 보장법」에 따른 수급자(성북구에 주소를 둔 자에 한함)",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    },
+    {
+     "target": "disability",
+     "label": "등록 장애인",
+     "rate": "50%",
+     "condition": "장애의 정도가 심한 장애인은 동반자 포함",
+     "quote": "2. 100분의 50 가. 「장애인복지법」에 따른 등록 장애인(장애의 정도가 심한 장애인은 동반자 포함)",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    },
+    {
+     "target": "multichild",
+     "label": "다둥이행복카드 3자녀 이상 가정",
+     "rate": "50%",
+     "condition": "성북구 주소 + 서울시 다둥이행복카드 소지. 부모와 그 자녀",
+     "quote": "라. 성북구에 주소를 둔 다둥이행복카드 소지자 중 3자녀 이상 가정의 부모와 그 자녀",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    },
+    {
+     "target": "multichild",
+     "label": "다둥이행복카드 2자녀 이상 가정",
+     "rate": "30%",
+     "condition": "성북구 주소 + 다둥이행복카드 소지",
+     "quote": "마. 성북구에 주소를 둔 다둥이행복카드 소지자로서 2자녀 이상 가정의 부모와 그 자녀",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    },
+    {
+     "target": "youth",
+     "label": "청소년 및 어린이",
+     "rate": "20%",
+     "condition": "전용 프로그램 제외. 조례·시행규칙에 청소년/어린이 나이 정의 없음. 별표 2의 청소년·어린이 기준액과의 관계(중복 여부) 조례상 불명확",
+     "age_definition": "조례·시행규칙에 정의 없음(미확인)",
+     "quote": "4. 100분의 20: 경로우대자, 청소년 및 어린이(전용 프로그램 제외)",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    },
+    {
+     "target": "other",
+     "label": "장기 등록자/가족 회원",
+     "rate": "5%",
+     "condition": "6개월 이상 장기등록, 2촌 이내 2명 이상 가족회원",
+     "quote": "6. 100분의 5 가. 장기 등록자(6개월 이상) 나. 가족 회원(2촌 이내 2명 이상의 경우)",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+    }
+   ],
+   "not_found": [
+    "near_poor(차상위) 조항 없음",
+    "single_parent(한부모) 조항 없음",
+    "defector(북한이탈주민) 조항 없음"
+   ],
+   "targets_vocab_note": "target ∈ youth|basic_livelihood|near_poor|single_parent|multichild|disability|defector|other",
+   "unverified": [
+    "청소년·어린이의 나이 기준이 조례·시행규칙 어디에도 정의되어 있지 않음 — 공단 이용약관 확인 필요",
+    "중복 감면 처리 규정이 조례에 없음(송파·노원·대구북구·고성과 달리)",
+    "다둥이행복카드 발급 기준(막내 나이 등)은 서울시 카드 사업 기준이며 조례에 없음. 언론(서울Pn 2024-01-03)은 '막내 18세 이하 2자녀 이상'으로 보도 — 포인터일 뿐 미검증",
+    "성북구도시관리공단 이용안내 페이지에서 실제 적용 감면표를 열람하지 못함"
+   ]
+  },
+  {
+   "sigungu_cd": "11710",
+   "sigungu_nm": "송파구",
+   "sido": "서울특별시",
+   "law": {
+    "title": "서울특별시 송파구 체육진흥 및 시설설치ㆍ운영 조례 시행규칙",
+    "article": "제5조(사용료의 감면) 및 [별표 2] 서울특별시 송파구립체육시설 사용료 등 비고 2.사용료 할인(감면)",
+    "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2040707",
+    "effective": "2025-05-22",
+    "mst": "2040707"
+   },
+   "related_sources": [
+    {
+     "title": "서울특별시 송파구 체육진흥 및 시설설치ㆍ운영 조례 제11조(사용료의 감면)(2026-03-23 시행) — 구체 감면은 시행규칙 위임",
+     "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2116027"
+    },
+    {
+     "title": "시행규칙 별표 1~6 원문(hwp)",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    }
+   ],
+   "operator": {
+    "name": "서울특별시 송파구 시설관리공단 (조례 제14조 위탁 근거)",
+    "url": "https://www.songpagongdan.or.kr/main.asp"
+   },
+   "scope": "송파구립 체육시설(체육문화회관·배드민턴체육관·축구장 등). 사용료=1인 1회 입장 기준, 강습료는 월단위. 전용사용료·개인지도성 강습료는 감면 제외, 중복 불가(유리한 율 1개). 청소년/어린이는 별도 요율표(수영장 1회 성인 5,500·청소년 4,500·어린이 3,500원, 주3회 월강습 65,000/55,000/45,000원)",
+   "reductions": [
+    {
+     "target": "youth",
+     "label": "청소년·어린이 별도 요율(할인율 아닌 요금표)",
+     "rate": "요금표 차등(예: 수영장 1회 청소년 4,500원 vs 성인 5,500원, 약 18%↓; 어린이 3,500원 약 36%↓)",
+     "condition": "감면이 아니라 요금 구분. 12세 이하 어린이·장애인 대상 경기의 전용사용료 50% 이내 경감 별도",
+     "age_definition": "영유아 5세 이하, 어린이 6~12세, 청소년 18세 이하",
+     "quote": "① 영유아는 5세 이하, 어린이는 6세~12세 이하, 청소년은 18세 이하로 한다.",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    },
+    {
+     "target": "basic_livelihood",
+     "label": "생계·의료급여 수급자와 동거 자녀",
+     "rate": "50%",
+     "condition": "생계·의료급여만(주거·교육급여 단독 수급자 제외), 1인 1강좌 한정",
+     "quote": "-「국민기초생활보장법」제7조제1항제1호 및 제3호에 따른 생계·의료급여 수급자(배우자포함)와 주민등록상 같은 주소를 두고 있는 자녀(1인 1강좌에 한함)",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    },
+    {
+     "target": "single_parent",
+     "label": "한부모가족 보호대상자",
+     "rate": "50%",
+     "condition": "「한부모가족지원법」 제5조 보호대상자(증명서 제시)",
+     "quote": "-「한부모가족지원법」 제5조에 따른 보호대상자",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    },
+    {
+     "target": "multichild",
+     "label": "다둥이 행복카드 소지자",
+     "rate": "50%",
+     "condition": "송파구 거주자 한정. 자녀 수 기준은 규칙에 명시 없음(서울시 카드 기준 따름)",
+     "quote": "- 다둥이 행복카드 소지자 (송파구 거주자에 한함)",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    },
+    {
+     "target": "disability",
+     "label": "장애인등록자",
+     "rate": "50% 이내",
+     "condition": "장애의 정도가 심한 장애인 동행 보호자 1명 포함",
+     "quote": "- 장애인등록자(장애의 정도가 심한 장애인을 보호하기 위해 동행한 보호자 1명 포함)",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    },
+    {
+     "target": "other",
+     "label": "공통 조건(중복불가·제외 항목)",
+     "rate": "-",
+     "condition": "전용사용료·개인지도성 강습료 제외, 중복 불가",
+     "quote": "※ 전용사용료 및 개인지도성 강습료는 감면(할인) 제외<br>※ 사용료 감면은 중복할인은 불가하며 그 중 유리한 할인(감면)율을 적용한다.",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=152142719"
+    }
+   ],
+   "not_found": [
+    "near_poor(차상위) 조항 없음",
+    "defector(북한이탈주민) 조항 없음"
+   ],
+   "targets_vocab_note": "target ∈ youth|basic_livelihood|near_poor|single_parent|multichild|disability|defector|other",
+   "unverified": [
+    "조례 제26조의2의 수강료 50% 감면(수급자·한부모·다둥이 등)은 '생활문화대학'(송파문화예술회관) 수강료 조항이라 체육시설 감면으로 기록하지 않음",
+    "시행규칙 최신판(2025-05-22) 별표 기준. 공단 홈페이지의 실제 적용표는 미확인",
+    "quote의 <br>은 별표 원문 줄바꿈 표시"
+   ]
+  },
+  {
+   "sigungu_cd": "11350",
+   "sigungu_nm": "노원구",
+   "sido": "서울특별시",
+   "law": {
+    "title": "서울특별시 노원구립 체육시설 설치 및 운영에 관한 조례",
+    "article": "제7조(사용료의 감면 등) 제3항 + [별표 1] 구민체육센터 사용료 비고 4",
+    "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597",
+    "effective": "2026-05-01",
+    "mst": "2123597"
+   },
+   "related_sources": [
+    {
+     "title": "[별표 1] 구민체육센터 사용료(제6조 관련) PDF",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=163545511"
+    }
+   ],
+   "operator": {
+    "name": "서울특별시 노원구 시설관리공단 (조례 제12조, 요청서의 '노원구서비스공단'은 조례상 명칭 아님)",
+    "url": ""
+   },
+   "scope": "구민체육센터·다목적체육시설·공공체육시설(별표 1~3). 부속시설사용료는 감면 제외. 감면 사유 2개 이상이면 높은 율 1개만. 증빙 제출 시점부터 적용(소급 불가)",
+   "reductions": [
+    {
+     "target": "youth",
+     "label": "어린이·청소년",
+     "rate": "20~75% 범위(조례). 실제는 별표 1의 청소년·어린이 별도 요율(수영장 기본 성인 3,900~4,800 / 청소년 2,700~3,300 / 어린이 1,900~2,400원)",
+     "condition": "별도 감면 신청이 아니라 요금 구분으로 적용",
+     "age_definition": "청소년 13~18세, 어린이 12세 이하 (제2조)",
+     "quote": "3. 어린이, 청소년 및 경로우대자: 20퍼센트 이상 75퍼센트 이하의 범위에서 감면",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    },
+    {
+     "target": "basic_livelihood",
+     "label": "생계·의료급여·보장시설 수급자",
+     "rate": "30%",
+     "condition": "생계·의료급여·보장시설 수급자만(주거·교육급여 단독 제외). 1년 단위 증빙 재제출",
+     "quote": "2. 「국민기초생활 보장법」 제7조제1항제1호 생계급여수급자, 같은 항 제3호의 의료급여수급자, 같은 법 제32조의 보장시설수급자: 30퍼센트 감면",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    },
+    {
+     "target": "single_parent",
+     "label": "한부모가족",
+     "rate": "20%",
+     "condition": "「서울특별시 노원구 한부모가족 지원에 관한 조례」 적용 대상",
+     "quote": "4. 「서울특별시 노원구 한부모가족 지원에 관한 조례」의 적용을 받는 한부모가족: 20퍼센트 감면",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    },
+    {
+     "target": "multichild",
+     "label": "다둥이행복카드 소지자·등재 가족",
+     "rate": "50%",
+     "condition": "자녀 수 기준 조례에 명시 없음(서울시 카드 기준)",
+     "quote": "카.  다둥이행복카드 소지자 또는 카드에 등재된 가족",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    },
+    {
+     "target": "disability",
+     "label": "장애인",
+     "rate": "50% (동행 보호자 1명 전액 면제)",
+     "condition": "보호자 동행 필요 인정 시",
+     "quote": "가. 「장애인복지법」에 따른 장애인(단, 시설 사용 시 보호자의 동행이 필요하다고 인정하는 경우에는, 해당 장애인의 이용을 보조하기 위하여 동행하는 보호자 1명에 한정하여 사용료 전액을 면제한다.)",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    },
+    {
+     "target": "other",
+     "label": "중복 불가",
+     "rate": "-",
+     "condition": "감면 사유 2개 이상이면 최고율 1개",
+     "quote": "단, 감면 사유가 2개 이상일 경우 감면율이 높은 것 하나만 적용한다.",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+    }
+   ],
+   "not_found": [
+    "near_poor(차상위) 조항 없음",
+    "defector(북한이탈주민) 조항 없음"
+   ],
+   "targets_vocab_note": "target ∈ youth|basic_livelihood|near_poor|single_parent|multichild|disability|defector|other",
+   "unverified": [
+    "카(다둥이) 항목의 quote는 조문 원문 그대로(공백 2칸 포함)",
+    "운영 공단 URL 미확인(빈 값)",
+    "별표 2(다목적)·별표 3(공공체육시설)의 세부 감면표는 별표 1과 유사할 것으로 보이나 원문을 전부 대조하지 않음"
+   ]
+  },
+  {
+   "sigungu_cd": "27230",
+   "sigungu_nm": "북구",
+   "sido": "대구광역시",
+   "law": {
+    "title": "대구광역시 북구 체육시설 관리 및 운영 조례",
+    "article": "제10조(사용료 감면) + [별표 3] 사용료 등의 감면",
+    "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2101737",
+    "effective": "2026-01-01",
+    "mst": "2101737"
+   },
+   "related_sources": [
+    {
+     "title": "[별표 3] 사용료 등의 감면(제10조 관련) hwp",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "title": "대구광역시 북구 체육시설 관리 및 운영 조례 시행규칙 제4조(감면신청)",
+     "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=1195998"
+    }
+   ],
+   "operator": {
+    "name": "북구청 직영 원칙(제17조), 일부 시설 위탁(연암공원관리사무소→대구광역시북구체육회 등). '북구 시설관리공단'은 조례에서 확인되지 않음",
+    "url": ""
+   },
+   "scope": "구 체육시설. 별표 3은 1. 전용사용료(단체 대관)와 2. 개인사용료·강습료·프로그램 수강료로 구분. 부대시설 사용료는 징수 가능. 둘 이상 사유 시 최고율 1개, 증빙 제시 필수",
+   "reductions": [
+    {
+     "target": "youth",
+     "label": "어린이·청소년(개인사용료·강습료·프로그램 수강료)",
+     "rate": "50%",
+     "condition": "개인 이용/강습 모두 해당. 소득·주소 조건 없음",
+     "age_definition": "어린이 5~12세 또는 초등학생, 청소년 13~18세 또는 중·고등학생 (제2조)",
+     "quote": "어린이·청소년 및 노인 | 50%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "basic_livelihood",
+     "label": "국민기초생활보장수급자",
+     "rate": "50%",
+     "condition": "급여 종류 제한 없음",
+     "quote": "「국민기초생활 보장법」의 적용을 받는 국민기초생활보장수급자 | 50%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "disability",
+     "label": "장애인",
+     "rate": "50%",
+     "condition": "",
+     "quote": "「장애인복지법」의 적용을 받는 장애인 | 50%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "multichild",
+     "label": "세 자녀 이상 가정",
+     "rate": "40%",
+     "condition": "대구 북구 주소. 자녀 나이 기준 명시 없음",
+     "quote": "대구광역시 북구에 주소를 둔 세 자녀 이상 가정 | 40%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "multichild",
+     "label": "두 자녀 가정",
+     "rate": "10%",
+     "condition": "대구 북구 주소",
+     "quote": "대구광역시 북구에 주소를 둔 두 자녀 가정 | 10%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "youth",
+     "label": "청소년·어린이 단체 경기·연습(전용사용료)",
+     "rate": "50%",
+     "condition": "이용자 전원이 대상자여야 함(관리자 제외)",
+     "quote": "65세 이상의 사람, 청소년, 어린이, 장애인 및「국민기초생활 보장법」에 따른 수급자를 위한 체육경기 및 행사 또한 이들이 하는 연습 경기 | 단, 이용자의 전원이 대상자이여야하며, 관리자는 제외한다 | 50%",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=161386967"
+    },
+    {
+     "target": "other",
+     "label": "중복 불가",
+     "rate": "-",
+     "condition": "",
+     "quote": "② 별표 3에 따라 둘 이상의 감면사유에 해당하면 그 중 감면율이 높은 어느 하나를 적용한다.",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2101737"
+    }
+   ],
+   "not_found": [
+    "near_poor(차상위) 조항 없음",
+    "single_parent(한부모) 조항 없음",
+    "defector(북한이탈주민) 조항 없음"
+   ],
+   "targets_vocab_note": "target ∈ youth|basic_livelihood|near_poor|single_parent|multichild|disability|defector|other",
+   "unverified": [
+    "별표 3의 quote는 hwp 표의 '구분 | 감면율' 두 칸을 ' | '로 이은 것(표 셀 원문 그대로)",
+    "운영 주체별(직영/위탁) 실제 적용 여부는 현장 확인 필요"
+   ]
+  },
+  {
+   "sigungu_cd": "51820",
+   "sigungu_nm": "고성군",
+   "sido": "강원특별자치도",
+   "law": {
+    "title": "고성군 체육시설의 설치 및 관리 운영 조례 (강원특별자치도 고성군)",
+    "article": "제12조(사용요금의 감면) + [별표 4] 사용요금의 감면",
+    "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2088745",
+    "effective": "2025-11-21",
+    "mst": "2088745"
+   },
+   "related_sources": [
+    {
+     "title": "[별표 4] 사용요금의 감면 hwp",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+    },
+    {
+     "title": "[별표 2] 체육시설의 사용료 hwp",
+     "url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456113"
+    }
+   ],
+   "operator": {
+    "name": "고성군(군수 관리, 제17조로 체육단체·비영리법인 위탁 가능 — 실제 운영주체 미확인)",
+    "url": ""
+   },
+   "scope": "군 체육시설(고성국민체육센터·복합국민체육센터 수영장/헬스, 볼링센터, 파크골프장 등). 부대시설 사용료·초과사용료는 감면 제외. 중복 시 최고율 1개. 풋살장·족구장 등 생활체육시설은 원래 무료",
+   "reductions": [
+    {
+     "target": "youth",
+     "label": "청소년 30% / 어린이 50%",
+     "rate": "청소년 30%, 어린이 50%",
+     "condition": "별표 4 하단 각주. 표 본문의 50% 행에는 청소년이 없어 적용 범위(개인 이용료 포함 여부)가 표만으로 불명확",
+     "age_definition": "어린이 7~12세, 청소년 13~18세 (제2조)",
+     "quote": "※ 어린이와 노인은 50% 감면, 청소년과 군인은 30% 감면을 적용한다.",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+    },
+    {
+     "target": "youth",
+     "label": "볼링센터 학생",
+     "rate": "30%",
+     "condition": "고성볼링센터 한정",
+     "quote": "․ 노인 50%, 군인학생 30% 감면",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456113"
+    },
+    {
+     "target": "basic_livelihood",
+     "label": "기초생활수급자",
+     "rate": "50%",
+     "condition": "급여 종류 제한 없음",
+     "quote": "「국민기초생활 보장법」에 따른 기초생활수급자",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+    },
+    {
+     "target": "single_parent",
+     "label": "한부모가족",
+     "rate": "50%",
+     "condition": "",
+     "quote": "「한부모가족지원법」에 적용을 받은 한부모 자족",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+    },
+    {
+     "target": "disability",
+     "label": "등록 장애인(보호자 1명 포함)",
+     "rate": "50%",
+     "condition": "",
+     "quote": "「장애인복지법」에 따라 등록된 장애인(보호자 1명 포함)",
+     "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+    },
+    {
+     "target": "other",
+     "label": "중복 불가",
+     "rate": "-",
+     "condition": "",
+     "quote": "단, 중복감면에 해당할 경우 감면율이 가장 높은 것 하나만 적용한다.",
+     "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2088745"
+    }
+   ],
+   "not_found": [
+    "multichild(다자녀) 조항 없음",
+    "near_poor(차상위) 조항 없음",
+    "defector(북한이탈주민) 조항 없음"
+   ],
+   "targets_vocab_note": "target ∈ youth|basic_livelihood|near_poor|single_parent|multichild|disability|defector|other",
+   "unverified": [
+    "별표 4 표는 50% 행이 병합 셀이라 수급자·한부모·장애인 행의 50%는 병합 구조로 판단(원문 셀엔 율이 한 번만 표기)",
+    "'한부모 자족'은 원문 오기(가족) 그대로 인용",
+    "실제 운영주체(군 직영/위탁)와 현장 적용 여부 미확인"
+   ]
+  }
+ ]
+}

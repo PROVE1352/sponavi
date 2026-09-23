@@ -13,6 +13,7 @@ import {
   Popup,
 } from 'maplibre-gl'
 import type { LatLon, Nearby } from '../types'
+import type { SearchMapPoint } from '../types_search'
 import { km, markerColor } from '../lib/format'
 
 // 스타일: 라이트=positron / 다크=dark (OpenFreeMap 제공, 서로 짝인 저채도 페어).
@@ -153,11 +154,14 @@ export function NearbyMap({
   personLoc,
   nearby,
   locate,
+  extraPoints,
 }: {
   personLoc: LatLon
   nearby: Nearby
   // 시설 목록에서 이름을 누르면 여기로 온다(패널이 지도 탭으로 바뀐 뒤).
   locate?: MapLocate | null
+  // 동·도로명·시설명 검색 결과 중 실좌표 행(근사 행은 오지 않는다). 목록에서 눌러 지목할 수 있게 얹는다.
+  extraPoints?: SearchMapPoint[]
 }) {
   const points = useMemo<MapPoint[]>(() => {
     const pts: MapPoint[] = [
@@ -187,8 +191,14 @@ export function NearbyMap({
         approx: a.coord_source === 'centroid',
       })
     }
+    const seen = new Set(pts.map((p) => p.id))
+    for (const e of extraPoints ?? []) {
+      if (seen.has(e.id)) continue
+      seen.add(e.id)
+      pts.push({ ...e, approx: false })
+    }
     return pts
-  }, [personLoc, nearby])
+  }, [personLoc, nearby, extraPoints])
 
   const boxRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapLibreMap | null>(null)

@@ -1,7 +1,41 @@
 {
-  "_comment": "T2A 계약 데이터 1본. 웹 목(mocks/personas.ts)과 server/tests/test_mock_parity.py 가 같은 파일을 읽는다. 순서 = 서버 _collect_alt_edges 의 dedupe 결과(CQ2A: to 유일 · '공식 확인' 우선).",
+  "_comment": "T2A 계약 데이터 1본. 웹 목(mocks/personas.ts)과 server/tests/test_mock_parity.py 가 같은 파일을 읽는다. 순서 = 서버 _collect_alt_edges 의 dedupe 결과(CQ2A: to 유일 · '공식 확인' 우선). public_program 은 조례 확인 지역(성북·고성 등)이면 '공식 확인(조례 …)' + reductions 블록(서버 _public_fee_block 출력 그대로).",
   "P1": [],
   "P2": [
+    {
+      "to": "public_program",
+      "note": "이용권 소득기준 미달 → 공공체육시설 프로그램(요금 감면은 시군구 조례)",
+      "curated": "공식 확인(조례 2026-09-17)",
+      "program": {
+        "id": "public_program",
+        "name": "공공체육시설 프로그램",
+        "benefit": "지자체 공공체육시설 이용료 — 감면 기준은 시군구 조례마다 달라요(청소년·수급자·장애인·다자녀 등). 이용 자격 제한은 없음.",
+        "apply_url": "https://www.kspo.or.kr"
+      },
+      "region": {
+        "sigungu_cd": "11290",
+        "sigungu_nm": "성북구",
+        "sido": "서울특별시"
+      },
+      "law": {
+        "title": "서울특별시 성북구 체육시설 관리 운영 및 사용료 징수 조례",
+        "article": "제10조(사용료의 감면 등)",
+        "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525",
+        "effective": "2026-09-17"
+      },
+      "operator": {
+        "name": "성북구도시관리공단 (조례 제17조 위탁 근거, 공단 페이지에서 감면표 원문은 미확인)",
+        "url": "https://www.gongdan.go.kr/"
+      },
+      "scope": "구립 체육시설(별표 1). 감면은 사용료 전반, 청소년·어린이 20%는 '전용 프로그램 제외'. 별표 2에 성인/청소년/어린이 별도 기준액(수영장 1회 성인 5,000·청소년 4,000·어린이 3,000원 등) 존재",
+      "checked": "2026-09-23",
+      "reductions": [],
+      "no_reduction_for": [],
+      "caveats": [
+        "중복 감면 처리 규정이 조례에 없음(송파·노원·대구북구·고성과 달리)",
+        "성북구도시관리공단 이용안내 페이지에서 실제 적용 감면표를 열람하지 못함"
+      ]
+    },
     {
       "to": "tteuntteun",
       "note": "이용권 소득기준 미달 → 튼튼머니(만 4세+ 소득무관 포인트 적립)",
@@ -23,20 +57,119 @@
         "benefit": "헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)",
         "apply_url": "https://www.culture.go.kr/deduction"
       }
-    },
+    }
+  ],
+  "P4": [
     {
       "to": "public_program",
-      "note": "이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램",
-      "curated": "검증 대기",
+      "note": "장애인 이용권 지원연령(5~69세) 초과 → 장애인 지원 공공체육시설",
+      "curated": "공식 확인(조례 2025-11-21)",
       "program": {
         "id": "public_program",
-        "name": "공공체육시설 프로그램(무료/저가)",
-        "benefit": "무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음",
+        "name": "공공체육시설 프로그램",
+        "benefit": "지자체 공공체육시설 이용료 — 감면 기준은 시군구 조례마다 달라요(청소년·수급자·장애인·다자녀 등). 이용 자격 제한은 없음.",
         "apply_url": "https://www.kspo.or.kr"
+      },
+      "region": {
+        "sigungu_cd": "51820",
+        "sigungu_nm": "고성군",
+        "sido": "강원특별자치도"
+      },
+      "law": {
+        "title": "고성군 체육시설의 설치 및 관리 운영 조례 (강원특별자치도 고성군)",
+        "article": "제12조(사용요금의 감면) + [별표 4] 사용요금의 감면",
+        "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2088745",
+        "effective": "2025-11-21"
+      },
+      "operator": {
+        "name": "고성군(군수 관리, 제17조로 체육단체·비영리법인 위탁 가능 — 실제 운영주체 미확인)",
+        "url": null
+      },
+      "scope": "군 체육시설(고성국민체육센터·복합국민체육센터 수영장/헬스, 볼링센터, 파크골프장 등). 부대시설 사용료·초과사용료는 감면 제외. 중복 시 최고율 1개. 풋살장·족구장 등 생활체육시설은 원래 무료",
+      "checked": "2026-09-23",
+      "reductions": [
+        {
+          "target": "disability",
+          "label": "등록 장애인(보호자 1명 포함)",
+          "rate": "50%",
+          "condition": null,
+          "quote": "「장애인복지법」에 따라 등록된 장애인(보호자 1명 포함)",
+          "source_url": "http://www.law.go.kr/flDownload.do?gubun=ELIS&flSeq=158456117"
+        }
+      ],
+      "no_reduction_for": [],
+      "caveats": [
+        "별표 4 표는 50% 행이 병합 셀이라 수급자·한부모·장애인 행의 50%는 병합 구조로 판단(원문 셀엔 율이 한 번만 표기)",
+        "실제 운영주체(군 직영/위탁)와 현장 적용 여부 미확인"
+      ]
+    },
+    {
+      "to": "senior_voucher",
+      "note": "이용권 연령(69세) 초과 어르신 → 기초연금 수급 시 어르신 스포츠 상품권(최대 15만)",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "senior_voucher",
+        "name": "어르신 스포츠 상품권",
+        "benefit": "기초연금 수급 65세+ · 상품권 최대 15만원(제로페이 스포츠시설)",
+        "apply_url": "https://ssvoucher.co.kr"
+      }
+    },
+    {
+      "to": "senior_free_class",
+      "note": "65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)",
+      "curated": "공식 확인(2026-07-21)",
+      "program": {
+        "id": "senior_free_class",
+        "name": "어르신 스포츠강좌 프로그램(무료 강좌)",
+        "benefit": "65세+ 누구나 · 소득 무관 무료 강좌(요가·기체조·파크골프 등)",
+        "apply_url": "https://www.mcst.go.kr"
       }
     }
   ],
   "P5": [
+    {
+      "to": "public_program",
+      "note": "→ 장애인 지원 공공체육시설(요금 감면은 시군구 조례)",
+      "curated": "공식 확인(조례 2026-09-17)",
+      "program": {
+        "id": "public_program",
+        "name": "공공체육시설 프로그램",
+        "benefit": "지자체 공공체육시설 이용료 — 감면 기준은 시군구 조례마다 달라요(청소년·수급자·장애인·다자녀 등). 이용 자격 제한은 없음.",
+        "apply_url": "https://www.kspo.or.kr"
+      },
+      "region": {
+        "sigungu_cd": "11290",
+        "sigungu_nm": "성북구",
+        "sido": "서울특별시"
+      },
+      "law": {
+        "title": "서울특별시 성북구 체육시설 관리 운영 및 사용료 징수 조례",
+        "article": "제10조(사용료의 감면 등)",
+        "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525",
+        "effective": "2026-09-17"
+      },
+      "operator": {
+        "name": "성북구도시관리공단 (조례 제17조 위탁 근거, 공단 페이지에서 감면표 원문은 미확인)",
+        "url": "https://www.gongdan.go.kr/"
+      },
+      "scope": "구립 체육시설(별표 1). 감면은 사용료 전반, 청소년·어린이 20%는 '전용 프로그램 제외'. 별표 2에 성인/청소년/어린이 별도 기준액(수영장 1회 성인 5,000·청소년 4,000·어린이 3,000원 등) 존재",
+      "checked": "2026-09-23",
+      "reductions": [
+        {
+          "target": "disability",
+          "label": "등록 장애인",
+          "rate": "50%",
+          "condition": "장애의 정도가 심한 장애인은 동반자 포함",
+          "quote": "2. 100분의 50 가. 「장애인복지법」에 따른 등록 장애인(장애의 정도가 심한 장애인은 동반자 포함)",
+          "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2168525"
+        }
+      ],
+      "no_reduction_for": [],
+      "caveats": [
+        "중복 감면 처리 규정이 조례에 없음(송파·노원·대구북구·고성과 달리)",
+        "성북구도시관리공단 이용안내 페이지에서 실제 적용 감면표를 열람하지 못함"
+      ]
+    },
     {
       "to": "tteuntteun",
       "note": "만 4세+ 누구나 · 소득 무관 스포츠활동 포인트 적립",
@@ -57,17 +190,6 @@
         "name": "체육시설 문화비 소득공제",
         "benefit": "헬스장·수영장 이용료 30% 소득공제(총급여 7천만원 이하 근로소득자)",
         "apply_url": "https://www.culture.go.kr/deduction"
-      }
-    },
-    {
-      "to": "public_program",
-      "note": "장애인 접근성 지원 공공체육시설 — 공식 페이지 확인 전(검증 대기)",
-      "curated": "검증 대기",
-      "program": {
-        "id": "public_program",
-        "name": "공공체육시설 프로그램(무료/저가)",
-        "benefit": "무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음",
-        "apply_url": "https://www.kspo.or.kr"
       }
     }
   ]

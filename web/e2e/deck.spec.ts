@@ -55,9 +55,9 @@ test('① 390px — 판정 결과 = 덱 밖 히어로 + 단일 덱(6A)', async (
   const anchor = page.locator('[data-result-anchor]')
   await expect(d.getByTestId('now-available-block')).toHaveCount(0)
   await expect(anchor.getByTestId('now-available-block')).toBeVisible()
-  // 계약 JSON = 공식 확인 2 + 검증 대기 1 → 본문 2줄 + "확인 중 1건" 한 줄(헤딩의 N 은 공식 확인만)
-  await expect(anchor.getByTestId('now-available-item')).toHaveCount(2)
-  await expect(anchor.getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+  // 계약 JSON = 공식 확인 3(성북 조례 감면 공공시설·튼튼머니·소득공제) → 본문 3줄, 확인 중 없음
+  await expect(anchor.getByTestId('now-available-item')).toHaveCount(3)
+  await expect(anchor.getByTestId('alt-route-pending')).toHaveCount(0)
 
   // 슬라이드 구성: 판정 카드 → 공급공백·커버리지 → 시설 요약 → 시설 카드
   await expect(d.getByRole('article', { name: /예상 자격 결과/ }).first()).toBeVisible()

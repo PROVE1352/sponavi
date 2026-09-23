@@ -51,6 +51,22 @@ DISABILITY_TYPES = ("지체", "뇌병변", "시각", "청각", "언어", "지적
 # 표기 변형 → 계약 어휘. dvoucher 웹 보조 소스(facility_accessibility)는 '자폐'로 적힌다.
 DISABILITY_ALIASES = {"자폐": "자폐성"}
 
+# 2027 예산안 확대 대상 자가선언 슬롯(models.AssessRequest.special 과 동일 어휘).
+# multichild = 3자녀 이상 다자녀가구, defector = 북한이탈주민. 인구감소지역은 시군구코드로
+# 서버가 대조하므로 슬롯이 아니다.
+SPECIAL_CATEGORIES = ("multichild", "defector")
+# LLM 이 고른 special 은 발화에 해당 단서가 있을 때만 채택한다(결정론 확인) — 자가선언
+# 슬롯이라 LLM 이 "애가 둘" 같은 발화에서 지어내면 곧바로 판정 재료가 되기 때문(P-2).
+_SPECIAL_CUES = {
+    "multichild": re.compile(
+        r"다자녀|다둥이|셋째|넷째|다섯째"
+        r"|(세|네|다섯|[3-9])\s*(명의\s*)?(자녀|아이|애|남매|형제|자매)"
+        r"|(자녀|아이|애|애들|아이들)\s*(가|이|는|은)?\s*(셋|넷|다섯|[3-9]\s*명)"
+        r"|[삼사오]남매|[삼사오]형제|[삼사오]자매"
+    ),
+    "defector": re.compile(r"탈북|북한\s*이탈|새터민|북한에서\s*(왔|온|넘어)|북향민"),
+}
+
 # FAQ 키 enum — LLM 은 이 중 하나로 "라우팅만" 한다(답변 본문은 아래 사전이 소유).
 FAQ_KEYS = (
     "dvoucher_income",
@@ -99,6 +115,7 @@ class NluEnvelope(BaseModel):
     income_class: Any = None
     disability_has: Any = None
     disability_type: Any = None
+    special: Any = None
 
 
 class _SlotField(BaseModel):
@@ -153,7 +170,18 @@ def _norm_disability_type(value: Any) -> Optional[str]:
     return t if t in DISABILITY_TYPES else None
 
 
-def _slot_updates(valid: dict) -> dict:
+def _norm_special(value: Any, text: Optional[str] = None) -> list[str]:
+    """special 슬롯 → 계약 어휘(multichild·defector)만, 중복 제거·어휘 순서.
+    text 가 주어지면 발화에 그 범주의 단서가 있는 값만 남긴다(LLM 창작 차단)."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    got = {v for v in value if isinstance(v, str) and v in SPECIAL_CATEGORIES}
+    if text is not None:
+        got = {v for v in got if _SPECIAL_CUES[v].search(text)}
+    return [c for c in SPECIAL_CATEGORIES if c in got]
+
+
+def _slot_updates(valid: dict, text: Optional[str] = None) -> dict:
     """검증 통과분만 담은 slot_updates(지역 제외 — 지역은 sigungu 대조가 확정)."""
     out: dict[str, Any] = {}
 
@@ -178,6 +206,10 @@ def _slot_updates(valid: dict) -> dict:
         disability["type"] = dtype
     if disability:
         out["disability"] = disability
+
+    special = _norm_special(valid.get("special"), text)
+    if special:
+        out["special"] = special
     return out
 
 
@@ -204,6 +236,9 @@ def _safe_slots(slots: Any) -> dict:
             d["type"] = dtype
         if d:
             out["disability"] = d
+    special = _norm_special(slots.get("special"))
+    if special:
+        out["special"] = special
     return out
 
 
@@ -754,6 +789,8 @@ SYSTEM_PROMPT = (
     "- 슬롯 추출과 짧은 연결 멘트만. 자격·금액·시설·순위에 대한 사실 진술 금지.\n"
     "- 지역은 사용자가 말한 원문 그대로 region_text 에 넣는다(행정코드·시도 추정 금지).\n"
     "- 발화에 없는 값은 null. 추측·창작 금지.\n"
+    "- special: 발화가 '3자녀 이상 다자녀가구'(세 자녀·셋째·다자녀)를 말하면 multichild,"
+    " '북한이탈주민'(탈북·새터민)을 말하면 defector 를 배열에 넣는다. 언급이 없으면 null.\n"
     "- 제도·자격을 묻는 질문이면 intent=ask_faq 와 faq_key 만 고른다. 답변은 쓰지 않는다.\n"
     "- '어떻게 알아?/무슨 근거로/어떤 방식으로 조사·판정하냐' 류(서비스 원리 질문)는 faq_key=how_it_works.\n"
     # 규칙 정규식(_WHY_EXERCISE)이 먼저 잡지만, 규칙을 비껴간 표현까지 덮으라고 프롬프트에도 남긴다.
@@ -800,6 +837,10 @@ def _schema() -> dict:
                 "type": ["string", "null"],
                 "enum": [*DISABILITY_TYPES, None],
             },
+            "special": {
+                "type": ["array", "null"],
+                "items": {"type": "string", "enum": list(SPECIAL_CATEGORIES)},
+            },
             "intent": {"type": "string", "enum": list(INTENTS)},
             "faq_key": {"type": ["string", "null"], "enum": [*FAQ_KEYS, None]},
             "reply": {"type": ["string", "null"]},
@@ -807,7 +848,7 @@ def _schema() -> dict:
         },
         "required": [
             "age", "sex", "region_text", "income_class", "disability_has",
-            "disability_type", "intent", "faq_key", "reply", "answer",
+            "disability_type", "special", "intent", "faq_key", "reply", "answer",
         ],
     }
 
@@ -975,7 +1016,7 @@ def run_nlu(store: Store, payload: dict) -> tuple[dict, dict]:
             empty["intent"] = forced_intent
         return empty, {"ok": False, "fallback_reason": reason}
 
-    updates = _slot_updates(valid)
+    updates = _slot_updates(valid, text)
     confirmed, candidates = resolve_region(valid.get("region_text"), sigungu_entries(store))
     if confirmed is not None:
         updates["sigungu_cd"] = confirmed["cd"]

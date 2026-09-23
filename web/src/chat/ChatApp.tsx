@@ -16,15 +16,20 @@ import { ScrollToBottomFab } from './ScrollToBottomFab'
 import { useIsDemo } from './route'
 import { AUTOPLAY_STATUS_TEXT } from './autoplay'
 import type { MessageHandlers } from './messages'
+import { TEXT_LARGE_CLASS, applyTextLarge, saveTextLarge } from '../lib/textSize'
 
 function Header({
   demo,
   dark,
   onToggleTheme,
+  textLarge,
+  onToggleTextLarge,
 }: {
   demo: boolean
   dark: boolean
   onToggleTheme: () => void
+  textLarge: boolean
+  onToggleTextLarge: () => void
 }) {
   return (
     // 제호 아래 2px 잉크 괘선 — 화면에서 가장 굵은 선이 여기 하나다(B·종이 메모).
@@ -47,6 +52,21 @@ function Header({
               </Badge>
             </span>
           )}
+          {/* 글씨 크게(저시력·고령 사용자). 켜짐 상태는 aria-pressed + 굵은 잉크 글자로 말한다. */}
+          <button
+            type="button"
+            data-testid="text-size-toggle"
+            onClick={onToggleTextLarge}
+            aria-pressed={textLarge}
+            className={
+              'press inline-flex min-h-11 items-center whitespace-nowrap bg-transparent text-[13px] underline decoration-1 underline-offset-4 hover:text-ink dark:hover:text-ink-dark ' +
+              (textLarge
+                ? 'font-bold text-ink dark:text-ink-dark'
+                : 'text-mute dark:text-mute-dark')
+            }
+          >
+            글씨 크게
+          </button>
           <button
             type="button"
             onClick={onToggleTheme}
@@ -109,6 +129,10 @@ function ChatShell({ demo }: { demo: boolean }) {
     typeof navigator === 'undefined' ? true : navigator.onLine,
   )
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'))
+  // 첫 값은 main.tsx 가 이미 <html> 에 반영해 둔 클래스에서 읽는다(저장소를 두 번 읽지 않는다).
+  const [textLarge, setTextLarge] = useState(() =>
+    document.documentElement.classList.contains(TEXT_LARGE_CLASS),
+  )
 
   // 푸터(데이터 기준일·버전)는 데모 페이지에만 있으므로 health 조회도 거기서만 한다.
   useEffect(() => {
@@ -146,6 +170,13 @@ function ChatShell({ demo }: { demo: boolean }) {
       window.removeEventListener('offline', goOffline)
     }
   }, [])
+
+  function toggleTextLarge() {
+    const next = !textLarge
+    setTextLarge(next)
+    applyTextLarge(next)
+    saveTextLarge(next)
+  }
 
   function toggleTheme() {
     const next = !dark
@@ -187,7 +218,13 @@ function ChatShell({ demo }: { demo: boolean }) {
         </div>
       )}
 
-      <Header demo={demo} dark={dark} onToggleTheme={toggleTheme} />
+      <Header
+        demo={demo}
+        dark={dark}
+        onToggleTheme={toggleTheme}
+        textLarge={textLarge}
+        onToggleTextLarge={toggleTextLarge}
+      />
 
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-5 lg:flex-row lg:items-start lg:gap-6">
         {state.lastAssess && (

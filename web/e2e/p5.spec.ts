@@ -3,14 +3,15 @@ import { openDemo, openPanel, panel, shot, startPersona, stream } from './helper
 
 // FR-P5 (목 모드, VITE_MOCK=1): P5 퀵스타트 칩 1회 →
 //   장애인 이용권 자격 ✓(신청은 소득 무관) + 예상 5순위(성인·비저소득) +
-//   '지금 바로 되는 것' 블록에 **공식 확인 대안 2개 + "확인 중 1건"**.
-//   (실DB 계약 = 튼튼머니·문화비 소득공제 2 + 공공프로그램 검증 대기 1 — 헤딩의 N 은 공식 확인만 센다)
+//   '지금 바로 되는 것' 블록에 **공식 확인 대안 3개**.
+//   (실DB 계약 = 공공시설(성북 조례 감면 원문 확인, 2026-09-23 승격)·튼튼머니·문화비 소득공제 —
+//    헤딩의 N 은 공식 확인만 센다. 조례 미확인 지역이면 공공시설은 다시 "확인 중"으로 빠진다)
 
 test.beforeEach(async ({ page }) => {
   await openDemo(page)
 })
 
-test('P5 · 지체장애 비저소득 성인 → 자격 ✓(소득무관) + 예상 5순위 + 지금 바로 되는 것 2개', async ({ page }) => {
+test('P5 · 지체장애 비저소득 성인 → 자격 ✓(소득무관) + 예상 5순위 + 지금 바로 되는 것 3개', async ({ page }) => {
   await startPersona(page, 'P5')
 
   const dcard = stream(page).getByRole('article', {
@@ -31,25 +32,29 @@ test('P5 · 지체장애 비저소득 성인 → 자격 ✓(소득무관) + 예�
   const block = stream(page).getByTestId('now-available-block')
   await expect(block).toBeVisible()
   await expect(block.getByText('지금 바로 되는 것')).toBeVisible()
-  // 공식 확인 2건만 항목으로 세우고, 검증 대기 1건은 "확인 중"으로 따로 밝힌다(P-1)
-  await expect(stream(page).getByTestId('now-available-item')).toHaveCount(2)
-  await expect(block.getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+  // 공식 확인 3건(공공시설 조례 감면 포함) — 검증 대기가 없으니 "확인 중" 줄도 없다(P-1)
+  await expect(stream(page).getByTestId('now-available-item')).toHaveCount(3)
+  await expect(block.getByTestId('alt-route-pending')).toHaveCount(0)
+  // 공공시설 행: 이 사람에게 맞는 감면(등록 장애인 50%) + 조례 조문 링크
+  await expect(block.getByTestId('public-fee-summary')).toHaveText('성북구 구립 체육시설 · 장애인 50%')
+  await expect(block.getByTestId('public-fee-law-link')).toHaveText('조례 제10조')
   // 히어로 CTA 는 후속 칩과 같은 액션(체력 레인) — 새 진입로를 만들지 않는다
   await expect(block.getByTestId('hero-fitness-cta')).toBeVisible()
 
   await shot(page, 'e2e-shots/P5-selection-priority.png')
 })
 
-test('P2 · 낀 계층 → 히어로 "이용권은 대상이 아니지만 …2가지" + 확인 중 1건', async ({ page }) => {
+test('P2 · 낀 계층 → 히어로 "이용권은 대상이 아니지만 …3가지" (성북 조례 감면 승격)', async ({ page }) => {
   await startPersona(page, 'P2')
 
-  // 비장애 income_fail: 히어로 헤딩의 N 은 공식 확인 엣지 수(2)만 센다(FR-02 AC5 v1.10)
+  // 비장애 income_fail: 히어로 헤딩의 N 은 공식 확인 엣지 수만 센다(FR-02 AC5 v1.10).
+  // 성북구는 공공시설 조례 감면이 원문 확인돼 공식 확인 3(공공시설·튼튼머니·소득공제).
   const block = stream(page).getByTestId('alt-routes-block')
   await expect(block).toBeVisible()
-  await expect(block).toContainText('이용권은 대상이 아니지만, 지금 바로 되는 것 2가지')
-  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(2)
-  // 검증 대기 엣지는 헤딩 밖 한 줄로 남는다 — 버리지도, N 에 넣지도 않는다
-  await expect(stream(page).getByTestId('alt-route-pending')).toContainText('확인 중 1건')
+  await expect(block).toContainText('이용권은 대상이 아니지만, 지금 바로 되는 것 3가지')
+  await expect(stream(page).getByTestId('alt-route-item')).toHaveCount(3)
+  // 검증 대기 엣지가 없으니 "확인 중" 줄도 없다
+  await expect(stream(page).getByTestId('alt-route-pending')).toHaveCount(0)
   // '지금 바로 되는 것'(자격 ✓·저순위 전용)과 혼동되지 않는다
   await expect(stream(page).getByTestId('now-available-block')).toHaveCount(0)
 

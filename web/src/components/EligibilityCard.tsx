@@ -1,10 +1,13 @@
-import type { AltEdge, ProgramEligibility, Selection } from '../types'
+import type { AltEdge, NextYear, ProgramEligibility, Selection } from '../types'
+import { wonKorean } from '../lib/format'
+import { feeSummaryLine, uniq } from '../lib/publicFee'
 import {
   Badge,
   BTN_INK,
   CheckIcon,
   ChevronDownIcon,
   EligibilityMark,
+  InfoIcon,
   ITEM_RULE,
   LINK_ACCENT,
   OkNote,
@@ -127,6 +130,9 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
         </div>
       )}
 
+      {/* 2027 예산안 기준 안내 — 2026 판정(위 ✗)은 그대로 두고, 별도 블록으로만 덧붙인다 */}
+      {p.next_year && <NextYearBlock ny={p.next_year} />}
+
       {/* 출처·확인일 각주 */}
       <footer
         className={`mt-3 flex flex-wrap gap-x-2 gap-y-0.5 pt-2.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark ${ITEM_RULE}`}
@@ -146,6 +152,107 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
         </span>
       </footer>
     </article>
+  )
+}
+
+// 2027 정부 예산안 기준 안내(svoucher ✗ · 5~18세 · 소득 사유일 때만 서버가 부착).
+// ★ 예산안은 국회 확정 전 "제안"이다 — "될 수 있어요 / 들어갈 예정"까지만 말하고,
+//   2026 판정·"지금 바로 되는 것 N가지"에는 섞지 않는다(SPEC §0 정직성).
+export const NEXT_YEAR_BASIS_LABEL = '2027년 정부 예산안 · 국회 확정 전'
+export const NEXT_YEAR_QUIET_LINE =
+  '2027년부터 3자녀 이상 가구·북한이탈주민·인구감소지역 유·청소년도 대상에 들어갈 예정이에요(정부 예산안)'
+
+// detail 이 라벨을 되풀이하면("3자녀 이상 다자녀가구 — 본인 응답") 뒷부분만 보인다.
+function matchedDetail(m: NextYear['matched'][number]): string {
+  const d = (m.detail ?? '').trim()
+  if (!d.startsWith(m.label)) return d
+  return d.slice(m.label.length).replace(/^\s*[—\-·:]\s*/, '').trim()
+}
+
+function NextYearSources({ ny }: { ny: NextYear }) {
+  if (ny.sources.length === 0) return null
+  return (
+    <ul data-testid="next-year-sources" className="mt-1.5 space-y-0.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+      {ny.sources.map((s, i) => (
+        <li key={`${s.url}-${i}`} className="break-all">
+          <span className="tracking-[0.12em]">출처</span>{' '}
+          <a
+            href={s.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="underline underline-offset-2 hover:text-ink dark:hover:text-ink-dark"
+          >
+            {s.label || s.url}
+          </a>
+          {s.checked ? ` · 확인일 ${s.checked}` : ''}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export function NextYearBlock({ ny }: { ny: NextYear }) {
+  if (!ny.eligible) {
+    return (
+      <div
+        data-testid="next-year-block"
+        data-eligible="false"
+        className={`mt-3 pt-2.5 ${ITEM_RULE}`}
+      >
+        <p className="text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark">{NEXT_YEAR_QUIET_LINE}</p>
+        <NextYearSources ny={ny} />
+      </div>
+    )
+  }
+  return (
+    <section
+      data-testid="next-year-block"
+      data-eligible="true"
+      aria-label={`${ny.year}년 예산안 기준 안내`}
+      className={`mt-3 ${TINT_BOX}`}
+    >
+      <p className="font-serif text-[17px] font-extrabold leading-[1.4] text-ink dark:text-ink-dark">
+        {ny.year}년부터 대상이 될 수 있어요
+      </p>
+      <p className="mt-1.5">
+        <Badge icon={<InfoIcon className="w-3 h-3" />}>{NEXT_YEAR_BASIS_LABEL}</Badge>
+      </p>
+      {ny.matched.length > 0 && (
+        <ul className="mt-2">
+          {ny.matched.map((m) => (
+            <li
+              key={m.id}
+              data-testid="next-year-matched"
+              className={`flex items-start gap-2 py-2 text-[13.5px] leading-[1.6] ${ITEM_RULE}`}
+            >
+              <CheckIcon className="mt-0.5 w-4 h-4 shrink-0 text-ok dark:text-ok-dark" />
+              <span className="min-w-0 text-ink dark:text-ink-dark">
+                <b>{m.label}</b>
+                {matchedDetail(m) && (
+                  <span className="text-mute dark:text-mute-dark"> · {matchedDetail(m)}</span>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className={`py-2 text-[14px] font-bold text-ink dark:text-ink-dark ${ITEM_RULE}`}>
+        월 {wonKorean(ny.subsidy_month)}
+        <span className="font-normal text-[12.5px] text-mute dark:text-mute-dark"> (예산안 기준 지원액)</span>
+      </p>
+      {ny.age_note && (
+        <p data-testid="next-year-age-note" className="mb-1 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+          ※ {ny.age_note}
+        </p>
+      )}
+      {ny.note && (
+        <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{ny.note}</p>
+      )}
+      {ny.apply_hint && (
+        <p className="mt-1 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{ny.apply_hint}</p>
+      )}
+      <NextYearSources ny={ny} />
+    </section>
   )
 }
 
@@ -283,6 +390,7 @@ export function AltRoutesBlock({
                 <p className="text-[13.5px] leading-[1.65] text-mute dark:text-mute-dark">
                   {a.program?.benefit ?? a.note}
                 </p>
+                <PublicFeeDetail a={a} />
                 {a.program?.apply_url && (
                   <a
                     href={a.program.apply_url}
@@ -334,6 +442,96 @@ export function AltRoutesBlock({
           내 체력에 맞는 운동까지 보기
           <ChevronDownIcon className="w-[18px] h-[18px] shrink-0" />
         </button>
+      )}
+    </div>
+  )
+}
+
+// ── 공공체육시설 조례 감면(public_program · 조례 확인 지역) ──────────────────────
+// 서버가 이 사람에게 맞는 감면만 골라 준다(reductions). 화면은 한 줄 요약 + 행별 주의 +
+// 정직한 공백(no_reduction_for) + 조례 조문 링크·확인일. 원문 인용·지역 주의는 접어 두되 감추지 않는다.
+
+function PublicFeeDetail({ a }: { a: AltEdge }) {
+  const summary = feeSummaryLine(a)
+  if (!summary || !a.reductions) return null
+  const article = a.law?.article.match(/제\d+조(?:의\d+)?/)?.[0] ?? a.law?.article
+  const rowCaveats = uniq(a.reductions.map((r) => r.caveat).filter((c): c is string => !!c))
+  const gaps = a.no_reduction_for ?? []
+  const caveats = a.caveats ?? []
+  return (
+    <div data-testid="public-fee" className={TINT_BOX}>
+      <p
+        data-testid="public-fee-summary"
+        className="break-keep text-[14px] font-bold leading-[1.55] text-ink dark:text-ink-dark"
+      >
+        {summary}
+      </p>
+      {rowCaveats.map((c) => (
+        <p
+          key={c}
+          data-testid="public-fee-caveat"
+          className="mt-1 flex items-start gap-1.5 text-[12px] leading-[1.55] text-mute dark:text-mute-dark"
+        >
+          <InfoIcon className="mt-0.5 w-3 h-3 shrink-0" />
+          {c}
+        </p>
+      ))}
+      {gaps.map((g) => (
+        <p
+          key={g}
+          data-testid="public-fee-gap"
+          className="mt-1 text-[12.5px] leading-[1.55] text-ink dark:text-ink-dark"
+        >
+          ※ {g}
+        </p>
+      ))}
+      {a.law && (
+        <p className="mt-1.5 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+          <a
+            data-testid="public-fee-law-link"
+            href={a.law.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className={LINK_ACCENT}
+          >
+            조례 {article}
+          </a>
+          {a.law.effective ? ` · 시행 ${a.law.effective}` : ''}
+          {a.checked ? ` · 원문 확인 ${a.checked}` : ''}
+        </p>
+      )}
+      {(a.reductions.length > 0 || caveats.length > 0) && (
+        <details className="mt-0.5">
+          <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12px] text-mute underline decoration-1 underline-offset-4 dark:text-mute-dark">
+            조례 원문{caveats.length > 0 ? ` · 확인 필요 ${caveats.length}건` : ''}
+          </summary>
+          <ul className="mt-1">
+            {a.reductions.map((r, i) => (
+              <li key={`${r.target}-${i}`} className={`py-2 text-[12.5px] leading-[1.6] ${ITEM_RULE}`}>
+                <span className="font-bold text-ink dark:text-ink-dark">
+                  {r.label} · {r.rate}
+                </span>
+                {r.condition && <span className="text-mute dark:text-mute-dark"> — {r.condition}</span>}
+                <blockquote className="mt-1 break-keep text-mute dark:text-mute-dark">
+                  “{r.quote.replace(/<br>/g, ' ')}”{' '}
+                  <a href={r.source_url} target="_blank" rel="noreferrer noopener" className={LINK_ACCENT}>
+                    원문
+                  </a>
+                </blockquote>
+              </li>
+            ))}
+            {caveats.map((c) => (
+              <li
+                key={c}
+                data-testid="public-fee-region-caveat"
+                className={`flex items-start gap-1.5 py-2 text-[12px] leading-[1.55] text-mute dark:text-mute-dark ${ITEM_RULE}`}
+              >
+                <WarnIcon className="mt-0.5 w-3 h-3 shrink-0" />
+                {c}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   )

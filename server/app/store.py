@@ -176,6 +176,13 @@ def _read_json(path: Path) -> dict:
         return json.load(fh)
 
 
+def _read_optional_json(path: Path) -> Optional[dict]:
+    """있으면 읽고, 없으면 None — 선택 데이터 파일(인구감소지역 등)용."""
+    if not path.exists():
+        return None
+    return _read_json(path)
+
+
 def _split_sports(raw: Optional[str]) -> list[str]:
     return [s for s in (raw or "").split(",") if s]
 
@@ -184,7 +191,11 @@ class Store:
     """Query layer backed by SQLite (facilities/courses/coverage/sigungu)
     plus parsed rules + Seoul centroid seed."""
 
-    def __init__(self, conn: sqlite3.Connection, rules: dict, centroids: dict) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, rules: dict, centroids: dict,
+        depopulation: Optional[dict] = None,
+        public_fees: Optional[dict] = None,
+    ) -> None:
         self.conn = conn
         self.conn.row_factory = sqlite3.Row
         self.rules = rules
@@ -192,6 +203,12 @@ class Store:
         self.programs: dict[str, dict] = {p["id"]: p for p in rules.get("programs", [])}
         self.alt_edges: list[dict] = rules.get("alt_edges", [])
         self.fitness_map: list[dict] = rules.get("fitness_map", [])
+        # 인구감소지역(행안부 지정) — 2027 이용권 확대 대상 판정용(engine next_year).
+        # 파일이 없으면 빈 표 = "매칭 불가"(지어내지 않는다, P-1).
+        self.set_depopulation(depopulation)
+        # 공공체육시설 사용료 감면(시군구 조례 원문 확인분) — public_program 대체경로 승격용
+        # (engine._public_fee_block). 파일이 없으면 빈 표 = 전부 "검증 대기" 유지(P-1).
+        self.set_public_fees(public_fees)
         # Seoul 25 seed — authoritative for GET /api/meta/sigungu (pilot region)
         # and the primary applicant-location fallback (docs/API.md).
         self._centroids: dict[str, dict] = {
@@ -225,6 +242,52 @@ class Store:
 
     def edges_from(self, pid: str) -> list[dict]:
         return [e for e in self.alt_edges if e.get("from") == pid]
+
+    # -- 인구감소지역 ----------------------------------------------------------
+    def set_depopulation(self, data: Optional[dict]) -> None:
+        """data/depopulation_regions.json 스키마
+        {basis, count, sources, regions:[{sido, sigungu_nm, sigungu_cd, alias_codes}]}
+        를 코드 → 지역 행 색인으로 적재한다(현행 코드 + 구 코드 별칭 모두)."""
+        self.depopulation: dict = data or {}
+        idx: dict[str, dict] = {}
+        for reg in self.depopulation.get("regions") or []:
+            codes = [reg.get("sigungu_cd"), *(reg.get("alias_codes") or [])]
+            for cd in codes:
+                if cd:
+                    idx.setdefault(str(cd), reg)
+        self._depop_index = idx
+
+    def depopulation_region(self, sigungu_cd: Optional[str]) -> Optional[dict]:
+        """시군구코드(현행·구 코드 무관)가 인구감소지역이면 그 행, 아니면 None.
+        원 코드와 현행 코드(sigungu_alias 해석) 둘 다 대조한다."""
+        if not sigungu_cd:
+            return None
+        cd = str(sigungu_cd)
+        return self._depop_index.get(cd) or self._depop_index.get(
+            str(self.canonical_sigungu(cd) or "")
+        )
+
+    # -- 공공체육시설 감면 조례 ----------------------------------------------
+    def set_public_fees(self, data: Optional[dict]) -> None:
+        """data/public_fee_reductions.json 스키마
+        {basis, checked, regions:[{sigungu_cd, sigungu_nm, sido, law, operator, scope,
+        reductions:[{target,label,rate,condition,quote,source_url,age_definition?}],
+        not_found, unverified}]} 를 시군구코드 → 지역 행 색인으로 적재한다."""
+        self.public_fees: dict = data or {}
+        self._public_fee_index: dict[str, dict] = {
+            str(reg["sigungu_cd"]): reg
+            for reg in self.public_fees.get("regions") or []
+            if reg.get("sigungu_cd")
+        }
+
+    def public_fee_region(self, sigungu_cd: Optional[str]) -> Optional[dict]:
+        """시군구코드(구 코드면 현행으로 해석)의 감면 조례 행. 없으면 None."""
+        if not sigungu_cd:
+            return None
+        cd = str(sigungu_cd)
+        return self._public_fee_index.get(cd) or self._public_fee_index.get(
+            str(self.canonical_sigungu(cd) or "")
+        )
 
     # -- 지역 코드 정규화 ----------------------------------------------------
     def canonical_sigungu(self, sigungu_cd: Optional[str]) -> Optional[str]:
@@ -338,6 +401,38 @@ class Store:
             (source, *codes),
         )
         return int(cur.fetchone()[0])
+
+    @staticmethod
+    def _like_escape(token: str) -> str:
+        """LIKE 와일드카드(% _)와 이스케이프 문자(\\) 자체를 글자 그대로 찾게 만든다."""
+        return (
+            token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+
+    def search_facilities(
+        self, source: str, sigungu_cds, tokens: list[str],
+    ) -> list[dict]:
+        """시군구(들) 안에서 이름·주소 키워드 검색(GET /api/facilities/search).
+
+        모든 토큰이 name 또는 addr 에 부분일치해야 한다(AND). 파라미터 바인딩 +
+        ESCAPE '\\' 로 사용자 입력의 % _ 는 글자 그대로 취급한다. SQLite LIKE 는
+        ASCII 대소문자를 무시한다(한글은 대소문자가 없다). 좌표 없는 행도 포함 —
+        목록 검색은 지도와 무관하게 '그 구에 있다'는 사실을 보여 준다."""
+        codes = [c for c in (sigungu_cds or ()) if c]
+        toks = [t for t in tokens if t]
+        if not codes or not toks:
+            return []
+        marks = ",".join("?" for _ in codes)
+        sql = f"SELECT * FROM facilities WHERE source = ? AND sigungu_cd IN ({marks})"
+        args: list = [source, *codes]
+        for t in toks:
+            pat = f"%{self._like_escape(t)}%"
+            sql += (
+                " AND (name LIKE ? ESCAPE '\\' OR COALESCE(addr, '') LIKE ? ESCAPE '\\')"
+            )
+            args.extend([pat, pat])
+        cur = self.conn.execute(sql, args)
+        return [self._facility_row(r) for r in cur.fetchall()]
 
     def courses_for(self, facility_id: str) -> list[dict]:
         cur = self.conn.execute(
@@ -597,7 +692,9 @@ def build_store(sqlite_target: str = ":memory:") -> Store:
     rules = _read_json(ddir / "rules.json")
     centroids = _read_json(ddir / "sigungu_centroids.json")
     conn = _build_conn(facilities, courses, coverage, centroids, sqlite_target)
-    return Store(conn, rules, centroids)
+    depop = _read_optional_json(ddir / "depopulation_regions.json")
+    fees = _read_optional_json(ddir / "public_fee_reductions.json")
+    return Store(conn, rules, centroids, depop, fees)
 
 
 def open_db_store(path: str) -> Store:
@@ -607,7 +704,9 @@ def open_db_store(path: str) -> Store:
     ddir = data_dir()
     rules = _read_json(ddir / "rules.json")
     centroids = _read_json(ddir / "sigungu_centroids.json")
-    return Store(conn, rules, centroids)
+    depop = _read_optional_json(ddir / "depopulation_regions.json")
+    fees = _read_optional_json(ddir / "public_fee_reductions.json")
+    return Store(conn, rules, centroids, depop, fees)
 
 
 # raw videos list lives in courses.json (fixtures) — separate small helper

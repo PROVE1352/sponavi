@@ -2,12 +2,13 @@
 // 지도(MapLibre GL)는 여기 단 하나만 상주한다(메시지별 재마운트 금지, ARCHITECTURE §11.4).
 // 패널이 없어도 스트림만으로 정보가 완결되므로(FR-12 AC3), 여기는 "더 크게 보는 곳"이다.
 
-import { useId } from 'react'
+import { useCallback, useId, useMemo, useState } from 'react'
 import type { RefObject } from 'react'
 import type { AssessRequest, AssessResponse } from '../types'
 import type { PanelTab } from '../types_chat'
 import { NearbyMap, type MapLocate } from '../components/NearbyMap'
 import { NearbyList } from '../components/NearbyList'
+import type { FacilitySearchScope, SearchMapPoint } from '../types_search'
 import { Badge } from '../components/ui'
 import { countMatching, poolCountText } from '../lib/sports'
 import { facilityCountText } from './messages'
@@ -46,6 +47,27 @@ export function ContextPanel({
   // C-4: 아래 목록이 종목 필터로 줄어 있으면 배지도 그 사실을 함께 말한다 —
   // 필터 걸린 목록 위에 전체 수만 떠 있으면 두 숫자가 서로 반박하는 것처럼 읽힌다(P-1).
   const altCounts = countMatching(data.nearby.alternatives, filterSports)
+  // 동·도로명·시설명 검색(현재 결과의 시군구 안). 실좌표 결과만 지도에 얹는다.
+  const [searchPoints, setSearchPoints] = useState<SearchMapPoint[]>([])
+  // 빈 배열 → 빈 배열은 상태를 바꾸지 않는다(지도 마커를 괜히 다시 그리지 않게).
+  const onSearchHits = useCallback(
+    (pts: SearchMapPoint[]) =>
+      setSearchPoints((prev) => (prev.length === 0 && pts.length === 0 ? prev : pts)),
+    [],
+  )
+  const searchScope = useMemo<FacilitySearchScope | undefined>(
+    () =>
+      req.sigungu_cd
+        ? {
+            sigungu_cd: req.sigungu_cd,
+            sigungu_nm: req.sigungu_nm,
+            voucherProgram: req.disability.has ? 'dvoucher' : 'svoucher',
+            origin: req.location ?? null,
+            age: req.age,
+          }
+        : undefined,
+    [req],
+  )
 
   return (
     <aside
@@ -133,7 +155,12 @@ export function ContextPanel({
             hidden={tab !== 'map'}
             className="py-3"
           >
-            <NearbyMap personLoc={personLocOf(req)} nearby={data.nearby} locate={locate} />
+            <NearbyMap
+              personLoc={personLocOf(req)}
+              nearby={data.nearby}
+              locate={locate}
+              extraPoints={searchPoints}
+            />
             <p className="mt-2 text-xs text-mute dark:text-mute-dark">
               지도 없이도 같은 정보를 시설 목록과 대화 카드에서 확인하실 수 있어요.
             </p>
@@ -151,6 +178,8 @@ export function ContextPanel({
               filterSports={filterSports}
               onClearFilter={onClearFilter}
               onLocate={onLocate}
+              search={searchScope}
+              onSearchHits={onSearchHits}
             />
           </div>
         </div>

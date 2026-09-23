@@ -55,7 +55,56 @@
      "note": "월 지원금 105,000원(유·청소년) 명시"
     }
    ],
-   "verified": true
+   "verified": true,
+   "next_year": {
+    "year": 2027,
+    "basis": "2027년 정부 예산안(국회 심의 전)",
+    "added_categories": [
+     {
+      "id": "multichild",
+      "label": "3자녀 이상 다자녀가구"
+     },
+     {
+      "id": "defector",
+      "label": "북한이탈주민"
+     },
+     {
+      "id": "depop_region",
+      "label": "인구감소지역 거주 유·청소년"
+     }
+    ],
+    "age_min": 5,
+    "age_max": 18,
+    "age_assumed": true,
+    "age_note": "2027년 지원 연령은 발표되지 않아 현행(5~18세)과 같다고 가정한 것 — 확정 기준 아님",
+    "subsidy_month": 105000,
+    "note": "구체적인 신청 자격과 방법은 추후 국민체육진흥공단과 각 지방자치단체가 안내 (2026-09-09 발표 기준)",
+    "apply_hint": "2027년 지원분 신청 시기는 공단 공고 확인 (참고: 2026년 지원분은 2025.11.10~11.28)",
+    "sources": [
+     {
+      "url": "https://www.mt.co.kr/sports/2026/09/04/2026090409242544409",
+      "checked": "2026-09-23",
+      "label": "머니투데이(2026-09-04)",
+      "tier": "secondary",
+      "note": "2027 문체부 예산안 — 스포츠강좌이용권 1,122억→1,375억, 대상 확대"
+     },
+     {
+      "url": "https://www.fnnews.com/news/202609090641452036",
+      "checked": "2026-09-23",
+      "label": "파이낸셜뉴스(2026-09-09)",
+      "tier": "secondary",
+      "note": "다자녀(3자녀+)·북한이탈주민·인구감소지역 유·청소년 확대, 월 10.5만원"
+     },
+     {
+      "url": "https://www.newspim.com/news/view/20260909000154",
+      "checked": "2026-09-23",
+      "label": "뉴스핌(2026-09-09)",
+      "tier": "secondary",
+      "note": "취약계층 유·청소년 이용권 869억→1,069억, 장애인 2.6만→3.2만명"
+     }
+    ],
+    "curated": "예산안 발표(2026-09-09)"
+   }
   },
   {
    "id": "dvoucher",
@@ -149,14 +198,14 @@
   },
   {
    "id": "public_program",
-   "name": "공공체육시설 프로그램(무료/저가)",
+   "name": "공공체육시설 프로그램",
    "eligibility": {
     "income_classes": "any",
     "age_min": 0,
     "age_max": 200,
     "disability": "any"
    },
-   "benefit": "지자체 공공체육시설의 무료/저가 생활체육 프로그램(수영·요가·헬스 등). 자격 제한 없음.",
+   "benefit": "지자체 공공체육시설 이용료 — 감면 기준은 시군구 조례마다 달라요(청소년·수급자·장애인·다자녀 등). 이용 자격 제한은 없음.",
    "subsidy_month": 0,
    "apply": {
     "how": "각 공공체육시설(구민체육센터 등) 현장/홈페이지 접수. 오전·비수기 저가 시간대 및 무료 실버/장애인 교실 활용.",
@@ -270,14 +319,14 @@
    "name": "체육시설 문화비 소득공제",
    "eligibility": {
     "income_classes": "any",
-    "age_min": null,
+    "age_min": 19,
     "age_max": null,
     "disability": "any",
     "extra": "총급여 7,000만원 이하 근로소득자"
    },
    "benefit": "등록 체육시설(헬스장·수영장) 이용료 30% 소득공제(문화비 합산 연 300만원 한도), 2025-07-01 결제분부터",
    "subsidy_month": null,
-   "income_note": "복지계층 기준 아님 — 총급여 7천만원 이하 근로소득자 요건. '소득공제 등록 시설'에서 결제한 금액만 해당.",
+   "income_note": "복지계층 기준 아님 — 총급여 7천만원 이하 근로소득자 요건. '소득공제 등록 시설'에서 결제한 금액만 해당. 미성년자는 안내 대상에서 제외(설계 결정: 근로소득자 요건)",
    "apply": {
     "how": "별도 신청 불필요 — 등록 시설에서 카드 결제 시 연말정산 자동 반영. 등록 시설 검색은 문화비 소득공제 누리집",
     "url": "https://www.culture.go.kr/deduction",
@@ -302,7 +351,7 @@
    "from": "svoucher",
    "when": "income_fail",
    "to": "public_program",
-   "note": "이용권 소득기준 미달 → 공공체육시설 무료/저가 프로그램",
+   "note": "이용권 소득기준 미달 → 공공체육시설 프로그램(요금 감면은 시군구 조례)",
    "curated": "검증 대기"
   },
   {
@@ -329,7 +378,7 @@
    "filter": {
     "disability_support": true
    },
-   "note": "→ 장애인 지원 공공체육시설(저가/무료)",
+   "note": "→ 장애인 지원 공공체육시설(요금 감면은 시군구 조례)",
    "curated": "검증 대기"
   },
   {

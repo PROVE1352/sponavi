@@ -6,6 +6,8 @@
 
 import type { AltEdge, AssessResponse, DemoPersona, Selection, VoucherFacility } from '../types'
 import ALT_EDGES_JSON from './contract/alt_edges.json'
+// rules.json public_program.benefit 과 같은 문구(목 엔진과 1벌) — '무료/저가'로 단정하지 않는다.
+import { PUBLIC_BENEFIT } from './engine'
 import FACILITIES_JSON from './contract/facilities.json'
 import PERSONAS_DEMO_JSON from './contract/personas_demo.json'
 
@@ -42,7 +44,6 @@ const PUBLIC_SOURCE = { url: 'https://www.seoul.go.kr', checked: '2026-07-20' }
 
 const SVOUCHER_BENEFIT = '월 최대 10만 5천원 강좌비 지원 (유청소년 기준)'
 const DVOUCHER_BENEFIT = '월 최대 11만원 강좌비 지원 (장애인) · 금액·기준 공식 확인 필요'
-const PUBLIC_BENEFIT = '무료 또는 저가(월 0~4만원대) 프로그램'
 
 // 성북구 차상위·한부모 커버리지(= docs/API.md 예시값, 정직-신호 핵심). 구 단위 통계.
 const COVERAGE_SB_NEARPOOR = {
@@ -54,30 +55,6 @@ const COVERAGE_SB_NEARPOOR = {
   year: 2025,
 }
 
-// ---------- 대체경로(alt_edges) 목적지 제도 메타 (data/rules.json 요약) ----------
-const ALT_PROGRAMS = {
-  public_program: {
-    id: 'public_program',
-    name: '공공체육시설 프로그램(무료/저가)',
-    benefit: '무료 또는 저가(월 0~4만원대) 생활체육 프로그램 — 자격 제한 없음',
-    apply_url: 'https://www.kspo.or.kr',
-  },
-  senior_voucher: {
-    id: 'senior_voucher',
-    name: '어르신 스포츠 상품권',
-    benefit: '기초연금 수급 65세+ · 상품권 최대 15만원(제로페이 스포츠시설)',
-    apply_url: 'https://ssvoucher.co.kr',
-  },
-  senior_free_class: {
-    id: 'senior_free_class',
-    name: '어르신 스포츠강좌 프로그램(무료 강좌)',
-    benefit: '65세+ 누구나 · 소득 무관 무료 강좌(요가·기체조·파크골프 등)',
-    apply_url: 'https://www.mcst.go.kr',
-  },
-}
-
-const OFFICIAL = '공식 확인(2026-07-21)'
-const PENDING = '검증 대기'
 
 // 선정순위 출처(rules dvoucher.selection_priority.source 요약)
 const SELECTION_SOURCE = {
@@ -108,15 +85,12 @@ const SELECTION_RANK5_ADULT: Selection = {
 // CQ2A: to 유일 + '공식 확인' 우선 정렬은 서버가 하고, 그 결과가 계약 JSON 이다.
 const P2_ALT_EDGES: AltEdge[] = CONTRACT_ALT_EDGES.P2
 
-// P4: dvoucher 연령 초과(72세) → 어르신 특화 대체경로
-const P4_ALT_EDGES: AltEdge[] = [
-  { to: 'public_program', note: '장애인 이용권 연령 초과 → 장애인 지원 공공체육시설', curated: PENDING, program: ALT_PROGRAMS.public_program },
-  { to: 'senior_voucher', note: '이용권 연령(69세) 초과 어르신 → 기초연금 수급 시 어르신 스포츠 상품권(최대 15만)', curated: OFFICIAL, program: ALT_PROGRAMS.senior_voucher },
-  { to: 'senior_free_class', note: '65세+ 누구나 → 어르신 무료 스포츠강좌(소득 무관)', curated: OFFICIAL, program: ALT_PROGRAMS.senior_free_class },
-]
+// P4: dvoucher 연령 초과(72세) → 어르신 특화 대체경로. 고성군은 체육시설 조례 감면 확인 지역이라
+// public_program 이 '공식 확인(조례 …)' + 장애인 50% 블록(계약 JSON = 실DB 출력)으로 올라온다.
+const P4_ALT_EDGES: AltEdge[] = CONTRACT_ALT_EDGES.P4
 
 // P5: dvoucher 자격 ✓ 이나 예상 5순위 → 대기 동안 '지금 바로 되는' 대안.
-// 실DB 는 공식 확인 2 + 검증 대기 1 이라 '지금 바로 되는 것' 필터(공식 확인)는 2줄이다(P-1).
+// 성북구 조례 감면 확인(2026-09-23) 이후 실DB 는 공식 확인 3(공공시설 감면·튼튼머니·소득공제)이다.
 const P5_ALT_EDGES: AltEdge[] = CONTRACT_ALT_EDGES.P5
 
 // P5 장애인 가맹 6곳(OV13): 등록강좌 수강료가 전부 결측이라 fee/subsidy/copay 3셀 모두 null.
@@ -232,7 +206,7 @@ const P1: AssessResponse = {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
       benefit: PUBLIC_BENEFIT,
@@ -300,7 +274,7 @@ const P2: AssessResponse = {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
       benefit: PUBLIC_BENEFIT,
@@ -311,7 +285,7 @@ const P2: AssessResponse = {
   ],
   path: [
     { from: 'person', to: 'svoucher', edge: '자격', result: 'fail', label: '소득 그외 · 연령 27>18' },
-    { from: 'svoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: '무료/저가 공공프로그램', curated: '검증 대기' },
+    { from: 'svoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: P2_ALT_EDGES[0].note, curated: P2_ALT_EDGES[0].curated },
     { from: 'public_program', to: 'facility:P01', edge: '적합·접근', result: 'ok', label: '성북구민체육센터 · 1.6km' },
   ],
   alt_edges: P2_ALT_EDGES,
@@ -371,7 +345,7 @@ const P3: AssessResponse = {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다' }],
       benefit: PUBLIC_BENEFIT,
@@ -405,7 +379,8 @@ const P3: AssessResponse = {
   },
 }
 
-// ---------- P4: 인천 서구 · dvoucher ✗(연령 초과) → 공급공백 + 장애 특화 대체경로 ----------
+// ---------- P4: 강원 고성군 · dvoucher ✗(연령 초과) → 공급공백 + 장애 특화 대체경로 ----------
+// (★FR-P4 2026-08-22: 데모 지역 = 고성군. 공급공백·최근접은 실DB 출력과 같다.)
 const P4: AssessResponse = {
   eligibility: [
     {
@@ -435,7 +410,7 @@ const P4: AssessResponse = {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다 (접근성 지원 시설 우선)' }],
       benefit: PUBLIC_BENEFIT,
@@ -444,11 +419,11 @@ const P4: AssessResponse = {
       verified: true,
     },
   ],
-  // 인천 서구(28260) 실 DB 기준: 반경 3km 안에 접근성 지원 공공시설이 잡히지 않아
+  // 고성군(51820) 실 DB 기준: 반경 안에 접근성 지원 공공시설이 잡히지 않아
   // 경로는 제도 대안까지만 이어진다(시설 홉 없음). 없는 시설을 만들어 붙이지 않는다(P-1).
   path: [
     { from: 'person', to: 'dvoucher', edge: '자격', result: 'fail', label: '연령 72 > 69 상한' },
-    { from: 'dvoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: '접근성 지원 공공프로그램', curated: '검증 대기' },
+    { from: 'dvoucher', to: 'public_program', edge: '대체경로', result: 'ok', label: P4_ALT_EDGES[0].note, curated: P4_ALT_EDGES[0].curated },
   ],
   alt_edges: P4_ALT_EDGES,
   nearby: {
@@ -461,11 +436,11 @@ const P4: AssessResponse = {
     radius_km: 3,
     voucher_count: 0,
     voucher_scope: 'sigungu',
-    sigungu_nm: '서구',
+    sigungu_nm: '고성군',
     alt_count: 0,
-    nearest: { name: '153합기도', coord_source: 'centroid', dist_km: null, sigungu_nm: '서해구' },
-    message: '서구에 장애인스포츠강좌이용권 가맹시설이 없습니다',
-    // 커버리지(수급률)는 서울 15구 실측분뿐 — 인천은 데이터가 없어 null 이다.
+    nearest: { name: '동진볼링장', coord_source: 'centroid', dist_km: null, sigungu_nm: '속초시' },
+    message: '고성군에 장애인스포츠강좌이용권 가맹시설이 없습니다',
+    // 커버리지(수급률)는 서울 15구 실측분뿐 — 고성군은 데이터가 없어 null 이다.
     coverage: null,
   },
 }
@@ -502,7 +477,7 @@ const P5: AssessResponse = {
     },
     {
       program_id: 'public_program',
-      program_name: '공공체육시설 프로그램(무료/저가)',
+      program_name: '공공체육시설 프로그램',
       eligible: true,
       reasons: [{ field: 'income_class', ok: true, message: '누구나 이용 가능한 공공 프로그램입니다 (접근성 지원 시설 우선)' }],
       benefit: PUBLIC_BENEFIT,

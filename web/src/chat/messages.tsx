@@ -23,7 +23,7 @@ import { ParqGate } from '../components/ParqGate'
 import { FitnessFormCard } from '../components/FitnessForm'
 import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
-import { Badge, CheckIcon, InfoIcon } from '../components/ui'
+import { Badge, CheckIcon, InfoIcon, KeepDates } from '../components/ui'
 import { CardCarousel, CardDeck } from '../components/Carousel'
 import { altPoolLabel } from '../lib/sports'
 import { BOT_NAME, T, primaryProgramId, specialAnswerChip, toggleSpecialSelection } from './policy'
@@ -541,7 +541,9 @@ function ResultDeck({
   )
 
   // 6A: 대체경로는 더 이상 덱 슬라이드가 아니다 — 슬라이드 수에서도 빠진다.
-  const slides = data.eligibility.length + 1 + 1 + vouchers.length + alternatives.length
+  // 시설 행은 각자 슬라이드가 아니라 "근처 자원" 슬라이드 하나 안의 목록이다(FR-12 AC9 "시설 요약").
+  //   짧은 행마다 한 장씩 차지해 진행 표시가 "1 / 8"로 부풀던 문제(2026-09-28 보고서 스샷).
+  const slides = data.eligibility.length + 1 + 1
 
   return (
     <section data-testid="assess-cards" aria-label="예상 자격 결과" className="space-y-2">
@@ -569,8 +571,9 @@ function ResultDeck({
           <SupplyGapBanner gap={data.supply_gap} />
         </li>
 
-        {/* ③ 근처 자원 머리 슬라이드(카운트 + 패널 열기) */}
-        <li key="facility-head" className={DECK_SLIDE_CLS}>
+        {/* ③ 근처 자원 슬라이드(카운트 + 시설 미리보기 목록 + 패널 열기) — 데스크톱 "근처 자원" 섹션과 같은 구성.
+            목록 순서는 서버가 정한 nearby.primary 를 따른다(1A) — 이용권 ✗ 사용자에게 가맹시설을 먼저 보여 주지 않는다. */}
+        <li key="facility-summary" className={DECK_SLIDE_CLS}>
           <section data-testid="facility-summary" aria-label="근처 자원 요약">
             <h3 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
               근처 자원
@@ -578,27 +581,29 @@ function ResultDeck({
             <div className="mt-2">
               <FacilityCounts req={req} data={data} />
             </div>
-            {vouchers.length + alternatives.length === 0 && <EmptyFacilities />}
+            {vouchers.length + alternatives.length === 0 ? (
+              <EmptyFacilities />
+            ) : (
+              <ul data-testid="deck-facility-rows" className="mt-3 space-y-2">
+                {data.nearby.primary === 'alternatives'
+                  ? [
+                      ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+                      ...vouchers.map((v) => (
+                        <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+                      )),
+                    ]
+                  : [
+                      ...vouchers.map((v) => (
+                        <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
+                      )),
+                      ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
+                    ]}
+              </ul>
+            )}
             <FacilityRest data={data} />
             <FacilityActions onOpenPanel={onOpenPanel} />
           </section>
         </li>
-
-        {/* ④ 시설 카드들. 순서는 서버가 정한 nearby.primary 를 따른다(1A) —
-            이용권 ✗ 사용자에게 가맹시설을 먼저 보여 주지 않는다. */}
-        {data.nearby.primary === 'alternatives'
-          ? [
-              ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
-              ...vouchers.map((v) => (
-                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-              )),
-            ]
-          : [
-              ...vouchers.map((v) => (
-                <VoucherRow key={v.id} v={v} accessibility={access[v.id]} accessError={error} />
-              )),
-              ...alternatives.map((a) => <AltRow key={a.id} a={a} />),
-            ]}
       </CardDeck>
 
       <p className="text-xs text-mute dark:text-mute-dark">{ELIGIBILITY_NOTE}</p>
@@ -849,7 +854,7 @@ function FaqAnswerCard({ msg }: { msg: FaqAnswerMsg }) {
         >
           {msg.entry.source_url}
         </a>{' '}
-        · 확인일 {msg.entry.checked}
+        · <KeepDates text={`확인일 ${msg.entry.checked}`} />
       </p>
     </section>
   )

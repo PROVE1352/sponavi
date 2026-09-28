@@ -4,6 +4,7 @@
 //   경계는 괘선으로만 — 큰 전환 2px ink / 항목 1px dashed rule / 목록 행 1px rule.
 //   radius ≤ 3px. 배지는 "채운 알약"이 아니라 1px rule 테두리의 텍스트 토큰이다.
 import type { ReactNode } from 'react'
+import { splitDateTokens } from '../lib/format'
 
 export function CheckIcon({ className = 'w-5 h-5' }: { className?: string }) {
   return (
@@ -158,5 +159,25 @@ export function EligibilityMark({ eligible }: { eligible: boolean }) {
       <XIcon className="w-3.5 h-3.5 shrink-0" />
       해당 없음
     </span>
+  )
+}
+
+// 날짜(와 "확인일 " 접두)를 한 덩어리로 — 좁은 칸·break-all 안에서도 "2026-09- / 23" 으로 쪼개지지 않는다.
+// 나머지 텍스트의 줄바꿈 규칙(keep-all 등)은 부모 것을 그대로 따른다.
+export function KeepDates({ text }: { text: string }) {
+  const parts = splitDateTokens(text)
+  if (parts.length === 1) return <>{text}</>
+  return (
+    <>
+      {parts.map((t, i) =>
+        i % 2 === 1 ? (
+          <span key={i} className="whitespace-nowrap">
+            {t}
+          </span>
+        ) : (
+          t
+        ),
+      )}
+    </>
   )
 }

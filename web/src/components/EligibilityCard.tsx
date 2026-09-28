@@ -15,6 +15,7 @@ import {
   TINT_BOX,
   WarnIcon,
   XIcon,
+  KeepDates,
 } from './ui'
 
 // ★ v1.10(6A): 대체경로 블록은 이 카드 안이 아니라 `assess_result` 메시지의 전폭 히어로다.
@@ -147,7 +148,7 @@ export function EligibilityCard({ p }: { p: ProgramEligibility }) {
           >
             {p.source.url}
           </a>{' '}
-          · 확인일 {p.source.checked}
+          · <KeepDates text={`확인일 ${p.source.checked}`} />
           {!p.verified && ' · 자격 기준은 공식 신청처에서 최종 확인하세요'}
         </span>
       </footer>
@@ -182,9 +183,14 @@ function NextYearSources({ ny }: { ny: NextYear }) {
             rel="noreferrer noopener"
             className="underline underline-offset-2 hover:text-ink dark:hover:text-ink-dark"
           >
-            {s.label || s.url}
+            <KeepDates text={s.label || s.url} />
           </a>
-          {s.checked ? ` · 확인일 ${s.checked}` : ''}
+          {s.checked && (
+            <>
+              {' · '}
+              <KeepDates text={`확인일 ${s.checked}`} />
+            </>
+          )}
         </li>
       ))}
     </ul>
@@ -242,14 +248,18 @@ export function NextYearBlock({ ny }: { ny: NextYear }) {
       </p>
       {ny.age_note && (
         <p data-testid="next-year-age-note" className="mb-1 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
-          ※ {ny.age_note}
+          ※ <KeepDates text={ny.age_note} />
         </p>
       )}
       {ny.note && (
-        <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{ny.note}</p>
+        <p className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+          <KeepDates text={ny.note} />
+        </p>
       )}
       {ny.apply_hint && (
-        <p className="mt-1 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">{ny.apply_hint}</p>
+        <p className="mt-1 text-[13px] leading-[1.6] text-mute dark:text-mute-dark">
+          <KeepDates text={ny.apply_hint} />
+        </p>
       )}
       <NextYearSources ny={ny} />
     </section>
@@ -286,7 +296,12 @@ export function SelectionBlock({ selection }: { selection: Selection }) {
           >
             공식 안내
           </a>
-          {selection.source.checked ? ` · 확인일 ${selection.source.checked}` : ''}
+          {selection.source.checked && (
+            <>
+              {' · '}
+              <KeepDates text={`확인일 ${selection.source.checked}`} />
+            </>
+          )}
         </p>
       )}
     </div>
@@ -496,8 +511,9 @@ export function PublicFeeDetail({ a }: { a: PublicFeeInfo }) {
           >
             조례 {article}
           </a>
-          {a.law.effective ? ` · 시행 ${a.law.effective}` : ''}
-          {a.checked ? ` · 원문 확인 ${a.checked}` : ''}
+          <KeepDates
+            text={(a.law.effective ? ` · 시행 ${a.law.effective}` : '') + (a.checked ? ` · 원문 확인 ${a.checked}` : '')}
+          />
         </p>
       )}
       {(a.reductions.length > 0 || caveats.length > 0) && (

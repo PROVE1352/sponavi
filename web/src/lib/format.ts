@@ -77,3 +77,11 @@ const DAYS = ['월', '화', '수', '목', '금', '토', '일']
 export function weekdays(mask: string): string {
   return DAYS.filter((_, i) => mask[i] === '1').join('·')
 }
+
+// 날짜 토큰(YYYY-MM-DD · YYYY.MM.DD · 확인일/원문 확인/시행 접두 포함)을 줄바꿈 금지 조각으로 떼어 낸다.
+// 좁은 칸에서 "확인일 2026-09- / 23" 처럼 날짜가 쪼개지던 문제(2026-09-28 보고서 스샷).
+// 반환: [일반 텍스트, 날짜 토큰, 일반 텍스트, …] — 홀수 인덱스가 날짜 토큰이다.
+const DATE_TOKEN = /((?:(?:확인일|원문 확인|시행) )?\d{4}[-.]\d{1,2}[-.]\d{1,2}\.?)/
+export function splitDateTokens(text: string): string[] {
+  return text.split(DATE_TOKEN)
+}

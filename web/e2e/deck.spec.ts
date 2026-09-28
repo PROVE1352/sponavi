@@ -59,7 +59,7 @@ test('① 390px — 판정 결과 = 덱 밖 히어로 + 단일 덱(6A)', async (
   await expect(anchor.getByTestId('now-available-item')).toHaveCount(3)
   await expect(anchor.getByTestId('alt-route-pending')).toHaveCount(0)
 
-  // 슬라이드 구성: 판정 카드 → 공급공백·커버리지 → 시설 요약 → 시설 카드
+  // 슬라이드 구성: 판정 카드 → 공급공백·커버리지 → 근처 자원(시설 요약 + 미리보기 목록)
   await expect(d.getByRole('article', { name: /예상 자격 결과/ }).first()).toBeVisible()
   await expect(d.getByTestId('selection-block')).toBeVisible()
   // 계약 갱신(T2A): 성북 장애인 가맹은 41곳 — 공급공백이 아니라 구 단위 공급 블록이 온다
@@ -67,8 +67,10 @@ test('① 390px — 판정 결과 = 덱 밖 히어로 + 단일 덱(6A)', async (
   await expect(d.getByText(/수급률은/)).toBeVisible() // 커버리지(같은 슬라이드)
   await expect(d.getByTestId('dvoucher-facility').first()).toBeVisible()
   await expect(d.getByTestId('facility-summary')).toBeVisible()
-  // 슬라이드 수 = 판정 3 + 공백 1 + 시설머리 1 + 가맹 미리보기 3(대안 0) = 8 (대체경로 슬라이드 없음)
-  await expect(page.getByTestId('deck-progress')).toContainText('/ 8')
+  // 슬라이드 수 = 판정 3 + 공백 1 + 근처 자원 1 = 5 (대체경로 슬라이드 없음).
+  // 시설 행은 각자 슬라이드가 아니라 '근처 자원' 슬라이드 안의 목록이다(2026-09-28: 행마다 한 장이라 "1 / 8"로 부풀던 것).
+  await expect(page.getByTestId('deck-progress')).toContainText('/ 5')
+  await expect(d.getByTestId('facility-summary').getByTestId('dvoucher-facility')).toHaveCount(3)
 
   // 결과가 세로 버블로 쌓이지 않는다 — 결과 메시지는 스트림에 딱 하나
   await expect(anchor).toHaveCount(1)

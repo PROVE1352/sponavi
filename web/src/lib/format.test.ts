@@ -1,7 +1,17 @@
 // 표기 헬퍼 스모크 테스트(T1A). 지금은 기존 동작만 고정한다 —
 // won()/CQ1A(결측 null) 케이스는 Lane W(T8)가 구현과 함께 붙였다.
 import { describe, expect, it } from 'vitest'
-import { dedupeDisplayTitles, displayTitle, km, percent, weekdays, won, wonKorean, wonPlain } from './format'
+import {
+  dedupeDisplayTitles,
+  displayTitle,
+  km,
+  percent,
+  splitDateTokens,
+  weekdays,
+  won,
+  wonKorean,
+  wonPlain,
+} from './format'
 
 describe('km', () => {
   it('소수 첫째 자리로 반올림해 km 를 붙인다', () => {
@@ -112,5 +122,13 @@ describe('wonKorean', () => {
   it('딱 떨어지지 않거나 0 이하면 숫자 그대로', () => {
     expect(wonKorean(105500)).toBe('105,500원')
     expect(wonKorean(0)).toBe('0원')
+  })
+})
+
+describe('splitDateTokens', () => {
+  it('날짜 토큰(접두 포함)을 홀수 인덱스로 떼어 낸다', () => {
+    expect(splitDateTokens('공식 확인(조례 2026-09-17)')).toEqual(['공식 확인(조례 ', '2026-09-17', ')'])
+    expect(splitDateTokens('출처 · 확인일 2026-09-23')).toEqual(['출처 · ', '확인일 2026-09-23', ''])
+    expect(splitDateTokens('날짜 없음')).toEqual(['날짜 없음'])
   })
 })

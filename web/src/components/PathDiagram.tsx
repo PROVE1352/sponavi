@@ -1,6 +1,6 @@
 import type { PathEdge } from '../types'
 import { curatedLabel, edgeWidth, type EdgeWidth } from '../lib/pathLabel'
-import { Badge, CheckIcon, SECTION_RULE, WarnIcon, XIcon } from './ui'
+import { Badge, CheckIcon, KeepDates, SECTION_RULE, WarnIcon, XIcon } from './ui'
 
 // path 배열을 가로 스텝 다이어그램으로: 개인 → 제도(✗) → 대안 → 시설
 // 엣지 라벨·✓/✗ 색. 대체경로 확인 표기: "공식 확인(…)"은 초록 체크 그대로,
@@ -91,11 +91,11 @@ function NodeBox({ node }: { node: Node }) {
       ? 'border-accent-ink dark:border-accent-ink-dark'
       : 'border-rule dark:border-rule-dark'
   return (
-    <div className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-[3px] border px-2 py-3 text-center break-keep [overflow-wrap:anywhere] ${styles}`}>
-      <div className="mb-1">
-        <span className="sr-only">
-          {node.status === 'ok' ? '충족: ' : node.status === 'fail' ? '미충족: ' : '시작: '}
-        </span>
+    // 폭: 제도명은 공식 명칭 그대로(가짜 띄어쓰기 금지) — 칸이 글자에 맞춰 넓어진다(최소 96px, sm 이상 80px — 남는 폭은 대체경로 칸 몫).
+    //   "스포츠강좌이용권"이 "스포츠강좌이 / 용권"으로 쪼개지던 문제(2026-09-28 PC 스샷) → overflow-wrap:anywhere 제거,
+    //   띄어쓰기가 있는 이름("문화비 소득공제")만 어절 단위로 접힌다.
+    <div className={`flex w-max min-w-24 max-w-[10rem] shrink-0 sm:min-w-20 flex-col items-center justify-center rounded-[3px] border px-2.5 py-3 text-center break-keep ${styles}`}>
+      <div className="mb-1" aria-hidden="true">
         {node.status === 'ok' && <CheckIcon className="w-5 h-5 text-ok dark:text-ok-dark" />}
         {node.status === 'fail' && (
           <XIcon className="w-5 h-5 text-accent-ink dark:text-accent-ink-dark" />
@@ -104,7 +104,14 @@ function NodeBox({ node }: { node: Node }) {
           <span className="inline-block h-4 w-4 bg-ink dark:bg-ink-dark" aria-hidden="true" />
         )}
       </div>
-      <div className="text-[13px] font-bold leading-tight text-ink dark:text-ink-dark">{title}</div>
+      <div className="text-[13px] font-bold leading-tight text-ink dark:text-ink-dark">
+        {/* 상태 접두는 제목과 같은 줄에 — 스크린리더·텍스트 추출이 "충족: 공공 프로그램"으로 읽는다
+            (값 없는 "충족:" 한 줄 금지). sr-only(absolute)는 블록으로 떨어져 줄이 갈리므로 인라인 블록 숨김을 쓴다. */}
+        <span className="-m-px inline-block h-px w-px overflow-hidden whitespace-nowrap [clip-path:inset(50%)]">
+          {node.status === 'ok' ? '충족:\u00a0' : node.status === 'fail' ? '미충족:\u00a0' : '시작:\u00a0'}
+        </span>
+        {title}
+      </div>
       {sub && <div className="mt-0.5 text-[11px] text-mute dark:text-mute-dark">{sub}</div>}
     </div>
   )
@@ -141,7 +148,7 @@ function EdgeArrow({ edge }: { edge: PathEdge }) {
         data-testid="path-edge-label"
         className="mt-1 max-w-full text-center text-[11px] leading-[1.45] text-mute dark:text-mute-dark"
       >
-        {edge.label}
+        <KeepDates text={edge.label} />
       </div>
       {cur && (
         <div data-testid="path-edge-curated" className="mt-1.5 max-w-full text-center">
@@ -149,11 +156,15 @@ function EdgeArrow({ edge }: { edge: PathEdge }) {
             // OkNote 와 같은 표기(초록 체크 + 작은 글자)지만 칸 안에서 어절 단위로 접힐 수 있게.
             <span className="inline-flex items-start gap-1 text-left text-[11.5px] leading-[1.5] text-ok dark:text-ok-dark">
               <CheckIcon className="mt-[3px] h-3 w-3 shrink-0" />
-              <span>{cur.text}</span>
+              <span>
+                <KeepDates text={cur.text} />
+              </span>
             </span>
           ) : (
             <Badge icon={<WarnIcon className="h-3 w-3 shrink-0" />}>
-              <span className="text-left">{cur.text}</span>
+              <span className="text-left">
+                <KeepDates text={cur.text} />
+              </span>
             </Badge>
           )}
         </div>

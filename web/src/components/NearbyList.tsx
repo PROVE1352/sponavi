@@ -17,6 +17,7 @@ import {
   ROW_RULE,
   TINT_BOX,
   WarnIcon,
+  KeepDates,
 } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
 import type { FacilitySearchScope, SearchMapPoint } from '../types_search'
@@ -364,7 +365,7 @@ export function NearbyList({
           data-testid="accessibility-source"
           className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
         >
-          {accessibilitySourceLine(checkedDate)} · 공단 웹서비스 공개 조회(보조)
+          <KeepDates text={accessibilitySourceLine(checkedDate)} /> · 공단 웹서비스 공개 조회(보조)
         </p>
       )}
 

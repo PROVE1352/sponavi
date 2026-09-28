@@ -29,6 +29,7 @@ import {
   SECTION_RULE,
   TINT_BOX,
   WarnIcon,
+  KeepDates,
 } from './ui'
 import { sourceLabel, viaGoalLabel } from '../lib/rationale'
 
@@ -131,7 +132,7 @@ export function FitnessResultCard({
           국민체력100 공식 인증기준
           {result.basis_checked && (
             <span data-testid="fitness-basis-checked" className="text-mute dark:text-mute-dark">
-              · 확인일 {result.basis_checked}
+              · <KeepDates text={`확인일 ${result.basis_checked}`} />
             </span>
           )}
         </p>

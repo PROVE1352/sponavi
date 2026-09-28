@@ -7,7 +7,7 @@ import { getAccessibility } from '../api/client'
 import { km, walkMinutes, won, wonPlain } from '../lib/format'
 import type { AccessibilityView } from '../lib/accessibility'
 import { LOAD_FAILED_TEXT, NO_INFO_TEXT, accessibilityView } from '../lib/accessibility'
-import { matchesFilter } from '../lib/sports'
+import { matchesFilter, summarizeSports } from '../lib/sports'
 import {
   ApproxLocationBadge,
   Badge,
@@ -94,10 +94,16 @@ export function NearbyList({
   onLocate,
   search,
   onSearchHits,
+  disabilityFiltered = false,
+  hasPublicProgram = false,
 }: {
   nearby: Nearby
   filterSports?: string[]
   onClearFilter?: () => void
+  // 공공·대안 풀이 원천 '장애' 표기 공공체육시설로 좁혀져 있는가(장애 있음 결과 — 서버 disability_filter).
+  disabilityFiltered?: boolean
+  // 대화 결과에 '공공체육시설 프로그램'(조례 감면) 대체경로가 있는가 — 0곳 안내에서 그쪽을 가리킨다.
+  hasPublicProgram?: boolean
   // 시설 이름을 누르면 지도 탭으로 바꾸고 그 좌표로 확대한다(패널 전용).
   onLocate?: (id: string) => void
   // 동·도로명·시설명 검색 범위(현재 결과의 시군구). 없으면 검색창을 그리지 않는다.
@@ -189,6 +195,9 @@ export function NearbyList({
     .filter(passesAmenity)
   const alts = nearby.alternatives.filter((a) => matchesFilter(a.sports, filterSports))
   const filterActive = Boolean(filterSports && filterSports.length > 0)
+  const sportSummary = summarizeSports(filterSports ?? [])
+  // 장애 필터로 공공·대안 풀이 비었다(운동 필터와 무관하게 원래 0곳).
+  const altPoolEmptyByDisability = disabilityFiltered && nearby.alternatives.length === 0
   const amenityActive = selectedAmenities.length > 0
 
   const checkedDate = Object.values(access).find((a) => a.checked)?.checked ?? null
@@ -218,16 +227,29 @@ export function NearbyList({
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h2 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">근처 자원</h2>
         {filterActive && (
-          <div className="flex items-center gap-2">
-            <Badge>운동 필터: {filterSports!.join(' · ')}</Badge>
+          <div className="flex min-w-0 items-center gap-2">
+            {/* 최대 3개 + "외 N" — 표기 변형(체력단련장업 등)은 접는다. 전체는 아래 펼침 목록. */}
+            <span data-testid="filter-sports-chip" title={sportSummary.all.join(' · ')} className="min-w-0">
+              <Badge>운동 필터: {sportSummary.text}</Badge>
+            </span>
             {onClearFilter && (
-              <button type="button" onClick={onClearFilter} className={BTN_TEXT}>
+              <button
+                type="button"
+                onClick={onClearFilter}
+                className={`${BTN_TEXT} shrink-0 whitespace-nowrap`}
+              >
                 필터 해제
               </button>
             )}
           </div>
         )}
       </div>
+      {filterActive && sportSummary.rest > 0 && (
+        <details data-testid="filter-sports-all" className="-mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+          <summary className="cursor-pointer">필터 종목 전체 {sportSummary.all.length}개 보기</summary>
+          <p className="mt-1 break-keep">{sportSummary.all.join(' · ')}</p>
+        </details>
+      )}
 
       {search && (
         <div className="flex flex-col gap-2">
@@ -347,6 +369,20 @@ export function NearbyList({
       )}
 
       {!altsFirst && alternatives}
+
+      {/* P5 모순 해소(2026-09-28): 히어로는 '공공체육시설 프로그램(조례 감면)'을 말하는데 여기 풀이
+          0곳이면, 이 풀이 어떤 기준으로 센 것인지 밝힌다. 없는 시설을 만들지 않는다(P-1). */}
+      {altPoolEmptyByDisability && (
+        <p
+          data-testid="alt-pool-disability-note"
+          className="text-[12.5px] leading-[1.6] break-keep text-mute dark:text-mute-dark"
+        >
+          공공·대안 목록은 원천 데이터에 ‘장애’ 표기가 있는 공공체육시설만 셉니다 — 근처에는 해당
+          시설이 없어요.
+          {hasPublicProgram &&
+            ' 시군구 조례의 체육시설 이용료 감면은 대화 카드의 ‘공공체육시설 프로그램’에서 확인하세요.'}
+        </p>
+      )}
 
       {vouchers.length === 0 && alts.length === 0 && !amenityActive && (
         <p className={`text-[13px] leading-[1.6] text-mute dark:text-mute-dark ${TINT_BOX}`}>

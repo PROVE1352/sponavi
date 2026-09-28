@@ -769,3 +769,63 @@ def test_answer_filter_guards():
     assert chat.filter_answer("소득 요건은 없어요. " * 40, ground, st) is None, "400자 상한"
     assert chat.filter_answer(
         "자세한 내용은 https://example.or.kr 에서 보세요.", ground, st) is None
+
+
+# --------------------------------------------------------------------------
+# ④-c 지역 모호 + "등록해 두었어요" (2026-09-28 실측: "고성 살아요" → 슬롯 0건인데 등록했다고 말함)
+# --------------------------------------------------------------------------
+_GOSEONG = [{"cd": "51820", "nm": "강원특별자치도 고성군"}, {"cd": "48820", "nm": "경상남도 고성군"}]
+
+
+@pytest.mark.parametrize("reply", [
+    "고성으로 등록해 두었어요.",
+    "고성군으로 입력해 놨어요!",
+    "지역을 저장했어요.",
+    "고성으로 설정해 뒀어요.",
+    "고성 등록 완료!",
+])
+def test_reconcile_region_ambiguous_confirm_becomes_clarify(reply):
+    out = chat._reconcile_reply(reply, {}, _GOSEONG)
+    assert out != reply
+    assert "아직 지역을 등록하지 않았어요" in out
+    assert "강원특별자치도 고성군" in out and "경상남도 고성군" in out
+    # 다른 슬롯이 반영됐어도 지역을 등록한 척하면 바로잡는다
+    assert chat._reconcile_reply(reply, {"age": 72}, _GOSEONG) == out
+    # 후보 제시 문장은 후필터 뒤에 만드는 서버 템플릿 — 숫자·제도명이 없다('강원'의 '원'은 금액이 아님)
+    assert not any(ch.isdigit() for ch in out)
+    assert not any(p["name"] in out for p in _fresh_store().programs.values())
+
+
+def test_reconcile_register_phrase_without_candidates_is_d08():
+    """후보가 없어도(지역 미해석) '등록해 두었어요'는 D-08 중립 템플릿으로 바뀐다."""
+    out = chat._reconcile_reply("고성으로 등록해 두었어요.", {})
+    assert "아직 반영된 정보는 없어요" in out
+
+
+def test_reconcile_region_confirm_kept_when_region_resolved():
+    reply = "성북구로 등록해 두었어요."
+    assert chat._reconcile_reply(reply, {"sigungu_cd": "11290"}, []) == reply
+
+
+def test_reconcile_region_clarify_via_endpoint(monkeypatch):
+    """엔드포인트: "고성 살아요" — 전국 마스터엔 고성군이 2곳(강원·경남)이라 후보만 오고 슬롯은 비는데,
+    LLM 이 "고성으로 등록해 두었어요"라고 답한 실측 재현. fixtures(서울 25구)에 두 고성을 심는다."""
+    st = _fresh_store()
+    real_entries = chat.sigungu_entries(st)
+
+    def with_goseong(_store):
+        extra = []
+        for cd, nm in (("51820", "고성군"), ("48820", "고성군")):
+            extra.append({
+                "cd": cd, "nm": nm, "nm_norm": chat._norm(nm), "sido_cd": cd[:2],
+                "label": f"{chat._sido_label(cd)} {nm}",
+            })
+        return real_entries + extra
+
+    monkeypatch.setattr(chat, "sigungu_entries", with_goseong)
+    _use(monkeypatch, _out(region_text="고성", reply="고성으로 등록해 두었어요."))
+    resp = chat.nlu(st, {"text": "고성 살아요", "slots": {}})
+    assert "sigungu_cd" not in resp["slot_updates"]
+    assert len(resp["region_candidates"]) == 2
+    assert "아직 지역을 등록하지 않았어요" in resp["reply"]
+    assert "고성군" in resp["reply"]

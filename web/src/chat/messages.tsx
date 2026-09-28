@@ -15,7 +15,7 @@ import type {
   FaqAnswerMsg,
   FitnessTurnApi,
 } from '../types_chat'
-import { AltRoutesBlock, EligibilityCard, altRouteItems } from '../components/EligibilityCard'
+import { AltRoutesBlock, EligibilityCard, PublicFeeDetail, altRouteItems } from '../components/EligibilityCard'
 import { PathDiagram } from '../components/PathDiagram'
 import { SupplyGapBanner } from '../components/SupplyGapBanner'
 import { AltRow, VoucherRow, useFacilityAccessibility } from '../components/NearbyList'
@@ -25,6 +25,7 @@ import { FitnessResultCard } from '../components/FitnessResult'
 import { ErrorPanel } from '../components/ErrorPanel'
 import { Badge, CheckIcon, InfoIcon } from '../components/ui'
 import { CardCarousel, CardDeck } from '../components/Carousel'
+import { altPoolLabel } from '../lib/sports'
 import { BOT_NAME, T, primaryProgramId, specialAnswerChip, toggleSpecialSelection } from './policy'
 import { Typewriter } from './Typewriter'
 
@@ -357,7 +358,9 @@ function FacilityCounts({ req, data }: { req: AssessRequest; data: AssessRespons
     <div className="flex flex-wrap gap-1.5">
       {/* 이용권은 구 단위 카운트(반경 문구 금지, FR-04 AC2) */}
       <Badge tone="brand">{facilityCountText(req, data)}</Badge>
-      <Badge tone="ok">공공·대안 {data.nearby.alternatives.length}곳</Badge>
+      <Badge tone="ok">
+        {altPoolLabel(req.disability.has)} {data.nearby.alternatives.length}곳
+      </Badge>
     </div>
   )
 }
@@ -452,6 +455,32 @@ function ResultHero({
   )
 }
 
+// ── 함께 받을 수 있는 것 · 구립(군립) 체육시설 감면 (2026-09-28) ──────────────────
+// 시군구 조례 감면은 이용권 자격과 무관하다 — 자격 ✓ 사용자도 받는다(노원 14세 한부모 20% 등).
+// 서버 최상위 public_fee 를 그린다. 대체경로(public_program)가 이미 같은 블록을 보여 주면 다시 그리지
+// 않고(중복 렌더 금지), 히어로 N("지금 바로 되는 것 N가지")에도 세지 않는다. 맞는 감면이 없으면 생략.
+function PublicFeeExtra({ data }: { data: AssessResponse }) {
+  const pf = data.public_fee
+  if (!pf || !pf.region || !pf.reductions || pf.reductions.length === 0) return null
+  if ((data.alt_edges ?? []).some((e) => e.to === 'public_program')) return null
+  const kind = pf.region.sigungu_nm.endsWith('군') ? '군립' : '구립'
+  const title = `함께 받을 수 있는 것 · ${kind} 체육시설 감면`
+  return (
+    <section
+      data-testid="public-fee-extra"
+      aria-label={title}
+      className="mt-1 mb-3 border-t border-rule pt-3 dark:border-rule-dark"
+    >
+      <h3 className="font-serif text-[16px] font-extrabold break-keep text-ink dark:text-ink-dark">{title}</h3>
+      <p className="mt-1 mb-2 text-[12.5px] leading-[1.6] break-keep text-mute dark:text-mute-dark">
+        이용권과 별개로 {pf.region.sigungu_nm} 조례의 체육시설 사용료 감면 대상에 해당해요(입력하신 내용 기준).
+        실제 적용·필요 서류는 시설에 확인하세요.
+      </p>
+      <PublicFeeDetail a={pf} />
+    </section>
+  )
+}
+
 // 결과 카드 하단 인라인 강좌 3행(W1) — 패널로 점프하지 않아도 "무엇을 하면 되는지"가 보인다.
 // 어느 목록을 쓰는지는 서버가 정한 nearby.primary 를 따른다(1A). 전체 목록은 패널 소관.
 const INLINE_LIMIT = 3
@@ -518,6 +547,7 @@ function ResultDeck({
     <section data-testid="assess-cards" aria-label="예상 자격 결과" className="space-y-2">
       {/* ★ 히어로 + 근처 강좌 3행: 덱보다 앞 = 폰 첫 화면(스와이프 0회) */}
       <ResultHero req={req} data={data} onStartFitness={onStartFitness} />
+      <PublicFeeExtra data={data} />
       <InlineFacilities data={data} access={access} accessError={error} />
 
       <CardDeck
@@ -595,6 +625,7 @@ function ResultBlocks({
     <div className="space-y-4">
       {/* 6A: 히어로는 카드 그리드보다 앞(같은 메시지 안 전폭 블록) */}
       <ResultHero req={req} data={data} onStartFitness={onStartFitness} />
+      <PublicFeeExtra data={data} />
 
       <section data-testid="assess-cards" aria-label="제도별 예상 자격" className="space-y-3">
         <CardCarousel

@@ -117,3 +117,23 @@ test('P5 · 장애인 가맹 6곳 — 확언(✓)은 지원유형이 있는 카�
   )
   expect(contradictions, '확언 배지 + "접근성 정보 없음" 동시 표기').toBe(0)
 })
+
+// 2026-09-28 보고서 스샷 모순: 히어로는 '공공체육시설 프로그램(성북구 구립 체육시설 · 장애인 50%)'을
+// 말하는데 패널 머리는 "공공·대안 0곳". 장애 있음 결과의 공공·대안 풀은 원천에 '장애' 표기가 있는
+// 공공체육시설만 센 수라서 생긴 일 — 숫자 옆에 그 기준을 적고, 목록에서 0곳인 이유를 밝힌다.
+// 없는 시설을 만들어 넣지는 않는다(P-1).
+test('P5 · 공공·대안 0곳은 "장애인 표기" 기준임을 밝히고, 조례 감면 안내를 가리킨다', async ({ page }) => {
+  await startPersona(page, 'P5')
+  await expect(stream(page).getByTestId('public-fee-summary')).toHaveText('성북구 구립 체육시설 · 장애인 50%')
+
+  const count = page.getByTestId('panel-alt-count')
+  await expect(count).toHaveText('장애인 표기 공공·대안 0곳')
+  // 기준 없이 "공공·대안 0곳"만 떠 있지 않다
+  await expect(count).not.toHaveText(/^공공·대안 0곳$/)
+
+  await openPanel(page, 'list')
+  const note = panel(page).getByTestId('alt-pool-disability-note')
+  await expect(note).toBeVisible()
+  await expect(note).toContainText('‘장애’ 표기가 있는 공공체육시설만')
+  await expect(note).toContainText('공공체육시설 프로그램')
+})

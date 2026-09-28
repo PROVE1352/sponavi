@@ -9,7 +9,8 @@ import {
 
 // "맨 아래로" 버튼(FAB) 계약 —
 //   ① 바닥에 붙어 있으면 없는 것과 같다(data-visible=false · 클릭·포커스 대상 아님)
-//   ② 바닥에서 조금만 멀어져도 나타난다(임계 160px) — 컴포저 위, 오른쪽 아래, 화면 안
+//   ② 바닥에서 조금만 멀어져도 나타난다(임계 160px) — 컴포저 줄 안(보내기 왼쪽), 화면 안.
+//      스트림 위에 떠 있지 않으므로 어떤 내용도 덮지 않는다(v1.12 — 떠 있던 버튼이 출처 줄·설명을 가렸다)
 //   ③ 누르면 문서 맨 아래로 부드럽게 내려가고 **바닥 추종이 재개**된다
 //      (다음 봇 버블이 다시 화면에 따라온다 = 덱 규칙을 되돌리는 유일한 사용자 조작)
 //   ④ 자동재생이 화면을 소유하는 동안에는 아예 렌더하지 않는다
@@ -26,7 +27,7 @@ function gapToBottom(page: Page): Promise<number> {
   )
 }
 
-test('① 바닥에서는 숨고, ② 위로 올라가면 컴포저 위 오른쪽 아래에 나타난다', async ({ page }) => {
+test('① 바닥에서는 숨고, ② 위로 올라가면 컴포저 줄 안(보내기 왼쪽)에 나타난다', async ({ page }) => {
   await openMain(page)
   await fillMainSlots(page)
   await settleTypewriter(page)
@@ -49,31 +50,37 @@ test('① 바닥에서는 숨고, ② 위로 올라가면 컴포저 위 오른�
   const vp = page.viewportSize()!
   const box = (await fab(page).boundingBox())!
   const composer = (await page.getByTestId('composer').boundingBox())!
+  const send = (await page.getByTestId('composer-send').boundingBox())!
+  const input = (await page.getByTestId('composer-input').boundingBox())!
   expect(box, 'FAB 박스를 못 잡았다').not.toBeNull()
 
-  // 44×44 원형 탭 타깃
-  expect(Math.round(box.width), `FAB 너비 ${box.width}`).toBe(44)
+  // 44×44 원형 탭 타깃(폭 전환이 끝난 뒤)
+  await expect.poll(async () => Math.round((await fab(page).boundingBox())!.width)).toBe(44)
   expect(Math.round(box.height), `FAB 높이 ${box.height}`).toBe(44)
 
-  // 화면 안 · 오른쪽 아래(오른쪽 여백 20px = B·종이 메모의 좌우 여백과 같은 값)
+  // 화면 안 · 화면 아래쪽
   expect(box.x).toBeGreaterThanOrEqual(0)
   expect(box.y).toBeGreaterThanOrEqual(0)
   expect(box.x + box.width).toBeLessThanOrEqual(vp.width)
   expect(box.y + box.height).toBeLessThanOrEqual(vp.height)
-  expect(Math.round(vp.width - (box.x + box.width)), '오른쪽 여백').toBe(20)
   expect(box.y, 'FAB 가 화면 위쪽 절반에 있다').toBeGreaterThan(vp.height / 2)
 
-  // ★ 컴포저를 가리지 않는다 — 두 박스가 겹치지 않는다(세로로 12px 위)
-  const overlap =
-    box.x < composer.x + composer.width &&
-    box.x + box.width > composer.x &&
-    box.y < composer.y + composer.height &&
-    box.y + box.height > composer.y
-  expect(
-    overlap,
-    `FAB(${Math.round(box.y)}~${Math.round(box.y + box.height)}) 가 컴포저(${Math.round(composer.y)}~) 와 겹친다`,
-  ).toBe(false)
-  expect(Math.round(composer.y - (box.y + box.height)), '컴포저 윗변과의 간격').toBe(12)
+  // ★ 컴포저 띠 안에 들어 있다 = 스트림 내용 위에 떠 있지 않다
+  expect(box.y, 'FAB 가 컴포저 윗변 위로 삐져나왔다').toBeGreaterThanOrEqual(composer.y)
+  expect(box.y + box.height).toBeLessThanOrEqual(composer.y + composer.height)
+  // 보내기 바로 왼쪽(간격 10px = gap-2.5), 입력칸·보내기와 겹치지 않는다
+  const fb = (await fab(page).boundingBox())!
+  expect(Math.round(send.x - (fb.x + fb.width)), '보내기와의 간격').toBe(10)
+  expect(fb.x, 'FAB 가 입력칸과 겹친다').toBeGreaterThanOrEqual(input.x + input.width - 1)
+
+  // 스트림 오른쪽 끝의 글자를 덮지 않는다 — FAB 중심점의 최상위 요소가 FAB 자신이다
+  const topIsFab = await page.evaluate(() => {
+    const el = document.querySelector('[data-testid="scroll-bottom-fab"]')!
+    const r = el.getBoundingClientRect()
+    const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)
+    return hit != null && el.contains(hit)
+  })
+  expect(topIsFab).toBe(true)
 })
 
 test('③ 누르면 맨 아래로 내려가고 바닥 추종이 재개된다(다음 봇 버블도 따라온다)', async ({

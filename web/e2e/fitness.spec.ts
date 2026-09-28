@@ -245,6 +245,48 @@ test('처방 → "이 운동 되는 근처 강좌" 적용 시 종목 필터 + �
   await expect(stream(page).getByText(/^이 운동 되는 근처 강좌 보기 · /).last()).toBeVisible() // 카드 버튼(첫 매치) 뒤의 사용자 버블
 })
 
+// 2026-09-28: 별칭까지 이어 붙은 종목 목록이 버튼·버블·필터 칩을 몇 줄씩 차지했다
+// ("헬스 · 유도 · 주짓수 · 체력단련장 · 체력단련장업 · 기타체육시설(체력단련장) · 투기체육관").
+// 화면 문구는 최대 3개 + "외 N", 표기 변형은 하나로 — 전체 목록은 title·패널 펼침에 남는다.
+test('처방 강좌 버튼·사용자 버블·필터 칩은 종목을 최대 3개 + "외 N"으로 줄인다 (전체는 펼침)', async ({
+  page,
+}) => {
+  await startPersona(page, 'P2')
+  await startFitnessThroughParq(page)
+  await page.getByTestId('fit-input-sit_reach').fill('-3')
+  await page.getByTestId('fitness-submit').click()
+  await expect(page.getByTestId('fitness-result')).toBeVisible()
+
+  const apply = page.getByTestId('facility-filter-apply')
+  const names = (t: string) =>
+    t.replace(/^.*보기 · /, '').replace(/\s*\(.*$/, '').replace(/ 외 \d+$/, '').split(' · ')
+  const btnText = (await apply.innerText()).replace(/\s+/g, ' ')
+  expect(names(btnText).length, `버튼 종목 수: ${btnText}`).toBeLessThanOrEqual(3)
+  // 전체 목록은 title 로 남는다(표기 변형은 접힌 채)
+  const title = (await apply.getAttribute('title')) ?? ''
+  expect(title).toMatch(/^이 운동 되는 근처 강좌 보기 · /)
+  expect(title).not.toContain('체력단련장업')
+  expect(title).not.toContain('기타체육시설(')
+  const hasMore = / 외 \d+/.test(btnText)
+
+  await apply.click()
+  // 사용자 버블도 같은 요약
+  const bubble = stream(page).getByText(/^이 운동 되는 근처 강좌 보기 · /).last()
+  expect(names(await bubble.innerText()).length).toBeLessThanOrEqual(3)
+  // 패널 필터 칩도 같은 요약 + 줄 끝 "필터 해제"는 한 줄(글자 단위로 꺾이지 않는다)
+  const chip = page.getByTestId('filter-sports-chip')
+  await expect(chip).toContainText('운동 필터:')
+  expect((await chip.innerText()).replace(/^운동 필터: /, '').replace(/ 외 \d+$/, '').split(' · ').length).toBeLessThanOrEqual(3)
+  const clear = page.getByTestId('context-panel').getByRole('button', { name: '필터 해제' })
+  expect(await clear.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe('nowrap')
+  if (hasMore) {
+    const all = page.getByTestId('filter-sports-all')
+    await expect(all).toBeVisible()
+    await all.locator('summary').click()
+    await expect(all.locator('p')).toBeVisible()
+  }
+})
+
 // C-4(P-1): "근처 N곳"이 종목 필터를 통과한 부분집합인데 옆 패널은 필터 이전 전체를 세면,
 // 두 숫자가 서로를 반박하는 것처럼 읽힌다(심사 지적: 좌 "근처 4곳" vs 우 "공공·대안 6곳").
 // 부분/전체를 한 문장에 같이 적어 관계가 보이게 한다.

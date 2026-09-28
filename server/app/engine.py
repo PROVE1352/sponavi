@@ -1047,10 +1047,24 @@ def assess(store: Store, payload: dict) -> dict:
         },
     )
 
+    # 조례 감면(공공체육시설 사용료)은 이용권 자격과 **무관하게** 받을 수 있다 — 이용권 대상자도
+    # 구립 체육센터 요금을 감면받는다(예: 노원 14세 한부모 20%, 대구 북구 12세 청소년 50%).
+    # 대체경로(public_program) 엣지에만 붙이면 자격 ✓ 사용자는 이 사실을 못 본다(2026-09-28 평가).
+    # 같은 매칭 함수를 쓰므로 엣지 블록과 내용이 같다. 조례 미확인 지역이면 None(지어내지 않는다).
+    public_fee = _public_fee_block(
+        store.public_fee_region(sigungu_cd),
+        {
+            "age": age, "income_class": income_class, "disability_has": disability_has,
+            "special": list(payload.get("special") or []),
+        },
+        checked=store.public_fees.get("checked"),
+    )
+
     return {
         "eligibility": [card],
         "path": path,
         "alt_edges": alt_edges,
+        "public_fee": public_fee,
         "nearby": {
             # 결정 1A: 자격 ✗ 면 가맹시설이 1순위가 될 수 없다(⚠#10) — 웹은 이 순서대로
             # 덱·리스트를 배치한다. 자격 판정은 서버 소유(P-2).

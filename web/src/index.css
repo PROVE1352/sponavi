@@ -156,6 +156,17 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  /* sticky 헤더(제호 + 2px 괘선) 높이. rem 이라 "글씨 크게"에서 같이 자란다. */
+  --header-h: 4.5rem;
+}
+
+/* 스트림 앵커(메시지 래퍼·체력 판정 등 섹션 머리)로 이동할 때 sticky 헤더 밑에 숨지 않게 한다.
+   scrollIntoView·해시 이동·포커스 이동 모두에 적용된다(앱의 window.scrollTo 는 자체 오프셋 72px). */
+[data-focus-anchor],
+[data-result-anchor],
+main section[aria-label],
+main [data-testid='fitness-result'] {
+  scroll-margin-top: var(--header-h);
 }
 
 body {
@@ -318,14 +329,21 @@ body {
   transition:
     opacity 180ms cubic-bezier(0, 0, 0.2, 1),
     transform 180ms cubic-bezier(0, 0, 0.2, 1),
+    width 180ms cubic-bezier(0, 0, 0.2, 1),
+    margin 180ms cubic-bezier(0, 0, 0.2, 1),
     visibility 0s linear 0s;
 }
+/* 숨김 = 폭 0 으로 접힌다(컴포저 줄 안 · 입력칸 폭을 빼앗지 않는다).
+   음수 margin 은 flex gap(0.625rem = gap-2.5)을 상쇄한다. */
 .fab-pop[data-visible='false'] {
   opacity: 0;
   transform: translateY(8px) scale(0.9);
   visibility: hidden;
   pointer-events: none;
-  transition-delay: 0s, 0s, 180ms;
+  width: 0;
+  border-width: 0;
+  margin-left: -0.625rem;
+  transition-delay: 0s, 0s, 0s, 0s, 180ms;
 }
 /* 모션 최소화 선호 → 이동·축소 없이 즉시 나타나고 사라진다(전역 규칙과 이중 방어). */
 @media (prefers-reduced-motion: reduce) {

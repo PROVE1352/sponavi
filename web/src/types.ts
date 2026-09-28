@@ -261,11 +261,19 @@ export interface AltEdge {
   caveats?: string[]
 }
 
+// 조례 감면 블록(서버 _public_fee_block) — public_program 엣지 블록과 같은 모양.
+export type PublicFeeInfo = Pick<
+  AltEdge,
+  'region' | 'law' | 'operator' | 'scope' | 'checked' | 'reductions' | 'no_reduction_for' | 'caveats'
+>
+
 export interface AssessResponse {
   eligibility: ProgramEligibility[]
   path: PathEdge[]
   // 매칭 엣지 전부(주 경로는 path 최상위 1개 유지). 구버전 응답 호환 위해 옵셔널.
   alt_edges?: AltEdge[]
+  // 이용권 자격과 무관하게 받을 수 있는 시군구 조례 감면(조례 확인 지역만, 아니면 null · 2026-09-28).
+  public_fee?: PublicFeeInfo | null
   nearby: Nearby
   supply_gap: SupplyGap
 }

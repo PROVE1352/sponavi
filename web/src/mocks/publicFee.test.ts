@@ -98,3 +98,47 @@ describe('히어로 N · 경로', () => {
     expect(res.path.find((p) => p.edge === '대체경로')?.curated).toBe('공식 확인(조례 2026-09-17)')
   })
 })
+
+// 2026-09-28: 조례 감면은 이용권 자격과 무관 — 응답 최상위 public_fee(서버 test_public_fee_eligible 와 같은 계약).
+type EligibleCase = {
+  body: AssessRequest
+  expected_public_fee: unknown
+  expected_alt_edge_tos: string[]
+}
+const ELIGIBLE = Object.entries(
+  (PUBLIC_FEE_JSON as unknown as { eligible_cases: Record<string, EligibleCase | string> }).eligible_cases,
+).filter(([k]) => !k.startsWith('_')) as [string, EligibleCase][]
+
+describe('최상위 public_fee — 이용권 자격 ✓ 사용자도 조례 감면을 본다', () => {
+  it('계약 eligible_cases 가 비어 있지 않다', () => {
+    expect(ELIGIBLE.length).toBeGreaterThan(0)
+  })
+  for (const [name, c] of ELIGIBLE) {
+    it(`${name} — 목 엔진 = 서버 계약`, () => {
+      const res = mockAssess(c.body)
+      expect(res.public_fee).toEqual(c.expected_public_fee)
+      expect((res.alt_edges ?? []).map((e) => e.to)).toEqual(c.expected_alt_edge_tos)
+    })
+  }
+
+  it('노원 14세 한부모 → 한부모 20% (자격 ✓ 이라 대체경로 엣지는 없다)', () => {
+    const res = mockAssess(ELIGIBLE.find(([k]) => k === 'N14_nowon_single_parent')![1].body)
+    expect(pp(res.alt_edges)).toBeUndefined()
+    expect(res.public_fee!.reductions!.find((r) => r.target === 'single_parent')?.rate).toBe('20%')
+  })
+
+  it('페르소나: public_program 엣지가 있으면 최상위 블록은 그 블록과 같다(P2·P4·P5)', () => {
+    for (const pid of ['P2', 'P4', 'P5']) {
+      const res = PERSONA_RESPONSES[pid]
+      const edge = pp(res.alt_edges)!
+      expect(res.public_fee?.reductions, pid).toEqual(edge.reductions)
+      expect(res.public_fee?.region, pid).toEqual(edge.region)
+    }
+  })
+
+  it('P1(성북 10세 기초수급, 자격 ✓)에도 성북 조례 블록이 실린다', () => {
+    const pf = PERSONA_RESPONSES.P1.public_fee
+    expect(pf?.region?.sigungu_nm).toBe('성북구')
+    expect((pf?.reductions ?? []).length).toBeGreaterThan(0)
+  })
+})

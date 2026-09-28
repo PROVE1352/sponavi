@@ -15,7 +15,7 @@ import type {
   Provenance,
 } from '../types'
 import type { AppError } from './ErrorPanel'
-import { countMatching, nearbyMatchText } from '../lib/sports'
+import { countMatching, nearbyMatchText, summarizeSports } from '../lib/sports'
 import { dedupeDisplayTitles } from '../lib/format'
 import { FITNESS_DISCLAIMER } from './FitnessForm'
 import {
@@ -144,10 +144,11 @@ export function FitnessResultCard({
                 <li
                   key={it.code}
                   data-testid="item-band"
-                  className={`grid grid-cols-[92px_minmax(0,1fr)] items-baseline gap-x-2.5 py-2.5 ${ITEM_RULE}`}
+                  // 어절 단위 줄바꿈(keep-all): "3등급"·"35회"가 숫자와 단위 사이에서 끊기지 않는다.
+                  className={`grid grid-cols-[minmax(92px,max-content)_minmax(0,1fr)] items-baseline gap-x-2.5 py-2.5 break-keep ${ITEM_RULE}`}
                 >
                   <span
-                    className={`text-[12px] font-bold tracking-[0.04em] ${
+                    className={`whitespace-nowrap text-[12px] font-bold tracking-[0.04em] ${
                       bandIsFail(it.band)
                         ? 'text-accent-ink dark:text-accent-ink-dark'
                         : 'text-ink dark:text-ink-dark'
@@ -166,7 +167,7 @@ export function FitnessResultCard({
               <p
                 key={d.code}
                 data-testid={`derived-note-${d.code}`}
-                className="mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
+                className="mt-2 text-[12px] leading-[1.6] break-keep text-mute dark:text-mute-dark"
               >
                 {d.code.toUpperCase()} {d.value}는 {Object.entries(d.from)
                   .map(([k, v]) => `${k === 'height_cm' ? '키' : k === 'weight_kg' ? '몸무게' : k} ${v}${k === 'height_cm' ? 'cm' : k === 'weight_kg' ? 'kg' : ''}`)
@@ -178,7 +179,7 @@ export function FitnessResultCard({
 
         {/* ② 참고등급(추정) + 미입력 요인 + 인증센터 안내 */}
         {rg && (
-          <div className={`mt-3 ${TINT_BOX}`}>
+          <div className={`mt-3 break-keep ${TINT_BOX}`}>
             <div className="flex items-baseline justify-between gap-2">
               <span className="text-[12px] tracking-[0.1em] text-mute dark:text-mute-dark">
                 {rg.label}
@@ -230,10 +231,12 @@ export function FitnessResultCard({
             type="button"
             data-testid="facility-filter-apply"
             onClick={() => onApplyFilter(sports)}
-            className="press mt-4 flex min-h-[48px] w-full items-center justify-center rounded-[3px] bg-ink px-4 py-2 text-center font-serif text-[15px] font-extrabold text-paper transition-opacity hover:opacity-90 dark:bg-ink-dark dark:text-paper-dark"
+            // 버튼에는 최대 3개 + "외 N"만 — 전체 종목은 title(마우스)과 패널 필터 목록에서 본다.
+            title={`이 운동 되는 근처 강좌 보기 · ${summarizeSports(sports).all.join(' · ')}`}
+            className="press mt-4 flex min-h-[48px] w-full items-center justify-center rounded-[3px] bg-ink px-4 py-2 text-center font-serif text-[15px] font-extrabold break-keep text-paper transition-opacity hover:opacity-90 dark:bg-ink-dark dark:text-paper-dark"
           >
             <span>
-              이 운동 되는 근처 강좌 보기 · {sports.join(' · ')}
+              이 운동 되는 근처 강좌 보기 · {summarizeSports(sports).text}
               <span data-testid="facility-filter-count" className="ml-1 font-sans text-[13px] font-normal">
                 ({nearbyMatchText(counts)})
               </span>

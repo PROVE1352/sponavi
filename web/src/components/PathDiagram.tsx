@@ -1,8 +1,15 @@
 import type { PathEdge } from '../types'
+import { curatedLabel, edgeWidth, type EdgeWidth } from '../lib/pathLabel'
 import { Badge, CheckIcon, SECTION_RULE, WarnIcon, XIcon } from './ui'
 
 // path 배열을 가로 스텝 다이어그램으로: 개인 → 제도(✗) → 대안 → 시설
-// 엣지 라벨·✓/✗ 색, curated 엣지엔 "전문가 큐레이션" 뱃지 (SPEC §0-3, §0-4).
+// 엣지 라벨·✓/✗ 색. 대체경로 확인 표기: "공식 확인(…)"은 초록 체크 그대로,
+// 그 밖(검증 대기)은 "전문가 큐레이션" 뱃지 (SPEC §0-3, §0-4 · lib/pathLabel).
+//
+// 폭(2026-09-28): 긴 엣지 설명·확인 표기가 80px 칸에 갇혀 글자 단위로 줄이 바뀌던 문제 →
+//   · 모바일(가로 스크롤): 대체경로(확인 표기) 칸 192px, 보통 128px, 짧은 96px 고정
+//   · sm 이상: 목록이 스트림 폭을 채우고 엣지 칸이 남는 폭을 나눠 갖는다(3 : 1.5 : 1)
+//   · 한국어는 어절 단위로만 줄바꿈(word-break: keep-all)
 
 function nodeLabel(id: string): { title: string; sub?: string } {
   if (id === 'person') return { title: '나', sub: '입력한 상황' }
@@ -47,13 +54,17 @@ export function PathDiagram({ path }: { path: PathEdge[] }) {
           role="group"
           aria-label="경로 단계 (좌우로 스크롤)"
         >
-          <ol className="flex min-w-max items-stretch gap-1">
-            {nodes.map((n, i) => (
-              <li key={i} className="flex items-stretch">
-                <NodeBox node={n} />
-                {i < nodes.length - 1 && <EdgeArrow edge={nodes[i + 1].incoming!} />}
-              </li>
-            ))}
+          <ol className="flex min-w-max items-stretch gap-1 sm:min-w-0 sm:w-full">
+            {nodes.map((n, i) => {
+              const edge = i < nodes.length - 1 ? nodes[i + 1].incoming! : null
+              const grow = edge ? GROW[edgeWidth(edge.label, edge.curated)] : 'shrink-0'
+              return (
+                <li key={i} className={`flex items-stretch ${grow}`}>
+                  <NodeBox node={n} />
+                  {edge && <EdgeArrow edge={edge} />}
+                </li>
+              )
+            })}
           </ol>
         </div>
         {/* 오른쪽 스크롤 힌트(모바일에서 다음 스텝이 있음을 알림) */}
@@ -80,7 +91,7 @@ function NodeBox({ node }: { node: Node }) {
       ? 'border-accent-ink dark:border-accent-ink-dark'
       : 'border-rule dark:border-rule-dark'
   return (
-    <div className={`flex w-24 flex-col items-center justify-center rounded-[3px] border px-2 py-3 text-center ${styles}`}>
+    <div className={`flex w-24 shrink-0 flex-col items-center justify-center rounded-[3px] border px-2 py-3 text-center break-keep [overflow-wrap:anywhere] ${styles}`}>
       <div className="mb-1">
         <span className="sr-only">
           {node.status === 'ok' ? '충족: ' : node.status === 'fail' ? '미충족: ' : '시작: '}
@@ -99,25 +110,52 @@ function NodeBox({ node }: { node: Node }) {
   )
 }
 
+// sm 이상에서 남는 폭을 나눠 갖는 비율(li = 노드 + 뒤따르는 엣지).
+const GROW: Record<EdgeWidth, string> = {
+  wide: 'sm:flex-[3_1_0%]',
+  medium: 'sm:flex-[1.5_1_0%]',
+  narrow: 'sm:flex-[1_1_0%]',
+}
+// 모바일(가로 스크롤) 고정 폭.
+const MOBILE_W: Record<EdgeWidth, string> = { wide: 'w-48', medium: 'w-32', narrow: 'w-24' }
+
 function EdgeArrow({ edge }: { edge: PathEdge }) {
   const ok = edge.result === 'ok'
   const line = ok ? 'bg-ok dark:bg-ok-dark' : 'bg-accent-ink dark:bg-accent-ink-dark'
   const arrow = ok ? 'text-ok dark:text-ok-dark' : 'text-accent-ink dark:text-accent-ink-dark'
+  const width = edgeWidth(edge.label, edge.curated)
+  const cur = curatedLabel(edge.curated)
   return (
-    <div className="flex w-20 flex-col items-center justify-center px-1">
+    <div
+      data-testid="path-edge"
+      className={`flex shrink-0 flex-col items-center justify-center px-1.5 break-keep [overflow-wrap:anywhere] ${MOBILE_W[width]} sm:w-auto sm:min-w-24 sm:flex-1`}
+    >
       <div className="mb-1 text-center text-[11px] font-bold text-mute dark:text-mute-dark">{edge.edge}</div>
       <div className="flex w-full items-center">
         <span className={`h-0.5 flex-1 ${line}`} />
-        <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 ${arrow}`} aria-hidden="true">
+        <svg viewBox="0 0 20 20" fill="currentColor" className={`h-4 w-4 shrink-0 ${arrow}`} aria-hidden="true">
           <path d="M7 4l6 6-6 6" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </div>
-      <div className="mt-1 text-center text-[11px] leading-tight text-mute dark:text-mute-dark">{edge.label}</div>
-      {edge.curated && (
-        <div className="mt-1.5">
-          <Badge icon={<WarnIcon className="w-3 h-3" />}>
-            전문가 큐레이션 · {edge.curated}
-          </Badge>
+      <div
+        data-testid="path-edge-label"
+        className="mt-1 max-w-full text-center text-[11px] leading-[1.45] text-mute dark:text-mute-dark"
+      >
+        {edge.label}
+      </div>
+      {cur && (
+        <div data-testid="path-edge-curated" className="mt-1.5 max-w-full text-center">
+          {cur.official ? (
+            // OkNote 와 같은 표기(초록 체크 + 작은 글자)지만 칸 안에서 어절 단위로 접힐 수 있게.
+            <span className="inline-flex items-start gap-1 text-left text-[11.5px] leading-[1.5] text-ok dark:text-ok-dark">
+              <CheckIcon className="mt-[3px] h-3 w-3 shrink-0" />
+              <span>{cur.text}</span>
+            </span>
+          ) : (
+            <Badge icon={<WarnIcon className="h-3 w-3 shrink-0" />}>
+              <span className="text-left">{cur.text}</span>
+            </Badge>
+          )}
         </div>
       )}
     </div>

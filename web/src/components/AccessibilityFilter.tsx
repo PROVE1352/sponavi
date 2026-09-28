@@ -28,7 +28,7 @@ export function AccessibilityFilter({
             type="button"
             onClick={onClear}
             data-testid="accessibility-filter-clear"
-            className={BTN_TEXT}
+            className={`${BTN_TEXT} shrink-0 whitespace-nowrap`}
           >
             필터 해제
           </button>

@@ -1,7 +1,7 @@
 // 공공체육시설 조례 감면 표기 헬퍼(순수 함수) — 히어로 public_program 행의 한 줄 요약.
 // 예: "성북구 구립 체육시설 · 청소년 20% · 3자녀 이상 50%". 원문 율·라벨은 서버가 준 그대로이고,
 // 여기선 '짧게 부르는 법'만 정한다(새 수치를 만들지 않는다).
-import type { AltEdge, FeeReduction } from '../types'
+import type { FeeReduction, PublicFeeInfo } from '../types'
 
 export function uniq<T>(xs: T[]): T[] {
   return [...new Set(xs)]
@@ -44,7 +44,7 @@ export function feeSummaryParts(reductions: FeeReduction[]): string[] {
   )
 }
 
-export function feeSummaryLine(a: AltEdge): string | null {
+export function feeSummaryLine(a: PublicFeeInfo): string | null {
   if (!a.region || !a.reductions) return null
   const kind = a.region.sigungu_nm.endsWith('군') ? '군립' : '구립'
   const parts = feeSummaryParts(a.reductions)

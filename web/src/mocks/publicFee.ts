@@ -2,7 +2,7 @@
 // 원천은 contract/public_fee.json(= data/public_fee_reductions.json 서울 3구 사본, parity 테스트로 동기).
 // 목 fixtures 가 서울 25구뿐이라 성북·송파·노원만 승격되고 나머지 구는 '검증 대기' 그대로다.
 
-import type { AltEdge, FeeReduction, FeeTarget, IncomeClass } from '../types'
+import type { FeeReduction, FeeTarget, IncomeClass, PublicFeeInfo } from '../types'
 import PUBLIC_FEE_JSON from './contract/public_fee.json'
 
 interface RawReduction {
@@ -106,7 +106,7 @@ export interface FeePerson {
   disability_has: boolean
 }
 
-export function publicFeeBlock(region: RawRegion | null, person: FeePerson): Partial<AltEdge> | null {
+export function publicFeeBlock(region: RawRegion | null, person: FeePerson): PublicFeeInfo | null {
   if (!region) return null
   const special = new Set(person.special ?? [])
   const seoul = region.sido.startsWith('서울')

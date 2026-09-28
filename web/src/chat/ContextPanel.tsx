@@ -10,7 +10,7 @@ import { NearbyMap, type MapLocate } from '../components/NearbyMap'
 import { NearbyList } from '../components/NearbyList'
 import type { FacilitySearchScope, SearchMapPoint } from '../types_search'
 import { Badge } from '../components/ui'
-import { countMatching, poolCountText } from '../lib/sports'
+import { altPoolLabel, countMatching, poolCountText } from '../lib/sports'
 import { facilityCountText } from './messages'
 import { personLocOf } from './policy'
 
@@ -47,6 +47,9 @@ export function ContextPanel({
   // C-4: 아래 목록이 종목 필터로 줄어 있으면 배지도 그 사실을 함께 말한다 —
   // 필터 걸린 목록 위에 전체 수만 떠 있으면 두 숫자가 서로 반박하는 것처럼 읽힌다(P-1).
   const altCounts = countMatching(data.nearby.alternatives, filterSports)
+  // 장애 있음 결과의 공공·대안 풀은 원천 '장애' 표기 시설만 센 수다 — 배지가 그 기준을 함께 말한다.
+  const disabilityFiltered = req.disability.has
+  const hasPublicProgram = (data.alt_edges ?? []).some((e) => e.to === 'public_program')
   // 동·도로명·시설명 검색(현재 결과의 시군구 안). 실좌표 결과만 지도에 얹는다.
   const [searchPoints, setSearchPoints] = useState<SearchMapPoint[]>([])
   // 빈 배열 → 빈 배열은 상태를 바꾸지 않는다(지도 마커를 괜히 다시 그리지 않게).
@@ -86,7 +89,7 @@ export function ContextPanel({
             {/* FR-04 AC6: 잘린 목록 길이를 구 단위 카운트인 척 쓰지 않는다(요약 바도 같은 문구) */}
             <Badge tone="brand">{facilityCountText(req, data)}</Badge>
             <Badge tone="ok">
-              <span data-testid="panel-alt-count">{poolCountText('공공·대안', altCounts)}</span>
+              <span data-testid="panel-alt-count">{poolCountText(altPoolLabel(disabilityFiltered), altCounts)}</span>
             </Badge>
           </div>
           <button
@@ -180,6 +183,8 @@ export function ContextPanel({
               onLocate={onLocate}
               search={searchScope}
               onSearchHits={onSearchHits}
+              disabilityFiltered={disabilityFiltered}
+              hasPublicProgram={hasPublicProgram}
             />
           </div>
         </div>

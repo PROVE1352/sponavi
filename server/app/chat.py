@@ -59,7 +59,12 @@ SPECIAL_CATEGORIES = ("multichild", "defector")
 # 슬롯이라 LLM 이 "애가 둘" 같은 발화에서 지어내면 곧바로 판정 재료가 되기 때문(P-2).
 _SPECIAL_CUES = {
     "multichild": re.compile(
-        r"다자녀|다둥이|셋째|넷째|다섯째"
+        r"다자녀|다둥이"
+        # '셋째'만으로는 자녀 단서가 아니다 — "매달 셋째 주 토요일"·"셋째 날" 같은 서수가 흔하다
+        # (2026-09-28 오탐). 자녀를 가리키는 말이 뒤따를 때만 인정한다.
+        r"|(셋|넷|다섯)째\s*(아이|애|딸|아들|자녀|막내|까지|둥이|낳|출산|임신"
+        r"|(가|도|는|이)\s*(있|태어|생겼|생기|어려|아직|[0-9]+\s*살|초등|중학|고등|유치원|어린이집))"
+        r"|(애|아이|딸|아들|막내|자녀|얘)\s*(가|는|이|도)?\s*(셋|넷|다섯)째"
         r"|(세|네|다섯|[3-9])\s*(명의\s*)?(자녀|아이|애|남매|형제|자매)"
         r"|(자녀|아이|애|애들|아이들)\s*(가|이|는|은)?\s*(셋|넷|다섯|[3-9]\s*명)"
         r"|[삼사오]남매|[삼사오]형제|[삼사오]자매"
@@ -408,10 +413,17 @@ def filter_reply(reply: Any, store: Optional[Store] = None) -> Optional[str]:
 # 그 밖은 원문 그대로. None 은 None.
 # ---------------------------------------------------------------------------
 # (규칙, 발화 패턴, 대체 템플릿) — D-10 만 "슬롯이 있을 때" 규칙이다.
+# "~해 두었어요/등록했어요/입력해 놨어요" 류 — 슬롯을 반영했다고 말하는 확인 발화.
+# (2026-09-28: "고성으로 등록해 두었어요"가 D-08 을 빠져나갔다 — 동사 목록을 넓힌다)
+_CONFIRM_PHRASE = re.compile(
+    r"확인해|확인했|둘게|해\s*둘게|해\s*(뒀|두었|놨|놓았)"
+    r"|(기록|반영|설정|저장|등록|입력)\s*(을\s*)?(해\s*)?(뒀|두었|놨|놓았|했|됐|되었|완료|할게|해\s*둘)"
+)
+
 _RECONCILE_PATTERNS = (
     (
         "D-08",
-        re.compile(r"확인해|확인했|둘게|해\s*둘게|해\s*뒀|기록했|반영했|설정했|저장했"),
+        _CONFIRM_PHRASE,
         "말씀 감사해요. 아직 반영된 정보는 없어요 — 아래 선택지에서 골라 주시면 이어갈게요.",
     ),
     (
@@ -422,10 +434,31 @@ _RECONCILE_PATTERNS = (
 )
 
 
-def _reconcile_reply(reply: Optional[str], updates: dict) -> Optional[str]:
-    """reply 와 slot_updates 의 불일치를 템플릿으로 바로잡는다(값은 되읊지 않는다)."""
+_REGION_CLARIFY_MAX = 4
+
+
+def _region_clarify(candidates: list[dict]) -> str:
+    """같은 이름의 지역이 여러 곳 — 등록하지 않았다고 밝히고 후보를 제시한다(숫자·제도명 없음)."""
+    names = [str(c.get("nm") or c.get("label") or "").strip() for c in candidates]
+    names = [n for n in dict.fromkeys(names) if n][:_REGION_CLARIFY_MAX]
+    return (
+        "같은 이름의 지역이 여러 곳이라 아직 지역을 등록하지 않았어요 — "
+        f"{', '.join(names)} 중 어디인지 골라 주세요."
+    )
+
+
+def _reconcile_reply(
+    reply: Optional[str], updates: dict, region_candidates: Optional[list[dict]] = None,
+) -> Optional[str]:
+    """reply 와 slot_updates 의 불일치를 템플릿으로 바로잡는다(값은 되읊지 않는다).
+
+    R-01(2026-09-28): 지역이 모호해 후보만 있고(sigungu 미확정) 발화가 "등록해 두었어요" 류면,
+    다른 슬롯이 반영됐더라도 지역을 등록한 척하는 문장이다 → 후보를 제시하는 확인 질문으로 바꾼다.
+    """
     if not isinstance(reply, str) or not reply.strip():
         return reply
+    if region_candidates and "sigungu_cd" not in updates and _CONFIRM_PHRASE.search(reply):
+        return _region_clarify(region_candidates)
     has_updates = bool(updates)
     for rule, pattern, template in _RECONCILE_PATTERNS:
         wants_updates = rule == "D-10"
@@ -1032,7 +1065,10 @@ def run_nlu(store: Store, payload: dict) -> tuple[dict, dict]:
         "faq_key": faq_key,
         "region_candidates": [{"cd": e["cd"], "nm": e["label"]} for e in candidates],
         # 후필터(사실 문장 폐기) → 정합(슬롯과 어긋난 확인/미확인 발화 교정) 순서(CQ5A)
-        "reply": _reconcile_reply(filter_reply(valid.get("reply"), store), updates),
+        "reply": _reconcile_reply(
+            filter_reply(valid.get("reply"), store), updates,
+            [{"cd": e["cd"], "nm": e["label"]} for e in candidates],
+        ),
         # fact-lock 통과분만 — 실패 시 null 이고 클라는 faq_key 카드로 폴백(AC9)
         "answer": filter_answer(valid.get("answer"), grounding, store),
         "provider": provider_used,

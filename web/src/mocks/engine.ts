@@ -423,10 +423,19 @@ export function mockAssess(req: AssessRequest): AssessResponse {
       ? `${userSigunguNm}에 ${label} 가맹시설이 없습니다`
       : `${label} · ${userSigunguNm} 가맹 ${voucherCount}곳`
 
+  // 서버 assess 최상위 public_fee 미러 — 이용권 자격과 무관(조례 확인 지역만).
+  const publicFee = publicFeeBlock(publicFeeRegion(req.sigungu_cd), {
+    age: req.age,
+    income_class: req.income_class,
+    special: req.special ?? [],
+    disability_has: req.disability.has,
+  })
+
   return {
     eligibility,
     path,
     alt_edges: altEdges,
+    public_fee: publicFee,
     nearby: {
       voucher_facilities: voucherFacilities,
       alternatives,

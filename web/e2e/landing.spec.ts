@@ -4,7 +4,7 @@ import { fillMainSlots, openDemo, openMain, pickAge, startPersona, stream } from
 // v1.4 UX 계약 — 메인/데모 분리 + 경로 시각화 배치 + 모바일 상단 시트(PRD FR-12 AC3·AC5·AC7, FR-03).
 //   ① 메인 랜딩 = 실사용 전용: 데모 문구·P1~P5 칩·푸터·컴포저 고지 없음, 인사 1버블 뒤 곧바로 첫 질문
 //   ② /#/demo  = 시연 전용: P1~P5 퀵스타트 칩 + 데모 배지 + 푸터(기준일·출처·면책)
-//   ③ 경로 시각화 = 메인 결과 부재 / 데모 결과 항시 노출
+//   ③ 경로 시각화 = 메인·데모 결과 모두 항시 노출(v1.12, 같은 자리 · 같은 컴포넌트)
 //   ④ 390px 결과 도착 → 컨텍스트 패널 자동 표시(슬라이드다운) + 접기 유지
 //   ⑤ prefers-reduced-motion → 애니메이션 없이 즉시 표시
 // v1.6 추가(FR-12 AC1) — 퀵리플라이 칩의 소유자가 컴포저에서 질문 버블로 바뀐다.
@@ -66,16 +66,24 @@ test('② /#/demo 는 P1~P5 퀵스타트 칩 + 데모 배지 + 푸터를 갖는�
   await expect(page.getByTestId('composer-notice')).toHaveCount(0)
 })
 
-test('③ 경로 시각화 — 메인 결과엔 없고 데모 결과엔 항시 노출된다 (FR-03 v1.4)', async ({ page }) => {
+test('③ 경로 시각화 — 메인·데모 결과 모두에 펼친 채로 같은 자리에 온다 (FR-03 v1.12)', async ({ page }) => {
   const pathCard = () => stream(page).getByRole('region', { name: '추천 경로 시각화' })
 
-  // 메인: 칩만으로 슬롯 5개를 채워 판정까지 — 결과가 나와도 경로 카드는 없다
+  // 메인: 칩만으로 슬롯 5개를 채워 판정까지 — 결과와 함께 경로 카드가 온다
   await openMain(page)
   await fillMainSlots(page)
   await expect(stream(page).getByTestId('assess-cards')).toBeVisible()
-  await expect(pathCard()).toHaveCount(0)
-  // 접힘 UI 자체가 없다("왜 이 결과인가?" 펼침 버튼도 두지 않는다)
+  await expect(pathCard()).toHaveCount(1)
+  await expect(pathCard().getByText('왜 이 결과인가 · 경로')).toBeVisible()
+  // 접힘 UI 는 없다("왜 이 결과인가?" 펼침 버튼을 두지 않는다 — 항시 펼침)
   await expect(stream(page).getByRole('button', { name: /왜 이 결과인가/ })).toHaveCount(0)
+  // 자리: 결과 덱보다 앞(판정 한 줄 → 경로 → 결과 덱) — 데모와 같은 배치
+  const mainOrder = await page.evaluate(() => {
+    const p = document.querySelector('[aria-label="추천 경로 시각화"]')
+    const d = document.querySelector('[data-testid="assess-cards"]')
+    return p && d ? Boolean(p.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING) : null
+  })
+  expect(mainOrder, '메인에서 경로 카드가 결과 덱 앞에 있지 않다').toBe(true)
 
   // 데모: 같은 판정에서 경로 카드가 펼쳐진 채로 함께 온다
   await openDemo(page)

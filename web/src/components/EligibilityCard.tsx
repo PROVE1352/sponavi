@@ -1,4 +1,4 @@
-import type { AltEdge, NextYear, ProgramEligibility, Selection } from '../types'
+import type { AltEdge, NextYear, ProgramEligibility, PublicFeeInfo, Selection } from '../types'
 import { wonKorean } from '../lib/format'
 import { feeSummaryLine, uniq } from '../lib/publicFee'
 import {
@@ -451,7 +451,7 @@ export function AltRoutesBlock({
 // 서버가 이 사람에게 맞는 감면만 골라 준다(reductions). 화면은 한 줄 요약 + 행별 주의 +
 // 정직한 공백(no_reduction_for) + 조례 조문 링크·확인일. 원문 인용·지역 주의는 접어 두되 감추지 않는다.
 
-function PublicFeeDetail({ a }: { a: AltEdge }) {
+export function PublicFeeDetail({ a }: { a: PublicFeeInfo }) {
   const summary = feeSummaryLine(a)
   if (!summary || !a.reductions) return null
   const article = a.law?.article.match(/제\d+조(?:의\d+)?/)?.[0] ?? a.law?.article

@@ -536,5 +536,66 @@
         "tteuntteun"
       ]
     }
+  },
+  "eligible_cases": {
+    "_comment": "이용권 자격 ✓ 인데도 받을 수 있는 조례 감면 — 응답 최상위 public_fee(2026-09-28). alt_edges 에는 public_program 이 없다.",
+    "N14_nowon_single_parent": {
+      "body": {
+        "age": 14,
+        "sex": "F",
+        "sigungu_cd": "11350",
+        "sigungu_nm": "",
+        "income_class": "한부모",
+        "disability": {
+          "has": false,
+          "type": null
+        }
+      },
+      "expected_public_fee": {
+        "region": {
+          "sigungu_cd": "11350",
+          "sigungu_nm": "노원구",
+          "sido": "서울특별시"
+        },
+        "law": {
+          "title": "서울특별시 노원구립 체육시설 설치 및 운영에 관한 조례",
+          "article": "제7조(사용료의 감면 등) 제3항 + [별표 1] 구민체육센터 사용료 비고 4",
+          "url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597",
+          "effective": "2026-05-01"
+        },
+        "operator": {
+          "name": "서울특별시 노원구 시설관리공단 (조례 제12조, 요청서의 '노원구서비스공단'은 조례상 명칭 아님)",
+          "url": null
+        },
+        "scope": "구민체육센터·다목적체육시설·공공체육시설(별표 1~3). 부속시설사용료는 감면 제외. 감면 사유 2개 이상이면 높은 율 1개만. 증빙 제출 시점부터 적용(소급 불가)",
+        "checked": "2026-09-23",
+        "reductions": [
+          {
+            "target": "youth",
+            "label": "어린이·청소년",
+            "rate": "20~75% 범위(조례). 실제는 별표 1의 청소년·어린이 별도 요율(수영장 기본 성인 3,900~4,800 / 청소년 2,700~3,300 / 어린이 1,900~2,400원)",
+            "condition": "별도 감면 신청이 아니라 요금 구분으로 적용",
+            "quote": "3. 어린이, 청소년 및 경로우대자: 20퍼센트 이상 75퍼센트 이하의 범위에서 감면",
+            "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597",
+            "age_definition": "청소년 13~18세, 어린이 12세 이하 (제2조)"
+          },
+          {
+            "target": "single_parent",
+            "label": "한부모가족",
+            "rate": "20%",
+            "condition": "「서울특별시 노원구 한부모가족 지원에 관한 조례」 적용 대상",
+            "quote": "4. 「서울특별시 노원구 한부모가족 지원에 관한 조례」의 적용을 받는 한부모가족: 20퍼센트 감면",
+            "source_url": "https://www.law.go.kr/ordinInfoP.do?ordinSeq=2123597"
+          }
+        ],
+        "no_reduction_for": [],
+        "caveats": [
+          "운영 공단 URL 미확인(빈 값)",
+          "별표 2(다목적)·별표 3(공공체육시설)의 세부 감면표는 별표 1과 유사할 것으로 보이나 원문을 전부 대조하지 않음",
+          "감면 사유가 둘 이상이면 가장 높은 감면율 하나만 적용(조례)"
+        ]
+      },
+      "expected_alt_edge_tos": []
+    }
   }
 }

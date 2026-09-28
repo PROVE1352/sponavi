@@ -28,19 +28,36 @@ test('P1 · 10세 여아 기초수급 → 스포츠강좌이용권 예상 자격
   await shot(page, 'e2e-shots/P1-svoucher-eligible.png')
 })
 
-test('P2 · 27세 낀 계층 → 대체경로 스텝 다이어그램(전문가 큐레이션) + 대체경로 블록', async ({ page }) => {
+test('P2 · 27세 낀 계층 → 대체경로 스텝 다이어그램(공식 확인 표기) + 대체경로 블록', async ({ page }) => {
   await startPersona(page, 'P2')
 
   // svoucher 는 해당 없음
   const sv = stream(page).getByRole('article', { name: '스포츠강좌이용권 예상 자격 결과', exact: true })
   await expect(sv.getByText('해당 없음', { exact: true })).toBeVisible()
 
-  // 경로 카드(스트림 임베드)에 대체경로 엣지 + 전문가 큐레이션 뱃지
+  // 경로 카드(스트림 임베드)에 대체경로 엣지 + 확인 상태 표기.
+  // 성북 공공시설 엣지는 "공식 확인(조례 …)" — 공식 원문 확인이므로 "전문가 큐레이션"이라 부르지 않는다
+  // (그 이름은 검증 대기 엣지 몫, lib/pathLabel · SPEC §0-3).
   const path = stream(page).getByRole('region', { name: '추천 경로 시각화' })
   await expect(path).toBeVisible()
   await expect(path.getByText('대체경로')).toBeVisible()
-  await expect(path.getByText(/전문가 큐레이션/)).toBeVisible()
+  const curated = path.getByTestId('path-edge-curated')
+  await expect(curated).toHaveText(/^공식 확인\(조례 2026-09-17\)$/)
+  await expect(path.getByText(/전문가 큐레이션/)).toHaveCount(0)
   await expect(path.getByText('공공 프로그램')).toBeVisible()
+
+  // 레이아웃(2026-09-28 보고서 스샷): 확인 표기·엣지 설명이 좁은 칸에서 글자 단위로 꺾이지 않는다.
+  //   대체경로 칸은 충분히 넓고(390 고정 192px) 확인 표기 3줄 이하, 엣지 설명은 4줄 이하.
+  const lines = (loc: typeof curated) =>
+    loc.evaluate((el) => {
+      const lh = parseFloat(getComputedStyle(el).lineHeight) || 16
+      return Math.round(el.getBoundingClientRect().height / lh)
+    })
+  const cBox = (await path.getByTestId('path-edge').nth(1).boundingBox())!
+  expect(cBox.width, `대체경로 칸 폭 ${cBox.width}`).toBeGreaterThanOrEqual(180)
+  expect(await lines(curated.locator('span').last())).toBeLessThanOrEqual(3)
+  const altLabel = path.getByTestId('path-edge-label').nth(1)
+  expect(await lines(altLabel), '대체경로 설명이 너무 여러 줄로 꺾였다').toBeLessThanOrEqual(4)
 
   // 복수 대체경로 히어로(FR-02 AC5 v1.10) — 성북구는 체육시설 조례 감면 원문 확인 지역이라
   // 공공시설이 '공식 확인(조례)'으로 올라와 공식 확인 3개, 검증 대기 0건(2026-09-23).
@@ -167,4 +184,52 @@ test('좌표 정직성: "위치 근사(구 중심)" 배지 + 이용권 블록 "�
   const voucherSection = panel(page).getByTestId('voucher-section')
   await expect(voucherSection).toBeVisible()
   await expect(voucherSection).not.toContainText('km')
+})
+
+test('경로 그림 1280px — 가로 스크롤 없이 스트림 폭에 들어오고 대체경로 칸이 넉넉하다', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await startPersona(page, 'P2')
+  const path = stream(page).getByRole('region', { name: '추천 경로 시각화' })
+  await expect(path).toBeVisible()
+  const scroller = path.getByRole('group', { name: '경로 단계 (좌우로 스크롤)' })
+  const over = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth)
+  expect(over, '1280 에서 경로 그림이 가로로 넘친다').toBeLessThanOrEqual(1)
+  const curated = path.getByTestId('path-edge-curated')
+  await expect(curated).toBeVisible()
+  const box = (await path.getByTestId('path-edge').nth(1).boundingBox())!
+  expect(box.width, `대체경로 칸 폭 ${box.width}`).toBeGreaterThanOrEqual(150)
+  const curLines = await curated.locator('span').last().evaluate((el) => {
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 16
+    return Math.round(el.getBoundingClientRect().height / lh)
+  })
+  expect(curLines, '1280 에서 확인 표기가 3줄을 넘는다').toBeLessThanOrEqual(2)
+  const lines = await path.getByTestId('path-edge-label').nth(1).evaluate((el) => {
+    const lh = parseFloat(getComputedStyle(el).lineHeight) || 16
+    return Math.round(el.getBoundingClientRect().height / lh)
+  })
+  expect(lines, '1280 에서 대체경로 설명이 3줄을 넘는다').toBeLessThanOrEqual(3)
+})
+
+// 2026-09-28: 조례 감면은 이용권 자격과 무관 — 자격 ✓(P1)에게도 "함께 받을 수 있는 것" 블록,
+// 대체경로가 이미 같은 블록을 보여 주는 P2 에는 다시 그리지 않는다(중복 렌더 금지 · 히어로 N 불변).
+test('P1 · 자격 ✓ 에도 "함께 받을 수 있는 것 · 구립 체육시설 감면"이 보이고, P2 에는 중복되지 않는다', async ({
+  page,
+}) => {
+  await startPersona(page, 'P1')
+  const extra = stream(page).getByTestId('public-fee-extra')
+  await expect(extra).toBeVisible()
+  await expect(extra).toContainText('함께 받을 수 있는 것 · 구립 체육시설 감면')
+  await expect(extra.getByTestId('public-fee-summary')).toContainText('성북구 구립 체육시설')
+  await expect(extra.getByTestId('public-fee-law-link')).toHaveText('조례 제10조')
+  // 히어로(지금 바로 되는 것)는 만들지 않는다
+  await expect(stream(page).getByTestId('alt-routes-block')).toHaveCount(0)
+
+  // 같은 해시(#/demo)로 다시 가면 대화가 그대로 남는다 — 메인을 거쳐 데모를 새로 시작한다.
+  await page.goto('/')
+  await page.reload()
+  await openDemo(page)
+  await startPersona(page, 'P2')
+  await expect(stream(page).getByTestId('alt-routes-block')).toBeVisible()
+  await expect(stream(page).getByTestId('public-fee-extra')).toHaveCount(0)
+  await expect(stream(page).getByTestId('public-fee-summary')).toHaveCount(1)
 })

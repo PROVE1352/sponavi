@@ -122,8 +122,6 @@ function ChatShell({ demo }: { demo: boolean }) {
     locateFacility,
   } = useChatController(demo)
   const panelRef = useRef<HTMLDivElement>(null)
-  // "맨 아래로" 버튼이 컴포저 바로 위에 앉도록 실측용 앵커를 넘긴다.
-  const composerRef = useRef<HTMLDivElement>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -254,19 +252,16 @@ function ChatShell({ demo }: { demo: boolean }) {
             handlers={handlers}
           />
           <Composer
-            boxRef={composerRef}
             llmMode={state.llmMode}
             pending={state.pending}
             onSend={(t) => void onSend(t)}
+            // "맨 아래로" — 바닥에서 멀어졌을 때만 나타난다(카드 CTA 로 위쪽에 올라간 뒤의 복귀 1탭).
+            // 컴포저 줄 안(보내기 왼쪽)에 있어 스트림 내용을 덮지 않는다(v1.12).
+            // 자동재생 중에는 화면 소유권이 자동재생에 있으므로 아예 렌더하지 않는다.
+            fab={autoplayRunning ? null : <ScrollToBottomFab onPress={scrollToBottom} />}
           />
         </main>
       </div>
-
-      {/* "맨 아래로" — 바닥에서 멀어졌을 때만 나타난다(카드 CTA 로 위쪽에 올라간 뒤의 복귀 1탭).
-          자동재생 중에는 화면 소유권이 자동재생에 있으므로 아예 렌더하지 않는다. */}
-      {!autoplayRunning && (
-        <ScrollToBottomFab composerRef={composerRef} onPress={scrollToBottom} />
-      )}
 
       {/* W2 자동재생 상태 필. 끝나거나 사용자가 개입하면 사라진다.
           클릭을 가로채지 않는다(pointer-events-none) — 화면 어디를 눌러도 취소가 먼저 걸린다. */}

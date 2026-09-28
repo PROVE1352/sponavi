@@ -5,7 +5,7 @@
 //   남는 것은 강등됐을 때의 정직 라벨뿐이다(FR-12 AC4).
 
 import { useState } from 'react'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { LlmMode } from '../types_chat'
 import { T } from './policy'
 import { InfoIcon } from '../components/ui'
@@ -15,12 +15,15 @@ export function Composer({
   pending,
   onSend,
   boxRef,
+  fab,
 }: {
   llmMode: LlmMode
   pending: boolean
   onSend: (text: string) => void
-  // "맨 아래로" 버튼이 자기 위치를 재는 기준(높이가 상황에 따라 자란다 — 칩 모드 고지 한 줄).
+  // 컴포저 박스 앵커(바깥에서 높이·위치를 잴 때).
   boxRef?: RefObject<HTMLDivElement | null>
+  // "맨 아래로" 버튼 자리(보내기 왼쪽). 스트림 위에 떠 있지 않으므로 어떤 내용도 가리지 않는다.
+  fab?: ReactNode
 }) {
   const [text, setText] = useState('')
 
@@ -52,6 +55,7 @@ export function Composer({
             className="min-h-11 w-full rounded-none border-0 border-b-[1.5px] border-ink bg-transparent px-0.5 py-3 text-base text-ink placeholder:text-mute dark:border-ink-dark dark:text-ink-dark dark:placeholder:text-mute-dark"
           />
         </label>
+        {fab}
         <button
           type="submit"
           data-testid="composer-send"

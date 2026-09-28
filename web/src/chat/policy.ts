@@ -19,6 +19,7 @@ import type {
   SpecialCategory,
 } from '../types'
 import type { Chip, ChatSlots, ChipQuestionMsg, QuestionId, RegionCandidate } from '../types_chat'
+import { SPORT_SUMMARY_MAX, summarizeSports } from '../lib/sports'
 
 // ────────────────────────────── 상수(구 ResultView 소유분 이주) ──────────────────────────────
 
@@ -283,7 +284,7 @@ export const T = {
   fitnessAlready: '체력 처방 카드로 이동할게요 — 거기서 이어서 하실 수 있어요.',
   fitnessNeedsResult: '체력 처방은 예상 자격을 먼저 확인한 뒤에 이어서 하실 수 있어요.',
   fitnessFilterApplied: (sports: string[]) =>
-    `${sports.join('·')} 종목만 남겨서 시설 목록을 패널에 열어 두었어요.`,
+    `${summarizeSports(sports, SPORT_SUMMARY_MAX, '·').text} 종목만 남겨서 시설 목록을 패널에 열어 두었어요.`,
 
   followUpPrompt: '더 필요하신 게 있으면 아래에서 골라 주세요.',
 

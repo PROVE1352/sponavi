@@ -34,6 +34,7 @@ import { useAutoplay } from './useAutoplay'
 import { readDemoRoute } from './route'
 import { FOCUS_BOTTOM_NOW_ID, type StreamFocus } from './ChatStream'
 import { FITT_SOURCE, rationaleLines } from '../lib/rationale'
+import { summarizeSports } from '../lib/sports'
 import type { MapLocate } from '../components/NearbyMap'
 import { nextId, useChat } from './store'
 import { useFitness } from './useFitness'
@@ -138,7 +139,7 @@ function toWire(s: ChatSlots): NluSlotsWire {
 }
 
 // demo = 해시 라우트 `/#/demo`(chat/route.ts). 대화 계약은 메인과 동일하고
-// 인사 시퀀스(퀵스타트 칩)·경로 시각화 카드만 달라진다(FR-12 AC5 · FR-03 v1.4).
+// 인사 시퀀스(퀵스타트 칩)만 달라진다(FR-12 AC5). 경로 시각화 카드는 v1.12 부터 양쪽 공통.
 export function useChatController(demo = false) {
   const { state, dispatch } = useChat()
   const [sigungu, setSigungu] = useState<Sigungu[]>([])
@@ -274,11 +275,11 @@ export function useChatController(demo = false) {
         dispatch({ type: 'setAssess', req, data })
         dispatch({ type: 'setPhase', phase: 'assessed' })
         const followUp = followUpChips(faqRef.current.map((f) => ({ key: f.key, q: f.q })))
-        // 경로 시각화(FR-03 v1.4): 데모 결과에만 항시 펼침으로 넣는다.
-        // 메인 결과에는 아예 렌더하지 않는다 — 실사용 화면은 판정 카드 중심으로 경량화.
-        const pathCard: ChatMessage[] = demo
-          ? [{ id: nextId('p'), role: 'bot', kind: 'path', path: data.path }]
-          : []
+        // 경로 시각화(FR-03, SPEC §0-4 "왜 이게 나왔나" 필수): 메인·데모 결과 모두에 항시 펼침으로
+        // 같은 자리(판정 한 줄 뒤, 결과 덱 앞)에 넣는다. v1.4 의 "데모 전용"은 2026-09-28 철회 —
+        // 실사용 화면에서도 제도✗→대안→시설 경로가 보여야 결과를 믿을 수 있다.
+        const pathCard: ChatMessage[] =
+          data.path.length > 0 ? [{ id: nextId('p'), role: 'bot', kind: 'path', path: data.path }] : []
         // ★ v1.7: 판정 카드·공급공백·시설 요약을 메시지 하나로 합친다(FR-12 AC9).
         //   결과가 버블 여러 개로 세로로 쌓이면 모바일에서 화면이 위아래로 크게 흔들린다.
         //   합친 뒤의 렌더 형태(모바일 덱 / 데스크톱 블록)는 메시지 렌더러가 정한다.
@@ -305,7 +306,7 @@ export function useChatController(demo = false) {
         dispatch({ type: 'setPending', pending: false })
       }
     },
-    [demo, dispatch, focusFollowUp, push],
+    [dispatch, focusFollowUp, push],
   )
 
   // 다음 미완 슬롯을 묻거나, 다 찼으면 판정으로 넘어간다(FR-12 AC6).
@@ -535,7 +536,8 @@ export function useChatController(demo = false) {
     (sports: string[]) => {
       // 카드 안 버튼은 칩이 아니라 사용자 말풍선이 안 남는다 — 스트림 끝에 봇 한 줄만 붙으면
       // 고아 문장처럼 읽힌다(실기기 제보 2026-08-28). 누른 행동을 먼저 사용자 버블로 남긴다.
-      push(userText(`이 운동 되는 근처 강좌 보기 · ${sports.join(' · ')}`))
+      // 버튼 문구와 같은 요약(최대 3개 + "외 N") — 전체 목록은 패널 필터 칩에서 펼쳐 본다.
+      push(userText(`이 운동 되는 근처 강좌 보기 · ${summarizeSports(sports).text}`))
       dispatch({ type: 'setFilterSports', sports })
       dispatch({ type: 'setPanel', open: true, tab: 'list' })
       push(botText(T.fitnessFilterApplied(sports)))

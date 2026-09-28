@@ -430,9 +430,9 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#f7f3ea">
-<meta name="description" content="되나요 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
+<meta name="description" content="스포내비 뒷면 — 시군구별 장애인스포츠강좌이용권 가맹 수·일반 가맹 수·공공체육시설 수와 가맹 유치 제안. 국민체육진흥공단·공공데이터포털 공개 데이터 기준.">
 <meta name="robots" content="index,follow">
-<title>{_esc(PAGE_TITLE)} · 되나요</title>
+<title>{_esc(PAGE_TITLE)} · 스포내비</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f3ea'/%3E%3Ctext x='32' y='46' font-family='serif' font-size='42' font-weight='800' fill='%231f2a44' text-anchor='middle'%3ES%3C/text%3E%3C/svg%3E">
 <style>
 /* 자체 호스팅 웹폰트(외부 CDN 0 — CSP 가 구글 폰트를 막는다). web/src/index.css 와 같은 파일. */
@@ -445,7 +445,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 <body>
 <div class="page">
 <div class="side">
-<a class="back" href="/">← 되나요로 돌아가기</a>
+<a class="back" href="/">← 스포내비로 돌아가기</a>
 <h1>{_esc(SHORT_TITLE)}<span class="sub">시군구별 장애인스포츠강좌이용권 가맹 현황과 공공체육시설 후보</span></h1>
 <p class="lede">
   국민체육진흥공단 스포츠강좌이용권 <b>등록시설</b> 자료(일반·장애인 2종)와
@@ -454,9 +454,10 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 </p>
 <div class="brief">
   <p><b>제안 규칙</b>(임계값까지 공개합니다) — ① 장애인 가맹 <b>0곳</b>이고 공공시설 <b>1곳 이상</b>이면
-     <b>전환 후보</b>, ③ 장애인 가맹 <b>2곳 이하</b>이고 공공시설이
+     <b>전환 후보</b>, ② 장애인 가맹 <b>0곳</b>이고 공공시설도 <b>0곳</b>이면 “—”(전환할 공공시설이 없음),
+     ③ 장애인 가맹 <b>2곳 이하</b>이고 공공시설이
      <span class="k">{threshold:,}곳 이상</span>(T = 이 표 {total}개 시군구 공공시설 수의 75퍼센타일)이면
-     <b>확대 후보</b>. 나머지 <b>{blank:,}행</b>이 빈칸인 것도 규칙입니다 —
+     <b>확대 후보</b>. ④ 나머지 <b>{blank:,}행</b>이 빈칸인 것도 규칙입니다 —
      근거가 없으면 제안을 만들지 않습니다.</p>
   <p><b>한계</b> — 가맹 수는 등록시설 자료에 실린 <b>시설 수</b>일 뿐 실제 강좌 수·정원이 아니고,
      공공시설이 있다고 곧바로 가맹이 되는 것도 아닙니다(시설 유형·운영 주체·접근성 확인 필요).
@@ -480,7 +481,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
   <input id="q" type="search" placeholder="시군구 검색 (예: 고성, 강원, 서해구)" autocomplete="off">
   <label class="toggle" for="det">신고·등록 시설 수 함께 보기</label>
 </div>
-<p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 <code>faci_gb_nm='공공'</code>만 셉니다(신고·등록 제외).</p>
+<p class="tnote" id="tnote">기준: 구(시군구) 단위 카운트 — 반경이 아닙니다. “공공시설”은 원천 데이터의 시설 구분이 ‘공공’인 시설만 셉니다(신고·등록 제외).</p>
 <p class="hint" aria-hidden="true">← 옆으로 넘겨보세요 →</p>
 <div class="wrap" tabindex="0" role="region" aria-label="시군구별 가맹·공공시설 표 (좌우로 스크롤됩니다)">
 <table id="gap" aria-describedby="tnote">
@@ -505,7 +506,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
 <h2>표 읽는 법 · 출처</h2>
 <ol>
   <li><b>출처</b> — 장애인 가맹·일반 가맹: 국민체육진흥공단 스포츠강좌이용권 등록시설 자료 2종.
-      공공시설·신고·등록: 공공데이터포털 「전국 공공체육시설」(15113986)의 원천 구분값 <code>faci_gb_nm</code> 기준.
+      공공시설·신고·등록: 공공데이터포털 「전국 공공체육시설」(15113986) 원천 데이터의 시설 구분값(공공·신고·등록) 기준.
       한 원천을 전부 “공공체육시설”이라 부르면 다수가 민간 신고 시설이라 사실과 어긋납니다 —
       그래서 <b>공공 {sum(r.public for r in rows):,} / 신고 {sum(r.reported for r in rows):,} /
       등록 {sum(r.registered for r in rows):,}</b> 을 나눠 셉니다.</li>
@@ -525,7 +526,7 @@ def render(rows: list[GapRow], *, threshold: int, date_label: str, date_basis: s
       아닙니다. 공공시설이 있다고 곧바로 가맹이 되는 것도 아닙니다(시설 유형·운영 주체·
       접근성 확인 필요). 이 표는 확인 대상을 좁히는 용도입니다.</li>
 </ol>
-<p style="margin-top:14px"><a class="back" href="/">← 되나요로 돌아가기</a></p>
+<p style="margin-top:14px"><a class="back" href="/">← 스포내비로 돌아가기</a></p>
 </div>
 </div>
 <script src="gap.js" defer></script>

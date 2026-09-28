@@ -218,6 +218,15 @@ def _out(**kw):
     # 발화에 단서 없음 → LLM 이 골라도 드롭(자가선언 창작 차단)
     ("애가 둘이에요", ["multichild"], None),
     ("16살이에요", ["defector"], None),
+    # '셋째'는 서수로 흔하다 — 자녀를 가리킬 때만 다자녀 단서(2026-09-28 오탐)
+    ("매달 셋째 주 토요일만 운동할 수 있어요", ["multichild"], None),
+    ("셋째 주말에만 시간이 나요", ["multichild"], None),
+    ("셋째 날부터 나갈 수 있어요", ["multichild"], None),
+    ("넷째 주 일요일에 가요", ["multichild"], None),
+    ("셋째 아이까지 있어요", ["multichild"], ["multichild"]),
+    ("셋째 딸이 초등학생이에요", ["multichild"], ["multichild"]),
+    ("셋째가 있어요", ["multichild"], ["multichild"]),
+    ("막내가 넷째예요", ["multichild"], ["multichild"]),
 ])
 def test_chat_special_slot(monkeypatch, store, text, llm, expected):
     monkeypatch.setattr(chat, "get_provider", lambda: _Fake(_out(special=llm)))

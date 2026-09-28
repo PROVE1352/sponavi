@@ -1,6 +1,15 @@
 // 종목 매칭 1벌(2A) — 별칭 확장은 서버 몫이라 여기선 정확 일치만 고정한다.
 import { describe, expect, it } from 'vitest'
-import { countMatching, matchesFilter, nearbyMatchText, poolCountText } from './sports'
+import {
+  altPoolLabel,
+  canonicalSportName,
+  countMatching,
+  dedupeSportNames,
+  matchesFilter,
+  nearbyMatchText,
+  poolCountText,
+  summarizeSports,
+} from './sports'
 
 describe('matchesFilter', () => {
   it('필터가 비어 있으면(또는 없으면) 전부 통과 — 필터 미적용', () => {
@@ -58,5 +67,46 @@ describe('countMatching / nearbyMatchText', () => {
     const c = countMatching(FACILITIES, ['볼링'])
     expect(c).toEqual({ matched: 0, total: 3 })
     expect(nearbyMatchText(c)).toBe('이 종목 근처 0곳 · 전체 3곳')
+  })
+})
+
+describe('summarizeSports — 버튼·버블·필터 칩의 종목 이름 요약', () => {
+  const HEALTH = ['헬스', '유도', '주짓수', '체력단련장', '체력단련장업', '기타체육시설(체력단련장)', '투기체육관']
+
+  it('표기 변형(체력단련장/체력단련장업/기타체육시설(체력단련장))을 하나로 접는다', () => {
+    expect(dedupeSportNames(HEALTH)).toEqual(['헬스', '유도', '주짓수', '체력단련장', '투기체육관'])
+    expect(canonicalSportName('체력단련장업')).toBe('체력단련장')
+    expect(canonicalSportName('기타체육시설(체력단련장)')).toBe('체력단련장')
+    expect(canonicalSportName('체력단련장(업)')).toBe('체력단련장')
+    expect(canonicalSportName('수영장업')).toBe('수영장')
+    // 뜻이 다른 별칭(헬스 ↔ 체력단련장)은 접지 않는다 — 별칭 표는 서버 소관
+    expect(canonicalSportName('헬스')).toBe('헬스')
+    expect(canonicalSportName('유도')).toBe('유도')
+  })
+
+  it('최대 3개 + "외 N", 전체 목록은 all 로 남긴다', () => {
+    const s = summarizeSports(HEALTH)
+    expect(s.text).toBe('헬스 · 유도 · 주짓수 외 2')
+    expect(s.shown).toEqual(['헬스', '유도', '주짓수'])
+    expect(s.rest).toBe(2)
+    expect(s.all).toEqual(['헬스', '유도', '주짓수', '체력단련장', '투기체육관'])
+  })
+
+  it('3개 이하면 "외" 없이 전부', () => {
+    expect(summarizeSports(['수영', '수영장', '수영장업']).text).toBe('수영 · 수영장')
+    expect(summarizeSports(['헬스']).text).toBe('헬스')
+    expect(summarizeSports([]).text).toBe('')
+  })
+
+  it('구분자를 바꿀 수 있다(봇 한 줄은 가운뎃점만)', () => {
+    expect(summarizeSports(HEALTH, 3, '·').text).toBe('헬스·유도·주짓수 외 2')
+  })
+})
+
+describe('altPoolLabel — 공공·대안 풀이 어떤 기준으로 센 수인지', () => {
+  it('장애 필터가 걸리면 "장애인 표기"를 함께 적는다', () => {
+    expect(altPoolLabel(false)).toBe('공공·대안')
+    expect(altPoolLabel(true)).toBe('장애인 표기 공공·대안')
+    expect(poolCountText(altPoolLabel(true), { matched: 0, total: 0 })).toBe('장애인 표기 공공·대안 0곳')
   })
 })

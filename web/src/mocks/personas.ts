@@ -8,6 +8,7 @@ import type { AltEdge, AssessResponse, DemoPersona, Selection, VoucherFacility }
 import ALT_EDGES_JSON from './contract/alt_edges.json'
 // rules.json public_program.benefit 과 같은 문구(목 엔진과 1벌) — '무료/저가'로 단정하지 않는다.
 import { PUBLIC_BENEFIT } from './engine'
+import { publicFeeBlock, publicFeeRegion } from './publicFee'
 import FACILITIES_JSON from './contract/facilities.json'
 import PERSONAS_DEMO_JSON from './contract/personas_demo.json'
 
@@ -511,4 +512,26 @@ const P5: AssessResponse = {
   },
 }
 
-export const PERSONA_RESPONSES: Record<string, AssessResponse> = { P1, P2, P3, P4, P5 }
+// 최상위 public_fee(2026-09-28): 서버와 같은 규칙 — public_program 엣지가 블록을 갖고 있으면 그 블록
+// (같은 매칭 함수의 같은 출력, test_public_fee_eligible 가 서버에서 고정), 없으면 목 포트로 계산.
+function withPublicFee(pid: string, res: AssessResponse): AssessResponse {
+  const edge = (res.alt_edges ?? []).find((e) => e.to === 'public_program' && e.region)
+  if (edge) {
+    const { region, law, operator, scope, checked, reductions, no_reduction_for, caveats } = edge
+    return { ...res, public_fee: { region, law, operator, scope, checked, reductions, no_reduction_for, caveats } }
+  }
+  const req = PERSONA_REQUESTS.find((p) => p.id === pid)!
+  return {
+    ...res,
+    public_fee: publicFeeBlock(publicFeeRegion(req.sigungu_cd), {
+      age: req.age,
+      income_class: req.income_class,
+      special: req.special ?? [],
+      disability_has: req.disability.has,
+    }),
+  }
+}
+
+export const PERSONA_RESPONSES: Record<string, AssessResponse> = Object.fromEntries(
+  Object.entries({ P1, P2, P3, P4, P5 }).map(([pid, res]) => [pid, withPublicFee(pid, res)]),
+)

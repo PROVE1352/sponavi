@@ -205,8 +205,14 @@ fi
 
 echo "== 6. Caddy 라우트 (DNS 등록돼 있을 때만) =="
 if nslookup "$DOMAIN" >/dev/null 2>&1; then
-  ssh "$HOST" "grep -q '$DOMAIN' /etc/caddy/Caddyfile || { printf '\n%s {\n\treverse_proxy 127.0.0.1:8100\n}\n' '$DOMAIN' | sudo tee -a /etc/caddy/Caddyfile >/dev/null && sudo systemctl reload caddy; }"
-  echo "https://$DOMAIN 라우트 적용"
+  # Caddyfile 은 root:caddy 640(2026-09-27 서버 하드닝) — 일반 사용자 grep 은 '권한 없음'으로 실패해
+  # "블록 없음"으로 오판, 같은 사이트 블록을 중복 append → reload 실패(2026-09-28 사고). 그래서
+  # sudo 로 읽고, 읽기 자체가 실패하면(종료코드 2) 아무것도 쓰지 않고 멈춘다.
+  ssh "$HOST" "set -e; rc=0; sudo grep -qF '$DOMAIN {' /etc/caddy/Caddyfile || rc=\$?
+    if [ \$rc -eq 0 ]; then echo '라우트 이미 있음 — 변경 없음'
+    elif [ \$rc -eq 1 ]; then printf '\n%s {\n\treverse_proxy 127.0.0.1:8100\n}\n' '$DOMAIN' | sudo tee -a /etc/caddy/Caddyfile >/dev/null && sudo systemctl reload caddy && echo '라우트 추가·reload'
+    else echo '[X] Caddyfile 읽기 실패 — 수정하지 않음' >&2; exit 1; fi"
+  echo "https://$DOMAIN 라우트 확인 완료"
 else
   echo "SKIP: $DOMAIN 미등록(NXDOMAIN) — 내도메인.한국에서 A레코드 193.123.163.215 등록 후 재실행하면 라우트만 추가됨"
 fi

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 되나요 배포: 로컬 빌드 → rsync → 서버 docker build/up → 워치독 설치 → (DNS 있으면) Caddy → 스모크
+# 스포내비 배포: 로컬 빌드 → rsync → 서버 docker build/up → 워치독 설치 → (DNS 있으면) Caddy → 스모크
 #
 # 사용:
 #   bash deploy/deploy.sh              # 코드만 배포 — 서버 DB 는 건드리지 않는다(기본)

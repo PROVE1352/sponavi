@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doenayo real-data ETL (key-injected). SPEC §2.
+"""SpoNavi real-data ETL (key-injected). SPEC §2.
 
 Reads DATA_GO_KR_KEY and pulls five public datasets, normalizing each into the
 SAME JSON schema as data/fixtures/*.json, written to data/raw/:
@@ -311,7 +311,7 @@ SOURCES = {
 # ---------------------------------------------------------------------------
 def _die_no_key() -> None:
     sys.stderr.write(
-        "\n[되나요 fetch_data] 환경변수 DATA_GO_KR_KEY 가 없습니다.\n"
+        "\n[스포내비 fetch_data] 환경변수 DATA_GO_KR_KEY 가 없습니다.\n"
         "실데이터를 받으려면 공공데이터포털(data.go.kr)에서 아래 5개 API 활용신청 후\n"
         "발급받은 '일반 인증키(Decoding)'를 환경변수로 주입하세요:\n"
         "  - 15107783 스포츠강좌이용권 등록시설\n"
@@ -327,7 +327,7 @@ def _die_no_key() -> None:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Doenayo 실데이터 ETL (키 주입형)")
+    ap = argparse.ArgumentParser(description="SpoNavi 실데이터 ETL (키 주입형)")
     ap.add_argument("--only", help="특정 data.go.kr id 하나만 처리")
     args = ap.parse_args()
 

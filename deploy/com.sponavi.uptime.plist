@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- 되나요 업타임 프로브 — 맥 launchd, 5분 주기. 설치:
+<!-- 스포내비 업타임 프로브 — 맥 launchd, 5분 주기. 설치:
      cp deploy/com.sponavi.uptime.plist ~/Library/LaunchAgents/ && launchctl load -w ~/Library/LaunchAgents/com.sponavi.uptime.plist
      해제: launchctl unload -w ~/Library/LaunchAgents/com.sponavi.uptime.plist
      ProgramArguments 의 스크립트 경로는 리포 위치에 맞게 수정. 맥이 잠들면 공백이 생긴다(README 참조). -->

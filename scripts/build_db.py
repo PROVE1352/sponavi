@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize the nationwide Doenayo SQLite DB from bulk raw JSON.
+"""Materialize the nationwide SpoNavi SQLite DB from bulk raw JSON.
 
     data/raw/{voucher_facility,voucher_course,dvoucher_facility,dvoucher_course,
               public_facility}.json   (scripts/bulk_fetch.py output, whole-country)

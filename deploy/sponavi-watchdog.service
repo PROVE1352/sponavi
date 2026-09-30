@@ -1,5 +1,5 @@
 [Unit]
-Description=Doenayo container health watchdog (restart on unhealthy)
+Description=SpoNavi container health watchdog (restart on unhealthy)
 After=docker.service
 Requires=docker.service
 

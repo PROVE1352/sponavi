@@ -1,4 +1,6 @@
-# 되나요 PRD (Product Requirements Document) v1.10
+# 스포내비 PRD (Product Requirements Document) v1.10
+
+> **이름 회귀(2026-09-05)**: 되나요(Doenayo) → **스포내비(SpoNavi)**, 도메인 `sponavi.kro.kr`(doenayo.kro.kr는 301 리다이렉트). 아래 2026-08-28 이름 변경 기록과 본문의 "되나요"는 당시 기록이다.
 
 > **디자인 언어 교체(2026-08-28)**: 디자인 시스템 토큰 v2(액션 블루·둥근 카드·알약 칩·배지) → **B · 종이 메모**(종이 `#f7f3ea`·잉크 `#1f2a44`·인주 `#c0532b`, 나눔명조 헤드/고운돋움 본문, 카드·그림자·배지 없음, 괘선만). 스펙 `docs/designs/b-paper-tokens.md`, 캔버스 `docs/designs/canvas/`. 챗 화자 아바타(나비) 삭제. testid·문구·레인 로직·접근성 규칙은 불변.
 

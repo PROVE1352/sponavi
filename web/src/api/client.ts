@@ -33,7 +33,13 @@ import {
 } from '../mocks'
 import { resolveMockAccessibility } from '../mocks/accessibility'
 import { MockSearchError, mockFacilitySearch } from '../mocks/search'
-import type { FacilitySearchParams, FacilitySearchResponse } from '../types_search'
+import { MockAreaError, mockAreaSearch } from '../mocks/area'
+import type {
+  FacilityAreaParams,
+  FacilityAreaResponse,
+  FacilitySearchParams,
+  FacilitySearchResponse,
+} from '../types_search'
 
 export const IS_MOCK = import.meta.env.VITE_MOCK === '1'
 
@@ -326,4 +332,33 @@ export function searchFacilities(
   }
   if (params.age != null) qs.set('age', String(params.age))
   return get<FacilitySearchResponse>(`/facilities/search?${qs.toString()}`, 10_000, signal)
+}
+
+// 지도 범위("이 지역에서 다시 찾기") 검색 — 좌표가 확인된 시설만 범위로 판정하고, 근사 좌표 시설은
+// unlocated(시군구 전체 수)로 따로 싣는다. 자격 판정 없음(docs/API.md GET /api/facilities/in-bounds).
+// 목 모드는 mocks/area 가 같은 규칙으로 응답한다(422 도 같은 봉투·코드로 흉내낸다).
+export function searchFacilitiesInBounds(
+  params: FacilityAreaParams,
+  signal?: AbortSignal,
+): Promise<FacilityAreaResponse> {
+  if (useMockData()) {
+    try {
+      return delay(mockAreaSearch(params), 120)
+    } catch (e) {
+      const code = e instanceof MockAreaError ? e.code : 'INVALID_REQUEST'
+      const msg = e instanceof Error ? e.message : '요청을 처리할 수 없습니다.'
+      return Promise.reject(new ApiCallError('client', code, msg, { status: 422 }))
+    }
+  }
+  const qs = new URLSearchParams({
+    min_lat: String(params.min_lat),
+    min_lon: String(params.min_lon),
+    max_lat: String(params.max_lat),
+    max_lon: String(params.max_lon),
+    program: params.program,
+  })
+  if (params.q != null) qs.set('q', params.q)
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  if (params.age != null) qs.set('age', String(params.age))
+  return get<FacilityAreaResponse>(`/facilities/in-bounds?${qs.toString()}`, 10_000, signal)
 }

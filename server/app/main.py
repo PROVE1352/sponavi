@@ -28,7 +28,9 @@ from .models import AssessRequest, ChatNluRequest, FitnessRequest
 from .personas import PERSONAS
 from .store import REPO_ROOT, get_store
 
-app = FastAPI(title="SpoNavi API", version="1.0")
+# 공개 운영에서는 자동 API 문서(/docs·/redoc·/openapi.json)를 닫는다 — CSP(script-src 'self')로 CDN 스크립트가
+# 막혀 빈 화면이 되고, 심사·이용자에게 보일 이유가 없다(2026-09-30). 계약은 docs/API.md 가 정본.
+app = FastAPI(title="SpoNavi API", version="1.0", docs_url=None, redoc_url=None, openapi_url=None)
 
 # ---------------------------------------------------------------------------
 # 프로세스 메타 (관측 가능성) — GET /api/health 확장 필드용
@@ -453,4 +455,40 @@ def get_facilities_search(
     return engine.search_facilities(
         get_store(), sigungu_cd=sigungu_cd, q=qs, program=program,
         limit=min(limit, engine.SEARCH_LIMIT_MAX), lat=lat, lon=lon, age=age,
+    )
+
+
+# 지도 범위 검색("이 지역에서 다시 찾기") — 화면 범위 안의 위치가 확인된(real 등급) 시설만
+# 점으로, 정확한 위치를 확인할 수 없는 시설은 시군구 전체 수(unlocated)로 따로 알린다.
+# 좌표 등급·공간 인덱스는 워커 메모리 안(app/area_index.py) — DB 무변경. docs/API.md 참조.
+@app.get("/api/facilities/in-bounds")
+def get_facilities_in_bounds(
+    min_lat: float = Query(..., ge=-90, le=90),
+    min_lon: float = Query(..., ge=-180, le=180),
+    max_lat: float = Query(..., ge=-90, le=90),
+    max_lon: float = Query(..., ge=-180, le=180),
+    program: Literal["svoucher", "dvoucher", "public"] = "svoucher",
+    q: Optional[str] = Query(None),
+    limit: int = Query(engine.AREA_LIMIT_DEFAULT, ge=1),
+    age: Optional[int] = Query(None, ge=0, le=120),
+) -> dict:
+    # ② q: 파라미터가 있을 때만 키워드 조건. 접은 뒤 1~30자.
+    qs: Optional[str] = None
+    if q is not None:
+        qs = " ".join(q.split())
+        if not qs or len(qs) > engine.SEARCH_Q_MAX:
+            return _error(
+                "INVALID_REQUEST",
+                f"입력값 오류(q): 검색어는 1~{engine.SEARCH_Q_MAX}자로 입력해 주세요.",
+                status=422,
+            )
+    # ③ 유한수·min<max → ④ 국내 범위와 겹침 → ⑤ 대각선 ≤ 20km. NaN·inf 는 ① ge/le 에서
+    # 이미 422 지만, math.isfinite 로 한 번 더 막는다(area_bounds_problem).
+    problem = engine.area_bounds_problem(min_lat, min_lon, max_lat, max_lon)
+    if problem is not None:
+        code, message = problem
+        return _error(code, message, status=422)
+    return engine.area_search(
+        get_store(), min_lat=min_lat, min_lon=min_lon, max_lat=max_lat, max_lon=max_lon,
+        program=program, q=qs, limit=min(limit, engine.AREA_LIMIT_MAX), age=age,
     )

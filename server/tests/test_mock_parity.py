@@ -303,3 +303,53 @@ def test_public_program_contract_block_matches_db(db_store, pid):
     actual = next(e for e in _assess(db_store, pid)["alt_edges"] if e["to"] == "public_program")
     for k in ("curated", "reductions", "no_reduction_for", "caveats", "law", "region", "checked"):
         assert expected.get(k) == actual.get(k), f"{pid}.{k} 불일치"
+
+
+# ---------------------------------------------------------------------------
+# area_search.json — 지도 범위 검색(GET /api/facilities/in-bounds) 계약
+# 상수·표·cases 대조는 test_area_search.py(C1·C2). 여기서는 계약 JSON 이 **기존 서버 사실**
+# (search 직렬화·실 DB 시군구 이름)과 어긋나지 않는지만 본다 — 목이 이 JSON 을 그대로 쓰므로.
+# ---------------------------------------------------------------------------
+def _ro_db_conn():
+    """실 DB 를 immutable 읽기 전용으로(SPONAVI_RO_DB 또는 data/sponavi.db). 없으면 None.
+    db_store(RW·WAL 전환) 대신 쓴다 — 동결본에 -wal/-shm 을 만들지 않는다."""
+    import os
+
+    from app import store as store_mod
+
+    path = Path(os.environ.get("SPONAVI_RO_DB") or (store_mod.data_dir() / "sponavi.db"))
+    if not path.exists():
+        return None
+    conn = sqlite3.connect(f"file:{path}?mode=ro&immutable=1", uri=True)
+    try:
+        conn.execute("SELECT cd, nm FROM sigungu LIMIT 1").fetchall()
+    except sqlite3.Error:
+        conn.close()
+        return None
+    return conn
+
+
+def test_area_search_row_keys_match_search_serializer(store):
+    """계약 row_keys(목 행 모양) = 서버 /api/facilities/search 행 키 집합(fixtures)."""
+    from app import engine
+
+    keys = _contract("area_search")["row_keys"]
+    v = engine.search_facilities(store, sigungu_cd="11290", q="성북")["facilities"]
+    p = engine.search_facilities(store, sigungu_cd="11290", q="성북", program="public")["facilities"]
+    assert v and p
+    assert sorted(v[0]) == keys["voucher"]
+    assert sorted(p[0]) == keys["public"]
+
+
+def test_area_search_dataset_sigungu_names_match_db():
+    """계약 dataset x 의 중심점 표(28260 서구·28275 서해구·28290 검단구·27170 서구)의 이름이
+    실 DB 시군구 이름과 같다 — 목·서버가 실 DB 에 없는 이름을 지어내지 않게."""
+    conn = _ro_db_conn()
+    if conn is None:
+        pytest.skip("data/sponavi.db 없음 — 실DB 시군구 이름 대조 스킵")
+    try:
+        db = dict(conn.execute("SELECT cd, nm FROM sigungu").fetchall())
+    finally:
+        conn.close()
+    for sg in _contract("area_search")["datasets"]["x"]["extra_sigungu"]:
+        assert db.get(sg["cd"]) == sg["nm"], (sg["cd"], sg["nm"], db.get(sg["cd"]))

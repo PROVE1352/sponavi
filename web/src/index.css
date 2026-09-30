@@ -169,6 +169,14 @@ main [data-testid='fitness-result'] {
   scroll-margin-top: var(--header-h);
 }
 
+/* 컨텍스트 패널의 포커스 대상(탭 버튼 · 시설 검색 입력칸) — 키보드 Tab 으로 들어올 때도 브라우저의 포커스 스크롤이
+   sticky 헤더 밑(뷰포트 "안")에 걸친 대상을 꺼내게 한다. 패널이 스스로 옮기는 포커스(K4·K6)는 ContextPanel 의
+   revealFocused 가 헤더와 목록 칸의 sticky 막대를 직접 재서 꺼낸다. */
+[data-testid='context-panel'] [role='tab'],
+[data-testid='facility-search-input'] {
+  scroll-margin-top: var(--header-h);
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -419,6 +427,20 @@ body {
   background: #1e293b;
 }
 
+/* 지도 안 쌓임 순서 — 마커 < "이 지역에서 다시 찾기" 오버레이 < 팝업 < 컨트롤(±·ⓘ).
+   · 오버레이(NearbyMap, z-1)는 지도 컨테이너 **앞** 형제라 같은 쌓임 맥락에 있다.
+   · 마커(강조 마커는 z-index 2)는 캔버스 컨테이너 안에 있다 — 그 컨테이너를 격리해 마커 전부를 z 0 층에 가둔다
+     (강조 마커가 오버레이 버튼 위로 올라와 버튼을 덮지 않게).
+   · 팝업(지도 컨테이너 직속)은 z 1 — 오버레이와 같은 z 이지만 문서 순서가 뒤라 위에 그려진다. 오버레이가 위면
+     팝업을 연 채 지도를 조금만 끌어도 버튼이 다시 떠서 시설 이름·닫기(×)를 덮고, ×를 누르면 팝업이 닫히는 대신
+     범위 검색이 실행됐다. 컨트롤(z 2)보다는 아래 — MapLibre 기본(± 버튼이 팝업 위)을 유지한다. */
+[data-testid='nearby-map'] .maplibregl-canvas-container {
+  isolation: isolate;
+}
+[data-testid='nearby-map'] .maplibregl-popup {
+  z-index: 1;
+}
+
 /* 팝업 다크 대비 — 본문·꼬리(삼각형)·닫기 버튼 */
 .dark .maplibregl-popup-content {
   background: #1e293b;
@@ -503,6 +525,34 @@ body {
   box-shadow:
     0 0 0 3px var(--color-paper-dark),
     0 2px 10px rgb(0 0 0 / 0.55);
+}
+
+/* 지도 범위 결과: 같은 종류·같은 좌표 n곳을 한 마커로 묶었을 때의 개수 배지(잉크·종이, 11px).
+   좌표를 흩뜨리지 않는다 — 없는 위치를 지어내지 않고 "같은 자리 n곳"이라고 적는다. */
+.marker-count {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+.dark .marker-count {
+  background: var(--color-ink-dark);
+  color: var(--color-paper-dark);
+}
+.map-popup-list {
+  margin: 4px 0 0;
+  padding-left: 1.1em;
+  list-style: disc;
 }
 
 /* ── "글씨 크게"(헤더 토글, html.text-large) ─────────────────────────────

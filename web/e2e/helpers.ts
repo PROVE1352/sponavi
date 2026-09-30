@@ -124,7 +124,16 @@ export async function shot(page: Page, path: string): Promise<void> {
   await settleTypewriter(page)
   await page.addStyleTag({ content: '[class*="sticky"]{position:static !important}' })
   // 등장 모션(msg-in)이 진행 중인 프레임을 잡지 않도록 애니메이션은 종료 상태로 고정.
-  await page.screenshot({ path, fullPage: true, animations: 'disabled' })
+  await page.screenshot({ path: shotPath(path), fullPage: true, animations: 'disabled' })
+}
+
+// 심사용 캡처(e2e-shots/*.png)는 저장소에 추적되는 파일이다. 회귀 검증으로 스펙을 돌릴 때마다 지도 타일
+// 렌더링의 비결정성 때문에 수백 바이트가 다른 PNG 로 덮어써져, 관계없는 바이너리 변경이 기능 커밋에 딸려 들어간다.
+// E2E_SHOTS_DIR 이 있으면 같은 파일 이름으로 그 폴더에 쓴다(캡처를 새로 뜰 때만 비워 두고 돌린다).
+export function shotPath(path: string): string {
+  const dir = process.env.E2E_SHOTS_DIR
+  if (!dir) return path
+  return `${dir.replace(/\/+$/, '')}/${path.split('/').pop()}`
 }
 
 // 봇 발화 연출이 완전히 끝날 때까지 — 순차 등장 큐가 남은 버블을 다 열고(FR-12 AC10 v1.6),
@@ -268,4 +277,70 @@ export async function expectAtBottom(page: Page, message: string): Promise<void>
       { message, timeout: 8_000 },
     )
     .toBeLessThanOrEqual(2)
+}
+
+// ── "이 지역에서 다시 찾기"(지도 범위 검색) ────────────────────────────────
+// 지도 위 버튼(사용자가 지도를 직접 움직였을 때만 뜬다).
+export function areaButton(page: Page): Locator {
+  return page.getByTestId('area-search-button')
+}
+
+// 지도 가운데(소수 5자리 "lat,lon") — moveend 마다 갱신되는 DOM 통로.
+export async function mapCenter(page: Page): Promise<string | null> {
+  return mapBox(page).getAttribute('data-center')
+}
+
+// 사용자처럼 휠로 굴려 지도까지 올라간다. 대화 스트림의 바닥 추종(stick)은 실제 휠·터치로만
+// 풀린다 — 프로그램 스크롤(scrollIntoView)만 쓰면 추종이 살아 있어, 패널 높이가 자라는 순간
+// 화면이 대화 바닥으로 끌려간다(실사용에서는 지도를 보려고 이미 손으로 올라와 있다).
+export async function userScrollToMap(page: Page): Promise<void> {
+  await page.mouse.move(2, 300)
+  await page.mouse.wheel(0, -40)
+  await mapBox(page).scrollIntoViewIfNeeded()
+}
+
+// 지도 가운데를 잡고 마우스로 끈다(down → move 8단계 → up). 관성 이동이 뒤따를 수 있다.
+export async function dragMap(page: Page, dx: number, dy: number): Promise<void> {
+  const box = await mapBox(page).boundingBox()
+  if (!box) throw new Error('지도 박스가 없다')
+  const x = box.x + box.width / 2
+  const y = box.y + box.height / 2
+  await page.mouse.move(x, y)
+  await page.mouse.down()
+  await page.mouse.move(x + dx, y + dy, { steps: 8 })
+  await page.mouse.up()
+}
+
+// 지도 이동이 끝나고(data-moving≠true = moveend 이후) data-center(와 data-zoom)가 300ms 동안 바뀌지 않을 때까지.
+// 고정 sleep 대신 쓴다. ± 버튼 확대·축소는 가운데가 그대로라 배율도 함께 본다.
+// data-center 는 moveend 에서만 쓰인다 — 관성 이동 중에는 값이 그대로라 "300ms 동안 그대로"만 보면 지도가 아직
+// 미끄러지는 중(120~150px 드래그는 mouseup 뒤 약 480ms 에 moveend)에 이동 전 가운데를 들고 끝났다고 판정한다.
+// 그래서 이동 중 표식(movestart→true, moveend→false)이 꺼진 뒤부터 잰다.
+export async function waitMoveSettled(page: Page, timeout = 6_000): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector('[data-testid="nearby-map"]')
+      const w = window as unknown as { __mc?: string; __mcAt?: number }
+      if (el?.getAttribute('data-moving') === 'true') {
+        delete w.__mc
+        delete w.__mcAt
+        return false
+      }
+      const c = `${el?.getAttribute('data-center') ?? ''}|${el?.getAttribute('data-zoom') ?? ''}`
+      const now = performance.now()
+      if (w.__mc !== c || w.__mcAt == null) {
+        w.__mc = c
+        w.__mcAt = now
+        return false
+      }
+      return now - w.__mcAt >= 300
+    },
+    undefined,
+    { polling: 50, timeout },
+  )
+  await page.evaluate(() => {
+    const w = window as unknown as { __mc?: string; __mcAt?: number }
+    delete w.__mc
+    delete w.__mcAt
+  })
 }

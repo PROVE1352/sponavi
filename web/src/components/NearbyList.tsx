@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import type { AlternativeFacility, Nearby, VoucherFacility } from '../types'
 import type { AccessibilityMap, FacilityAccessibility } from '../types_accessibility'
 import { accessibilitySourceLine } from '../types_accessibility'
@@ -20,14 +20,64 @@ import {
   KeepDates,
 } from './ui'
 import { AccessibilityFilter } from './AccessibilityFilter'
-import type { FacilitySearchScope, SearchMapPoint } from '../types_search'
+import type { FacilitySearchProgram, UnlocatedArea } from '../types_search'
 import {
   FacilitySearchForm,
   SearchNotice,
   SearchStatus,
   ZERO_HINT,
   useFacilitySearch,
+  type InputVia,
 } from './FacilitySearch'
+import { sideResult, type AreaDone, type Side } from './AreaSearch'
+import {
+  AREA_TEXT,
+  areaSectionPlan,
+  countText,
+  programNoun,
+  searchInText,
+  sectionFailedText,
+  sectionZeroText,
+  unlocatedHeadline,
+  unlocatedItemText,
+  unlocatedSearchLabel,
+  voucherGuide,
+  type SectionPlan,
+} from '../lib/areaSearch'
+
+// 패널(ContextPanel)이 소유한 키워드 검색 상태와 폼 제어(계약서 §6.7 — 훅을 패널로 끌어올렸다).
+export interface KeywordControls {
+  state: ReturnType<typeof useFacilitySearch>['state']
+  // 지도 범위 결과가 목록을 대신하는 동안 키워드 상태 한 줄은 비워 둔다(낭독 영역은 유지).
+  statusSuppressed?: boolean
+  // 검색 범위를 다른 시군구로 덮어썼는데 아직 검색어가 없다(K6 · q 없음, 또는 덮어쓴 채 "검색 지우기").
+  // 이때 목록 본문에 내 지역 근처 목록을 두지 않고 이 안내를 둔다 — 바로 위 도움말이 "{다른 시군구} 안에서"라
+  // 내 지역 시설(거리·도보 포함)이 그 시군구 결과처럼 읽힌다(SPEC §0).
+  scopePrompt?: string | null
+  form: {
+    sigunguLabel?: string
+    help?: string
+    busy: boolean
+    active: boolean
+    onSubmit: (q: string, via: InputVia) => void
+    onClear: (via: InputVia) => void
+    // 모드가 바뀔 때 다시 마운트(입력칸 값 되돌리기)
+    formKey: string | number
+    initialValue: string
+    inputRef?: RefObject<HTMLInputElement | null>
+    onScopeReset?: () => void
+  }
+}
+
+// 목록 탭의 지도 범위 결과(계약서 §6.9).
+export interface AreaListView {
+  done: AreaDone
+  voucherProgram: FacilitySearchProgram
+  homeLabel: string
+  disability: boolean
+  onSearchArea: (a: UnlocatedArea) => void
+  onSearchHome: () => void
+}
 
 // FR-10: dvoucher(장애인 가맹) 시설의 접근성 보조 정보(별도 API, engine 무접촉).
 // 부분 실패 격리: 이 조회가 실패해도 시설 리스트는 그대로 뜨고, 인라인 안내 + 재시도만 노출한다.
@@ -93,8 +143,8 @@ export function NearbyList({
   filterSports,
   onClearFilter,
   onLocate,
-  search,
-  onSearchHits,
+  keyword,
+  area,
   disabilityFiltered = false,
   hasPublicProgram = false,
 }: {
@@ -107,52 +157,15 @@ export function NearbyList({
   hasPublicProgram?: boolean
   // 시설 이름을 누르면 지도 탭으로 바꾸고 그 좌표로 확대한다(패널 전용).
   onLocate?: (id: string) => void
-  // 동·도로명·시설명 검색 범위(현재 결과의 시군구). 없으면 검색창을 그리지 않는다.
-  search?: FacilitySearchScope
-  // 검색 결과 중 실좌표 행을 지도에 얹는다(근사 행은 지도에 찍지 않는다 — P-1).
-  onSearchHits?: (points: SearchMapPoint[]) => void
+  // 동·도로명·시설명 검색(패널 소유). 없으면 검색창을 그리지 않는다.
+  keyword?: KeywordControls
+  // 지도 범위 결과("이 지역에서 다시 찾기"). 있으면 목록을 대신한다(범위 > 키워드 > 근처 기본).
+  area?: AreaListView | null
 }) {
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([])
-  const { state: searchState, run: runSearch, clear: clearSearch } = useFacilitySearch(
-    search,
-    nearby,
-  )
+  const searchState = keyword?.state ?? { status: 'idle' as const }
   const searchActive = searchState.status !== 'idle'
-
-  useEffect(() => {
-    if (!onSearchHits) return
-    if (searchState.status !== 'done') {
-      onSearchHits([])
-      return
-    }
-    const r = searchState.result
-    const pts: SearchMapPoint[] = []
-    for (const v of r.vouchers) {
-      if (v.coord_source === 'centroid' || v.lat == null || v.lon == null) continue
-      pts.push({
-        id: v.id,
-        name: v.name,
-        lat: v.lat,
-        lon: v.lon,
-        kind: v.source === 'dvoucher' ? 'dvoucher' : 'voucher',
-        dist_km: v.dist_km,
-        detail: v.sports.join(' · '),
-      })
-    }
-    for (const a of r.alts) {
-      if (a.coord_source === 'centroid' || a.lat == null || a.lon == null) continue
-      pts.push({
-        id: a.id,
-        name: a.name,
-        lat: a.lat,
-        lon: a.lon,
-        kind: 'public',
-        dist_km: a.dist_km,
-        detail: a.sports.join(' · '),
-      })
-    }
-    onSearchHits(pts)
-  }, [searchState, onSearchHits])
+  const areaShown = area != null
 
   const dvoucherIds = useMemo(
     () =>
@@ -226,7 +239,9 @@ export function NearbyList({
   return (
     <section aria-label="근처 자원 목록" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <h2 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">근처 자원</h2>
+        <h2 className="font-serif text-[18px] font-extrabold text-ink dark:text-ink-dark">
+          {areaShown ? AREA_TEXT.listTitle : '근처 자원'}
+        </h2>
         {filterActive && (
           <div className="flex min-w-0 items-center gap-2">
             {/* 최대 3개 + "외 N" — 표기 변형(체력단련장업 등)은 접는다. 전체는 아래 펼침 목록. */}
@@ -245,6 +260,11 @@ export function NearbyList({
           </div>
         )}
       </div>
+      {filterActive && areaShown && (
+        <p data-testid="area-filter-note" className="-mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
+          {AREA_TEXT.filterNote}
+        </p>
+      )}
       {filterActive && sportSummary.rest > 0 && (
         <details data-testid="filter-sports-all" className="-mt-2 text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
           <summary className="cursor-pointer">필터 종목 전체 {sportSummary.all.length}개 보기</summary>
@@ -252,26 +272,41 @@ export function NearbyList({
         </details>
       )}
 
-      {search && (
+      {keyword && (
         <div className="flex flex-col gap-2">
           <FacilitySearchForm
-            sigunguLabel={search.sigungu_nm}
-            busy={searchState.status === 'loading'}
-            active={searchActive}
-            onSubmit={runSearch}
-            onClear={clearSearch}
+            key={keyword.form.formKey}
+            sigunguLabel={keyword.form.sigunguLabel}
+            help={keyword.form.help}
+            busy={keyword.form.busy}
+            active={keyword.form.active}
+            onSubmit={keyword.form.onSubmit}
+            onClear={keyword.form.onClear}
+            initialValue={keyword.form.initialValue}
+            inputRef={keyword.form.inputRef}
+            onScopeReset={keyword.form.onScopeReset}
           />
-          <SearchStatus state={searchState} />
+          <SearchStatus state={keyword.statusSuppressed ? { status: 'idle' } : searchState} />
         </div>
       )}
 
-      {/* 검색 중이면 결과가 아래 목록을 대신한다("검색 지우기"로 돌아온다) */}
-      {searchActive ? (
+      {/* 우선순위: 지도 범위 결과 > 키워드 결과 > 근처 기본 목록 */}
+      {areaShown ? (
+        <AreaResults view={area} altsFirst={altsFirst} onLocate={onLocate} />
+      ) : searchActive ? (
         <SearchResults
           state={searchState}
           altsFirst={altsFirst}
           onLocate={onLocate}
         />
+      ) : keyword?.scopePrompt ? (
+        <p
+          data-testid="facility-search-scope-pending"
+          className={`flex items-start gap-2 text-[13px] leading-[1.6] break-keep text-ink dark:text-ink-dark ${TINT_BOX}`}
+        >
+          <InfoIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          {keyword.scopePrompt}
+        </p>
       ) : (
       <>
       {/* FR-10: 편의시설 칩 필터 — 장애 있음(dvoucher 가맹) 결과에서만 노출 */}
@@ -395,6 +430,225 @@ export function NearbyList({
       </>
       )}
     </section>
+  )
+}
+
+// ── 지도 범위 결과(목록 탭) ─────────────────────────────────────────────
+// 행은 키워드 검색 결과와 같은 행 컴포넌트(이용권 feeOnly · 공공 AltRow) — dist_km 가 null 이라 거리 표기가 없다.
+// 0건 규칙은 섹션마다 따로(areaSectionPlan). 실패한 쪽은 0건·안내·위치 미상을 두지 않는다.
+function AreaResults({
+  view,
+  altsFirst,
+  onLocate,
+}: {
+  view: AreaListView
+  altsFirst: boolean
+  onLocate?: (id: string) => void
+}) {
+  const d = view.done
+  const plan = areaSectionPlan(sideResult(d.voucher), sideResult(d.pub))
+  const homeBtn = (
+    <button type="button" onClick={view.onSearchHome} className={`${BTN_TEXT} text-left`}>
+      {searchInText(view.homeLabel)}
+    </button>
+  )
+  if (plan.neutral) {
+    return (
+      <div data-testid="area-search-results" className="flex flex-col gap-4">
+        <div
+          data-testid="area-search-zero"
+          className={`flex flex-wrap items-center justify-between gap-x-3 text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
+        >
+          <p className="min-w-0">{AREA_TEXT.neutralZero}</p>
+          {homeBtn}
+        </div>
+      </div>
+    )
+  }
+  const voucher = (
+    <AreaSection
+      key="v"
+      testId="area-search-voucher-section"
+      side={d.voucher}
+      program={view.voucherProgram}
+      plan={plan.voucher}
+      q={d.q}
+      onLocate={onLocate}
+      onSearchArea={view.onSearchArea}
+      guide={
+        plan.voucher.kind === 'zero+guide' ? (
+          <div
+            data-testid="area-voucher-guide"
+            className={`flex flex-wrap items-center justify-between gap-x-3 text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
+          >
+            <p className="min-w-0">{voucherGuide(view.voucherProgram)}</p>
+            {homeBtn}
+          </div>
+        ) : null
+      }
+    />
+  )
+  const alts = (
+    <AreaSection
+      key="p"
+      testId="area-search-alt-section"
+      side={d.pub}
+      program="public"
+      plan={plan.public}
+      q={d.q}
+      onLocate={onLocate}
+      onSearchArea={view.onSearchArea}
+      guide={null}
+    />
+  )
+  return (
+    <div data-testid="area-search-results" className="flex flex-col gap-5">
+      {altsFirst ? alts : voucher}
+      {altsFirst ? voucher : alts}
+      {/* 공공 섹션이 결과로 보일 때만(§6.9) — 실패한 공공 섹션("…확인하지 못했어요") 바로 밑에 "모두 보여요"를 두면
+          서로 반박한다. */}
+      {view.disability && d.pub.status === 'ok' && (
+        <p
+          data-testid="area-alt-disability-note"
+          className="text-[12.5px] leading-[1.6] break-keep text-mute dark:text-mute-dark"
+        >
+          {AREA_TEXT.listDisability}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function AreaSection({
+  testId,
+  side,
+  program,
+  plan,
+  q,
+  onLocate,
+  onSearchArea,
+  guide,
+}: {
+  testId: string
+  side: Side
+  program: FacilitySearchProgram
+  plan: SectionPlan
+  q: string | null
+  onLocate?: (id: string) => void
+  onSearchArea: (a: UnlocatedArea) => void
+  guide: ReactNode
+}) {
+  const long = programNoun(program, 'long')
+  if (side.status === 'failed') {
+    return (
+      <div data-testid={testId} className="flex flex-col gap-1.5">
+        <ListHeading title={long} />
+        <p
+          data-testid="area-section-failed"
+          data-program={program}
+          className={`flex items-start gap-2 text-[13px] leading-[1.6] text-ink dark:text-ink-dark ${TINT_BOX}`}
+        >
+          <WarnIcon className="mt-0.5 h-4 w-4 shrink-0" />
+          {sectionFailedText(program)}
+        </p>
+      </div>
+    )
+  }
+  const res = side.res
+  const n = res.facilities.length
+  const aside =
+    res.total > 0 ? (res.truncated ? `${countText(res.total)} 중 ${countText(n)} 표시` : countText(res.total)) : undefined
+  const isVoucher = program !== 'public'
+  return (
+    <div data-testid={testId} className="flex flex-col gap-1.5">
+      <ListHeading title={long} aside={aside} />
+      {res.total === 0 ? (
+        <p
+          data-testid="area-section-zero"
+          data-program={program}
+          className="text-[13px] leading-[1.6] text-mute dark:text-mute-dark"
+        >
+          {sectionZeroText(program)}
+        </p>
+      ) : (
+        <>
+          {isVoucher && (
+            <p
+              data-testid="search-fee-note"
+              className="pb-1 text-[12.5px] leading-[1.6] text-mute dark:text-mute-dark"
+            >
+              수강료만 보여요 · 이용권 지원·내 부담은 위 자격 판정 결과를 따라요
+            </p>
+          )}
+          <ul>
+            {res.facilities.map((f, i) =>
+              isVoucher ? (
+                <VoucherRow key={f.id} v={f as VoucherFacility} index={i + 1} onLocate={onLocate} feeOnly />
+              ) : (
+                <AltRow key={f.id} a={f as AlternativeFacility} index={i + 1} onLocate={onLocate} />
+              ),
+            )}
+          </ul>
+          {res.truncated && (
+            <p
+              data-testid="area-search-truncated-note"
+              className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark"
+            >
+              {AREA_TEXT.truncatedNote}
+            </p>
+          )}
+        </>
+      )}
+      {plan.unlocated && (
+        <UnlocatedBlock program={program} areas={res.unlocated.areas} q={q} onSearchArea={onSearchArea} />
+      )}
+      {guide}
+    </div>
+  )
+}
+
+function UnlocatedBlock({
+  program,
+  areas,
+  q,
+  onSearchArea,
+}: {
+  program: FacilitySearchProgram
+  areas: UnlocatedArea[]
+  q: string | null
+  onSearchArea: (a: UnlocatedArea) => void
+}) {
+  return (
+    <div
+      data-testid="area-unlocated-block"
+      data-program={program}
+      tabIndex={-1}
+      data-focus-anchor=""
+      className={`flex flex-col gap-1.5 text-ink outline-none dark:text-ink-dark ${TINT_BOX}`}
+    >
+      <p className="text-[13.5px] leading-[1.6] font-bold break-keep">{unlocatedHeadline(program, areas, q, 'block')}</p>
+      <p className="text-[12px] leading-[1.6] break-keep text-mute dark:text-mute-dark">{AREA_TEXT.unlocatedSub}</p>
+      <ul className="flex flex-col">
+        {areas.map((a) => (
+          <li
+            key={a.sigungu_cd}
+            className="flex flex-wrap items-center justify-between gap-x-3 border-t border-dashed border-rule first:border-t-0 dark:border-rule-dark"
+          >
+            <span className="text-[13px]">{unlocatedItemText(a)}</span>
+            <button
+              type="button"
+              data-testid="area-unlocated-search"
+              data-sigungu={a.sigungu_cd}
+              aria-label={unlocatedSearchLabel(a)}
+              onClick={() => onSearchArea(a)}
+              className={BTN_TEXT}
+            >
+              {AREA_TEXT.unlocatedSearch}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

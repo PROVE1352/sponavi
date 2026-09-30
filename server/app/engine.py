@@ -1150,3 +1150,176 @@ def search_facilities(
         "truncated": total > len(facilities),
         "facilities": facilities,
     }
+
+
+# ---------------------------------------------------------------------------
+# 지도 범위 검색 — GET /api/facilities/in-bounds (docs/API.md)
+# "이 지역에서 다시 찾기": 화면 범위 안의 **위치가 확인된(real 등급)** 시설만 점으로 돌려주고,
+# 정확한 위치를 확인할 수 없는 시설(시군구 중심점·자리표시 점·먼 행·번지 없는 geocoded·번지 없이 한 점을
+# 함께 쓰는 api)은 시군구 전체 수로 따로 알린다(unlocated). 자격 판정·지원금 차감 없음(search 와 같다).
+# 좌표 등급·공간 인덱스는 프로세스 메모리 안에서만 만든다(app/area_index.py, DB 무변경).
+# 상수는 web/src/mocks/contract/area_search.json 과 같아야 한다(tests C1).
+# ---------------------------------------------------------------------------
+AREA_MAX_DIAG_KM = 20.0
+# 경도 폭(max_lon − min_lon)이 이보다 크면 haversine 은 지구 반대편 **짧은 길**로 재어 범위의 폭을 잃는다
+# (min_lon=−180·max_lon=180 이면 sin²(Δλ/2)≈0 이라 대각선이 위도 차만 남는다). 그런 범위는 대각선과
+# 상관없이 AREA_TOO_WIDE 다 — 범위 판정·가운데 계산은 min_lon ≤ lon ≤ max_lon(긴 길)로 읽기 때문이다.
+AREA_MAX_LON_SPAN_DEG = 180.0
+AREA_LIMIT_DEFAULT = 50
+AREA_LIMIT_MAX = 50
+KOREA_BOUNDS = {"min_lat": 32.5, "max_lat": 39.6, "min_lon": 124.0, "max_lon": 132.5}
+AREA_PLACEHOLDER_MIN_AREAS = 3
+AREA_SUSPECT_MAX_KM = 40.0
+AREA_ROBUST_MIN_ROWS = 5
+AREA_GEOCODED_BNO_PATTERN = r"(?:^|[\s,])(?:산\s?)?[0-9]+(?:-[0-9]+)?(?:번지)?(?=$|[\s,(])"
+AREA_GEOCODED_BNO_RE = re.compile(AREA_GEOCODED_BNO_PATTERN)
+# 한 점 공유(shared_point): api 행 중 주소에 번지(지번·건물번호)가 없는 행이, 역시 번지 없는 **다른 이름의**
+# api 행과 좌표를 **똑같이**(반올림 없음) 함께 쓰면 시군구·읍면동·도로 단위로 지오코딩된 근사 좌표다
+# (실 DB: '대전광역시 동구' 한 줄 주소 88행이 한 점, '경기도 가평군' 31행이 한 점). 이름이 하나뿐인 점
+# (같은 시설 중복 행)과 혼자 있는 점(약수터·공원)은 그대로 둔다. api 주소는 '양덕동477'·'체육로90'처럼
+# 번지가 붙어 적히는 일이 흔해서 geocoded 정규식보다 느슨한 식을 쓴다 — 숫자 뒤에 한글·숫자가 이어지면
+# ('장위3동'·'다문1리'·'2층') 번지가 아니다.
+AREA_SHARED_POINT_MIN_NAMES = 2
+AREA_API_BNO_PATTERN = r"[0-9]+(?:-[0-9]+)?(?:번지)?(?:일원|외)?(?![0-9가-힣])"
+AREA_API_BNO_RE = re.compile(AREA_API_BNO_PATTERN)
+AREA_EVIDENCE_MIN_POINTS = 2
+# 전국에서 이름이 겹치는 시군구명 — unlocated.display_label 에 시도명을 붙인다(tests R8 가
+# 실 DB 에서 도출한 집합과 대조한다).
+AREA_AMBIGUOUS_LABELS = frozenset({"강서구", "고성군", "남구", "동구", "북구", "서구", "중구"})
+
+_AREA_BOUNDS_MSG = "입력값 오류(bounds): min_lat<max_lat, min_lon<max_lon 이어야 합니다."
+_AREA_OUTSIDE_MSG = "대한민국 밖의 범위예요. 국내 지역에서만 찾을 수 있어요."
+
+
+def _num(v: float):
+    """정수값 float 은 int 로(JSON 에 20 이 아니라 20.0 이 찍히지 않게)."""
+    return int(v) if float(v).is_integer() else v
+
+
+def area_diag_km(min_lat: float, min_lon: float, max_lat: float, max_lon: float) -> float:
+    """범위의 대각선(km). 보통은 haversine(남서 모서리 → 북동 모서리).
+
+    경도 폭이 AREA_MAX_LON_SPAN_DEG(180°)를 넘으면 haversine 은 반대편 짧은 길로 재어 폭을 잃는다
+    (−180~180 이면 위도 차 11.1km 만 남아 "20km 이내"로 통과했다). 이 경우는 범위를 읽는 방향 그대로
+    (서→동 긴 길) 위도 평균에서의 경도 호와 위도 호로 평면 근사한다 — 20km 를 넘는 것은 자명하지만
+    거절 메시지의 "대각선 약 …km"가 거짓 숫자가 되지 않게 한다. 웹 lib/areaSearch.ts diagKm 과 같은 식."""
+    if max_lon - min_lon > AREA_MAX_LON_SPAN_DEG:
+        r = 6371.0088  # store.haversine_km 과 같은 반지름(계약 JSON earth_radius_km)
+        phi_m = math.radians((min_lat + max_lat) / 2)
+        dx = math.radians(max_lon - min_lon) * math.cos(phi_m)
+        dy = math.radians(max_lat - min_lat)
+        return r * math.hypot(dx, dy)
+    return haversine_km(min_lat, min_lon, max_lat, max_lon)
+
+
+def area_bounds_problem(
+    min_lat: float, min_lon: float, max_lat: float, max_lon: float,
+) -> Optional[tuple[str, str]]:
+    """검증 3~5단계(계약 §3.2). 문제가 없으면 None, 있으면 (code, message).
+
+    3. 유한수 · min<max(엄격) → INVALID_REQUEST
+    4. KOREA_BOUNDS 와 전혀 겹치지 않음 → AREA_OUT_OF_RANGE (일부만 겹치면 통과, 자르지 않음)
+    5. 대각선 > AREA_MAX_DIAG_KM(정확히 20 은 허용) 또는 경도 폭 > 180° → AREA_TOO_WIDE
+       (경도 폭 180° 초과는 haversine 이 짧은 길로 재는 구멍 — area_diag_km)"""
+    vals = (min_lat, min_lon, max_lat, max_lon)
+    if not all(isinstance(v, (int, float)) and math.isfinite(v) for v in vals):
+        return "INVALID_REQUEST", _AREA_BOUNDS_MSG
+    if not (min_lat < max_lat and min_lon < max_lon):
+        return "INVALID_REQUEST", _AREA_BOUNDS_MSG
+    kb = KOREA_BOUNDS
+    if (
+        max_lat < kb["min_lat"] or min_lat > kb["max_lat"]
+        or max_lon < kb["min_lon"] or min_lon > kb["max_lon"]
+    ):
+        return "AREA_OUT_OF_RANGE", _AREA_OUTSIDE_MSG
+    d = area_diag_km(min_lat, min_lon, max_lat, max_lon)
+    if d > AREA_MAX_DIAG_KM or max_lon - min_lon > AREA_MAX_LON_SPAN_DEG:
+        return (
+            "AREA_TOO_WIDE",
+            f"지도 범위가 너무 넓어요(대각선 약 {d:.1f}km, 최대 {_num(AREA_MAX_DIAG_KM)}km). "
+            "지도를 조금 더 확대해 주세요.",
+        )
+    return None
+
+
+def area_search(
+    store: Store, *, min_lat: float, min_lon: float, max_lat: float, max_lon: float,
+    program: str = "svoucher", q: Optional[str] = None,
+    limit: int = AREA_LIMIT_DEFAULT, age: Optional[int] = None,
+) -> dict:
+    """범위(양 끝 포함) 안 real 등급 시설 + 위치 미상 묶음. 범위 검증은 호출부(main)가
+    area_bounds_problem 으로 마친 뒤 부른다.
+
+    - 정렬: 지도 가운데에서 가까운 순(위도 보정 평면 거리 제곱), 같으면 id 순.
+    - total = 잘라내기 전 일치 수, truncated = total > len(facilities).
+    - 행 모양 = GET /api/facilities/search 와 같다(_voucher_row/_alt_row + addr).
+      dist_km 는 항상 null(거리 원점이 없다). 장애 필터 없음(키워드 검색 계열)."""
+    source = SEARCH_PROGRAMS.get(program)
+    if source is None:
+        raise AssessError("INVALID_PROGRAM", f"알 수 없는 제도입니다: {program}")
+    qs = " ".join(q.split()) if q is not None else ""
+    tokens = list(dict.fromkeys(qs.split()))
+    lim = max(1, min(int(limit), AREA_LIMIT_MAX))
+    bounds = (min_lat, min_lon, max_lat, max_lon)
+
+    idx = store.area_index()
+    total, top_rowids = idx.real_hits(source, bounds, tokens, lim)
+
+    picked: list[dict] = []
+    if top_rowids:
+        marks = ",".join("?" for _ in top_rowids)
+        cur = store.conn.execute(
+            f"SELECT rowid AS _area_rowid, * FROM facilities WHERE rowid IN ({marks})",
+            top_rowids,
+        )
+        by_rowid = {r["_area_rowid"]: r for r in cur.fetchall()}
+        for rid in top_rowids:  # 뽑은 순서(가운데 거리순)로 맞춘다
+            r = by_rowid.get(rid)
+            if r is None:
+                continue
+            f = store._facility_row(r)
+            # 직렬화 직전 재확인: 실좌표 원천 + real 등급만 점으로 내보낸다(P-1).
+            if f["coord_source"] not in _REAL_COORD_SOURCES or idx.is_nonreal(f["id"]):
+                continue
+            f["dist_km"] = None  # 거리 원점 없음 — 거리 미표기
+            picked.append(f)
+
+    if source == "public":
+        facilities = [_alt_row(store, f, age) for f in picked]
+    else:
+        # 자격 미상 — subsidy/copay = null (fee_month 만 사실로 싣는다).
+        facilities = [_voucher_row(store, f, source, age, None) for f in picked]
+    for row, f in zip(facilities, picked):
+        row["addr"] = f.get("addr")
+
+    areas = idx.unlocated(source, bounds, tokens)
+    clat = (min_lat + max_lat) / 2
+    clon = (min_lon + max_lon) / 2
+    return {
+        "bounds": {"min_lat": min_lat, "min_lon": min_lon, "max_lat": max_lat, "max_lon": max_lon},
+        "center": {"lat": round(clat, 7), "lon": round(clon, 7)},
+        "diag_km": round(area_diag_km(min_lat, min_lon, max_lat, max_lon), 1),
+        "max_diag_km": _num(AREA_MAX_DIAG_KM),
+        "program": program,
+        "q": qs or None,
+        "tokens": tokens,
+        "match_fields": ["name", "addr"],
+        "coord_sources": ["api", "geocoded"],
+        "coord_rules": {
+            "placeholder_min_areas": AREA_PLACEHOLDER_MIN_AREAS,
+            "suspect_max_km": _num(AREA_SUSPECT_MAX_KM),
+            "robust_min_rows": AREA_ROBUST_MIN_ROWS,
+            "geocoded_requires_building_no": True,
+            "shared_point_min_names": AREA_SHARED_POINT_MIN_NAMES,
+        },
+        "order": "center_distance",
+        "eligibility_applied": False,
+        "total": total,
+        "truncated": total > len(facilities),
+        "facilities": facilities,
+        "unlocated": {
+            "total": sum(a["count"] for a in areas),
+            "count_basis": "whole_area",
+            "areas": areas,
+        },
+    }

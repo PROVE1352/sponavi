@@ -17,6 +17,7 @@ import json
 import math
 import os
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -158,6 +159,23 @@ def db_mtime_iso() -> Optional[str]:
 # ---------------------------------------------------------------------------
 # geo
 # ---------------------------------------------------------------------------
+# 워커 하나가 커넥션 하나를 스레드풀의 여러 요청이 함께 쓴다(check_same_thread=False, 동기 라우트).
+# sqlite3 모듈의 문장 캐시(cached_statements)는 SQL 문자열이 같으면 **같은 준비된 문장**을 돌려주는데,
+# 두 스레드가 그것을 동시에 bind·step 하면 `InterfaceError: bad parameter or other API misuse`·
+# `IndexError: tuple index out of range` 가 난다(웹은 "이 지역에서 다시 찾기" 한 번에 in-bounds 2건을
+# 동시에 보낸다 — 둘 다 courses_for 를 수십 번 부른다). 캐시를 끄면 호출마다 제 문장을 준비하고,
+# SQLite 자체(serialized 모드)가 커넥션 호출을 직렬화한다. 비용은 in-bounds 1회 약 0.1ms.
+SHARED_CONN_CACHED_STATEMENTS = 0
+
+
+def connect_shared(target: str, **kwargs: Any) -> sqlite3.Connection:
+    """스레드풀이 함께 쓰는 커넥션 — 문장 캐시 없음(위 주석). 앱과 테스트가 모두 이것으로 연다."""
+    return sqlite3.connect(
+        target, check_same_thread=False,
+        cached_statements=SHARED_CONN_CACHED_STATEMENTS, **kwargs,
+    )
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in kilometers."""
     r = 6371.0088
@@ -235,6 +253,29 @@ class Store:
             self._sigungu_alias = {r["old_cd"]: r["new_cd"] for r in cur.fetchall()}
         except sqlite3.OperationalError:
             pass
+        # 지도 범위 검색용 메모리 공간 인덱스(app/area_index.py) — 첫 요청 때 워커당 1회
+        # 지연 빌드한다(시작 워밍업 없음). DB 에는 아무것도 쓰지 않는다(동결본).
+        self._area_index = None
+        self._area_lock = threading.Lock()
+
+    # -- 지도 범위 검색 인덱스 ------------------------------------------------
+    def area_index(self):
+        """AreaIndex 싱글턴(이 Store 당 1개). 이중 확인 잠금 — 동시 첫 호출도 빌드 1회."""
+        idx = self._area_index
+        if idx is None:
+            with self._area_lock:
+                idx = self._area_index
+                if idx is None:
+                    from .area_index import AreaIndex
+
+                    idx = AreaIndex.build(self)
+                    self._area_index = idx
+        return idx
+
+    def invalidate_area_index(self) -> None:
+        """캐시한 인덱스를 버린다 — 다음 area_index() 호출이 다시 빌드한다(테스트 행 삽입 뒤)."""
+        with self._area_lock:
+            self._area_index = None
 
     # -- programs / rules ---------------------------------------------------
     def program(self, pid: str) -> Optional[dict]:
@@ -370,8 +411,10 @@ class Store:
         bbox: Optional[tuple[float, float, float, float]] = None,
     ) -> list[dict]:
         """bbox=(lat_min, lat_max, lon_min, lon_max) — 반경 원을 포함하는 사각형
-        프리필터(idx_fac_geo). 박스 밖 점은 축 거리만으로 반경 밖이 보장되므로
-        하버사인 정밀 필터 결과는 전량 로드와 동일하다(성능만 다름)."""
+        프리필터. 박스 밖 점은 축 거리만으로 반경 밖이 보장되므로 하버사인 정밀 필터
+        결과는 전량 로드와 동일하다(성능만 다름). 좌표 인덱스(idx_fac_geo)는 MySQL
+        스키마에만 있고 SQLite 에는 없다. coord_source 로 거르지 않으므로 지도 범위
+        검색(/api/facilities/in-bounds)은 이 함수 대신 area_index() 를 쓴다."""
         sql = "SELECT * FROM facilities WHERE lat IS NOT NULL AND lon IS NOT NULL"
         args: list = []
         if source is not None:
@@ -624,7 +667,7 @@ def _build_conn(
     facilities: dict, courses: dict, coverage: dict, centroids: dict,
     target: str = ":memory:",
 ) -> sqlite3.Connection:
-    conn = sqlite3.connect(target, check_same_thread=False)
+    conn = connect_shared(target)
     create_schema(conn)
 
     fac_source: dict[str, str] = {}
@@ -699,7 +742,7 @@ def build_store(sqlite_target: str = ":memory:") -> Store:
 
 def open_db_store(path: str) -> Store:
     """Load the prebuilt nationwide DB (scripts/build_db.py output)."""
-    conn = sqlite3.connect(path, check_same_thread=False)
+    conn = connect_shared(path)
     _apply_pragmas(conn)  # 읽기 최적화(WAL/mmap 등) — best-effort, RO 볼륨 안전
     ddir = data_dir()
     rules = _read_json(ddir / "rules.json")

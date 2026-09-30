@@ -197,6 +197,217 @@ svoucher 카드에만, **2026 판정이 소득 사유 하나로만 ✗**(= 연�
   웹은 0건일 때 도로명·시설 이름으로도 찾아보라고 안내한다.
 - 레이트리밋: 일반 `api` 버킷(120/min). 쿼리스트링(검색어)은 액세스 로그에 남지 않는다(P-3).
 
+## GET /api/facilities/in-bounds (2026-09-30 · 지도 범위 검색 "이 지역에서 다시 찾기")
+
+`?min_lat=37.595&min_lon=127.005&max_lat=37.612&max_lon=127.045&program=public[&q=…][&limit=50][&age=…]`
+
+카카오맵 "현 지도에서 검색"과 같은 기능이다. 사용자가 지도를 직접 움직인 뒤 버튼을 누르면 웹이
+**화면 범위(bounds)** 로 이 API 를 부른다(주 이용권 program 1번 + `public` 1번, 동시에 2요청).
+범위 판정에는 **좌표 등급이 `real`인 행만** 쓰고, 정확한 위치를 확인할 수 없는 시설은 점으로
+찍지 않고 **시군구 전체 수**(`unlocated`)로 따로 알린다(SPEC §0 — 근사 좌표를 실좌표처럼 쓰지 않는다).
+배경: 이용권 가맹 28,772곳 중 실좌표는 538곳(성북 11290·인천 서구 28260 일대)뿐이라, 그 밖의
+지역에서 이용권 실좌표 결과 0곳은 정상이다 — 이것을 "가맹 0곳"처럼 보이게 하면 거짓 공급 공백이다.
+
+| 파라미터 | 규칙 |
+|---|---|
+| `min_lat`, `max_lat` | 필수 float, −90~90(아니면 422). |
+| `min_lon`, `max_lon` | 필수 float, −180~180(아니면 422). |
+| `program` | `svoucher`(기본) · `dvoucher` · `public`. 밖의 값은 422. |
+| `q` | 선택. 앞뒤 공백 제거·연속 공백 1칸으로 접은 뒤 **1~30자**(아니면 422). **파라미터가 없으면 키워드 조건이 없다.** |
+| `limit` | 기본 50, 1 미만 422, **50 초과는 50으로 자른다**. |
+| `age` | 선택(0~120). 이용권 행의 대표 수강료(`fee_month`)를 고르는 기준 — search 와 같다. |
+
+범위는 **양 끝 포함**이다.
+
+### 검증 순서와 에러 (서버·웹 게이트·목이 같은 순서)
+
+1. FastAPI 검증(누락·범위 밖·`nan`·`inf`·program·limit·age) → 422 `INVALID_REQUEST`
+2. `q`가 있는데 접은 뒤 비었거나 30자 초과 → 422 `INVALID_REQUEST`
+   `입력값 오류(q): 검색어는 1~30자로 입력해 주세요.`
+3. 유한수가 아니거나 `min_lat < max_lat`·`min_lon < max_lon`(엄격)이 아님 → 422 `INVALID_REQUEST`
+   `입력값 오류(bounds): min_lat<max_lat, min_lon<max_lon 이어야 합니다.` (`math.isfinite`로 한 번 더 막는다)
+4. 국내 범위(lat 32.5–39.6, lon 124.0–132.5)와 **전혀 겹치지 않음** → 422 `AREA_OUT_OF_RANGE`
+   `대한민국 밖의 범위예요. 국내 지역에서만 찾을 수 있어요.` — 일부만 겹치면 통과하고, 범위를 자르지 않는다.
+5. 대각선(`haversine(min_lat,min_lon,max_lat,max_lon)`)이 **20km 초과**(정확히 20은 허용), 또는
+   **경도 폭(`max_lon − min_lon`)이 180° 초과** → 422 `AREA_TOO_WIDE`
+   `지도 범위가 너무 넓어요(대각선 약 {d:.1f}km, 최대 20km). 지도를 조금 더 확대해 주세요.`
+   경도 폭 규칙의 이유: haversine 은 지구 반대편 **짧은 길**로 잰다. `min_lon=-180&max_lon=180` 이면
+   sin²(Δλ/2)≈0 이라 대각선이 위도 차(11.1km)만 남아 통과했고, 가운데(lon 0)에서 가까운 순으로 한반도 서쪽
+   끝 시설이 나왔다. 범위 판정은 `min_lon ≤ lon ≤ max_lon`(긴 길)로 읽으므로 폭 180° 초과는 거절한다.
+   이때 메시지의 `{d}`는 서→동 긴 길 그대로(위도 평균의 경도 호 + 위도 호, 평면 근사) 잰 값이다
+   (`engine.area_diag_km` = 웹 `diagKm` · 계약 JSON `max_lon_span_deg`, cases `E_lon_wrap_*`).
+
+봉투는 다른 에러와 같은 `{"error": {"code", "message"}}`. 20km 근거(위도 37.5): 1280 화면 z12 17.2km 허용 ·
+z11.5 24.3km 거부, 390 화면 z11.5 18.5km 허용 · z11 26km 거부 — 처음 맞춤에서 축소 1번은 되고 2번은 안 된다.
+
+### 좌표 등급 (`coord_class`, 워커 메모리 안에서 인덱스 빌드 때 1회)
+
+`coord_source`가 `api`·`geocoded`라고 해서 모두 실좌표로 치지 않는다. 실 DB 를 보면 api 좌표에도
+원천 기본값·다른 시도 좌표·시군구 단위 좌표가 섞여 있다(예: '경기도 군포시 … 그린당구장' 좌표가 전남,
+'부산 북구 …' 행이 서울 좌표, 세종 한 점에 영역 113곳의 api 438행, '대전광역시 동구' 한 줄 주소 88행이 한 점).
+행마다 `cd' = canonical_sigungu(sigungu_cd)`, 영역 키 = 영역그룹이면 그룹 id, 아니면 `cd'`.
+
+| 등급 | 규칙 | 이유 |
+|---|---|---|
+| `placeholder` | api 행을 좌표 (lat, lon)가 **똑같은**(반올림 없음) 것끼리 묶어, 한 점에 서로 다른 영역 키가 **3개 이상** | 원천 기본값(자리표시 점) — 전국 13점 |
+| `far` | api 행이 자기 시군구 **강건 중심**에서 **40km 초과** | 주소는 자기 시군구인데 좌표가 딴 곳 |
+| `no_ref` | api 행인데 강건 중심·시군구 중심점이 모두 없음 | 판정 불가(실 DB 0건) |
+| `shared_point` | api 행인데 주소에 **번지가 없고**(아래 api 정규식 불일치), 역시 번지 없는 **다른 이름의** api 행과 좌표가 **똑같다** — 자리표시 점을 뺀 번지 없는 api 행을 좌표 (lat, lon)가 똑같은 것끼리 묶어 이름 키(ASCII 소문자 + 공백 제거)가 **2개 이상**이면 그 행들 전부. 먼 행 판정이 먼저다 | 시군구·읍면동·도로 단위로 지오코딩된 근사 좌표 — '대전광역시 동구' 88행, '경기도 가평군' 31행, '인천광역시 남동구' 13행이 각각 한 점(전국 147점·500행). 같은 시설 중복 행(이름 키 하나)과 혼자 있는 점(약수터·공원)은 real 로 둔다 |
+| `geocoded_approx` | geocoded 행인데 주소에 **건물번호(번지)가 없다** — 정규식 `(?:^\|[\s,])(?:산\s?)?[0-9]+(?:-[0-9]+)?(?:번지)?(?=$\|[\s,(])` 불일치 | '서울 성북구 하월곡동'처럼 동·구 중심점에 찍혀 있다(30행) |
+| `centroid` | 시군구 중심점 폴백(과 알 수 없는 coord_source) | 근사 좌표 |
+| `real` | 위 어디에도 걸리지 않음 | **범위 판정에는 이 등급만** 쓴다 |
+
+- **api 번지 정규식**(한 점 공유 판정에만): `[0-9]+(?:-[0-9]+)?(?:번지)?(?:일원|외)?(?![0-9가-힣])`. api 주소는
+  '양덕동477'(마산종합운동장 6행)·'의정부시 체육로90'·'문학동482번지외'처럼 번지가 붙어 적혀 geocoded 정규식으로는
+  번지가 없는 것으로 읽힌다 — 그래서 이 판정만 느슨한 식을 쓴다. 숫자 뒤에 한글·숫자가 이어지면('장위3동'·'다문1리'·
+  '2층') 번지가 아니다. 계약 JSON `coord_rules.api_building_no_regex`·`shared_point_min_names`(2)와 같다(tests C1).
+- **강건 중심** `ref(code)`: 그 코드의 api 행 가운데 자리표시 점이 아닌 행이 **5개 이상**이면
+  `(median(lat), median(lon))`(짝수 개면 가운데 둘 평균), 아니면 `store.centroid(code)`, 그것도 없으면 없음.
+  build_db 의 시군구 중심점은 공공시설 좌표의 **평균**이라 오염에 끌려간다(옹진 31.5km·군포 11.3km 등 14곳이
+  강건 중심과 5km 넘게 차이, 군포 중심점은 수원 시가지 안) — 그래서 중앙값을 쓴다.
+- `coord_source`가 NULL이면 `_facility_row`와 같은 폴백(public→api, 그 밖→centroid).
+- 응답 행의 `coord_source`는 원래 값(`api`/`geocoded`)을 그대로 싣는다. 직렬화 직전에 실좌표 원천이고
+  real 등급인지 한 번 더 확인한다.
+- 실 DB 분포(2026-09-30): public api real 105,438 · placeholder 477(13점) · far 496 · shared_point 500(147점) /
+  voucher geocoded real 508 · geocoded_approx 30 / dvoucher geocoded real 41 / public geocoded real 40 / 나머지 centroid.
+  자리표시 점 수·행 수는 좌표 **똑같음**(반올림 없음) 기준이다 — 소수 6자리로 반올림해 묶으면 영역 114곳·439행,
+  전국 482행이 되지만 그것은 이 규칙이 아니다.
+- 좌표 등급·공간 인덱스는 **프로세스 메모리 안에만** 만든다(`app/area_index.py`, 워커당 첫 요청 때 지연 빌드,
+  약 0.5초·tracemalloc 약 36MB). DB(동결본)의 스키마·인덱스·행은 바꾸지 않는다.
+
+### 위치 미상 묶음 (`unlocated`)
+
+뜻: **지도 범위와 겹쳐 보이는 시군구 영역에서, 이 program(과 q)에 맞지만 정확한 위치를 확인할 수 없어 점으로
+찍지 않은 시설의 영역 전체 수.** 영역그룹(인천 서해·검단 28260/28275/28290, 제물포·영종)은 한 항목으로 합친다.
+
+후보 영역(A 또는 B):
+- **A 중심** — 영역 소속 코드 중 하나라도 **강건 중심** 점이 범위 안에 있다(DB 중심점이 아니다).
+- **B 증거** — 그 영역의 **증거 행**(real 등급 api 행, geocoded 제외)이 범위 안에 **서로 다른 좌표로 2곳 이상**
+  있다. 좌표가 같은 행은 1곳으로 센다.
+
+`count` = 그 영역에서 요청 source 의 비real 등급 행 가운데 q 에 맞는 행의 수(q 없으면 전부). count 0 은 빼고,
+소속 코드 중 중심점이 있는 코드가 하나도 없어 이름을 붙일 수 없는 영역도 뺀다(실 DB 0건).
+정렬 = count 내림차순, 같으면 `sigungu_cd` 오름차순. `unlocated.total` = count 합.
+
+| 필드 | 값 |
+|---|---|
+| `sigungu_cd` | `/api/facilities/search`에 그대로 쓸 수 있는 코드. 그룹이면 소속 목록 순서로 중심점이 있는 첫 코드 |
+| `sigungu_nm` | `store.centroid(sigungu_cd).nm` |
+| `sido_nm` | `region.sido_label(sigungu_cd[:2])` |
+| `label` | 그룹이면 그룹 label, 아니면 `sigungu_nm` |
+| `display_label` | `label`이 전국에서 겹치는 이름(강서구·고성군·남구·동구·북구·서구·중구)이면 `"{sido_nm} {label}"`, 아니면 `label`. 예: `대구광역시 서구` |
+| `scope_codes` | 그룹이면 소속 코드 전부, 아니면 `[cd']` |
+| `count` | 위 규칙의 수 |
+| `included_by` | `["center"]` · `["evidence"]` · 둘 다 — 설명용(목·서버 대조 대상 아님) |
+
+**이 수가 말하지 않는 것**(`count_basis: "whole_area"`): 시군구 폴리곤이 없으므로 "이 N곳이 이 범위 안에 있다"는
+뜻이 **아니다**. 범위 밖 시설이 섞여 있고, 범위와 겹치는 시군구 일부는 빠질 수 있다(A·B 를 모두 못 채우는 경우,
+예: 옹진 섬). 웹 문구도 "정확한 위치를 확인할 수 없어 지도에 없어요 · 시군구 전체 수"로 적는다.
+
+### 정렬 · 행 모양 · 그 밖
+
+- **정렬**: 지도 가운데에서 가까운 순. `clat=(min_lat+max_lat)/2`, `clon=(min_lon+max_lon)/2`,
+  `k=cos(clat·π/180)`, `d2=(lat−clat)²+((lon−clon)·k)²`, 키 `(d2, id)`. 상위 N개만 DB 에서 다시 읽는다.
+- `total` = 잘라내기 전 일치 수, `truncated = total > facilities.length`.
+- **`dist_km`는 항상 `null`** — 거리 원점(내 위치)이 없다. 화면 가운데는 사용자의 위치가 아니다.
+- **행 모양 = `/api/facilities/search`와 같다**(키 집합 동일, `engine._voucher_row`/`_alt_row` + `addr`).
+  이용권 행은 `subsidy`·`copay` = `null`(자격 미상), `fee_month` = 그 나이 강좌 중 최저, 맞는 강좌가 없으면
+  **전체 강좌 중 최저(폴백)**, `age` 없으면 전체 최저. 공공 행에는 `source` 키가 없다(마커 종류는 응답 `program`으로).
+- **장애 필터를 적용하지 않는다**(키워드 검색 계열) — `disability_support`는 원천 값(true/false/null) 그대로.
+  웹은 장애 있음일 때 "‘장애’ 표기와 관계없이 모두 보여요"라고 밝힌다.
+- `eligibility_applied`는 항상 `false`. `q`는 접은 문자열 또는 `null`, `tokens`는 공백 분리(중복 제거·순서 유지).
+- **q 매칭**: 모든 토큰이 이름 **또는** 주소에 부분일치(AND). 대소문자는 ASCII A–Z 만 무시하고 `%`·`_`·`\`는
+  글자 그대로 — 결과 집합이 SQLite `LIKE … ESCAPE '\'`(search)와 같다(tests P2).
+- 레이트리밋: 일반 `api` 버킷(IP당 120/min, 워커별). 쿼리스트링(좌표·검색어)은 액세스 로그에 남지 않는다(P-3).
+  웹은 버튼·범위 모드 폼 제출·다시 시도 때만 부른다. 429 도 막대의 "다시 시도" 대상이다(서버가 "잠시 후 다시
+  시도"라고 말한다 — 422 만 같은 요청이면 같은 답이라 다시 시도 없이 확대·국내 안내).
+- **동시 요청**: 웹은 한 번에 2요청(주 이용권 + `public`)을 동시에 보낸다. 워커는 SQLite 커넥션 하나를 스레드풀이
+  함께 쓰므로 **문장 캐시 없이** 연다(`store.connect_shared`, `cached_statements=0`). 캐시가 같은 SQL 의 준비된
+  문장을 두 스레드에 주면 `InterfaceError: bad parameter or other API misuse`·`IndexError`로 500 이 났다
+  (in-bounds·search·assess 가 서로 겹쳐도 같다 — tests I4). 비용은 in-bounds 1회 약 0.1ms.
+
+응답(fixtures, `program=public`, 위 쿼리):
+```json
+{
+  "bounds": {"min_lat": 37.595, "min_lon": 127.005, "max_lat": 37.612, "max_lon": 127.045},
+  "center": {"lat": 37.6035, "lon": 127.025},
+  "diag_km": 4.0, "max_diag_km": 20,
+  "program": "public", "q": null, "tokens": [], "match_fields": ["name", "addr"],
+  "coord_sources": ["api", "geocoded"],
+  "coord_rules": {"placeholder_min_areas": 3, "suspect_max_km": 40, "robust_min_rows": 5, "geocoded_requires_building_no": true, "shared_point_min_names": 2},
+  "order": "center_distance", "eligibility_applied": false,
+  "total": 3, "truncated": false,
+  "facilities": [
+    {"id": "P02", "name": "아리랑체육관", "type": "공공체육시설", "sports": ["배드민턴", "탁구"],
+     "lat": 37.6008, "lon": 127.0117, "coord_source": "api", "dist_km": null, "sigungu_nm": "성북구",
+     "faci_gb": null, "note": null, "disability_support": false, "addr": "서울 성북구 아리랑로 82"}
+  ],
+  "unlocated": {"total": 0, "count_basis": "whole_area", "areas": []}
+}
+```
+(`facilities`는 P02·P03·P01 3행 중 첫 행만 적었다. 같은 범위 `program=svoucher`면 `total: 0`,
+`unlocated.areas = [{"sigungu_cd": "11290", "label": "성북구", "count": 4, "included_by": ["evidence"], …}]`.)
+
+실측(실 DB 2026-09-30 적재본, immutable 읽기 전용으로 engine 직접 호출 · 위 예시와 같은 공통 키는 일부 생략) — 창원
+`35.20–35.26, 128.58–128.66`, `program=svoucher`:
+```json
+{
+  "bounds": {"min_lat": 35.2, "min_lon": 128.58, "max_lat": 35.26, "max_lon": 128.66},
+  "center": {"lat": 35.23, "lon": 128.62}, "diag_km": 9.9, "max_diag_km": 20,
+  "program": "svoucher", "q": null, "tokens": [], "order": "center_distance", "eligibility_applied": false,
+  "total": 0, "truncated": false, "facilities": [],
+  "unlocated": {"total": 638, "count_basis": "whole_area", "areas": [
+    {"sigungu_cd": "48120", "sigungu_nm": "창원시", "sido_nm": "경상남도", "label": "창원시",
+     "display_label": "창원시", "scope_codes": ["48120"], "count": 638, "included_by": ["center", "evidence"]}
+  ]}
+}
+```
+(가맹 638곳이 전부 시군구 중심점 한 점에 겹쳐 있다 — 점으로 찍지 않고 "창원시 이용권 가맹시설 638곳은 정확한
+위치를 확인할 수 없어 지도에 없어요 · 시군구 전체 수"로 안내한다.) 세종 z15 `36.493–36.503, 127.258–127.273`,
+`program=public&limit=2`:
+```json
+{
+  "diag_km": 1.7, "program": "public", "total": 46, "truncated": true,
+  "facilities": [
+    {"id": "public-402423995300201524", "name": "(사) 아라유소년 야구협회", "type": "공공체육시설",
+     "sports": ["야구장", "야구장업"], "lat": 36.4978768912545, "lon": 127.265433458684,
+     "coord_source": "api", "dist_km": null, "sigungu_nm": "세종시", "faci_gb": "신고", "note": null,
+     "disability_support": null, "addr": "인천광역시  검단구 한들로 66-34"},
+    {"id": "public-459794317379985360", "name": "한국파워점핑줄넘기클럽", "type": "공공체육시설",
+     "sports": ["줄넘기", "체육교습업"], "lat": 36.4978768912545, "lon": 127.265433458684,
+     "coord_source": "api", "dist_km": null, "sigungu_nm": "세종시", "faci_gb": "신고", "note": null,
+     "disability_support": null, "addr": "세종특별자치시 갈매로 388(어진동)"}
+  ],
+  "unlocated": {"total": 95, "count_basis": "whole_area", "areas": [
+    {"sigungu_cd": "36110", "sigungu_nm": "세종시", "sido_nm": "세종특별자치시", "label": "세종시",
+     "display_label": "세종시", "scope_codes": ["36110"], "count": 95, "included_by": ["center", "evidence"]}
+  ]}
+}
+```
+(옛 방식 — coord_source 만 보면 — 이 범위 public 은 487곳이고 대부분 세종 한 점에 쌓인 다른 지역 시설이다.
+위 첫 행이 보여 주듯 40km 안쪽·한 영역 안의 오염은 아직 남는다 — 아래 한계.)
+
+### 알려진 한계
+
+- 40km 안쪽·한 영역 안의 좌표 오염은 걸러지지 않는다. 세종 z15 public 46곳 중 2곳의 주소가 세종이 아니다
+  (청주 주소 1행, 세종 코드로 적재된 인천 주소 1행 — 세종시청 좌표). 크기 반영 반경은 실제 외곽 시설을
+  떨어뜨리는 역효과가 있어 쓰지 않았다.
+- geocoded 행은 번지가 있어도 카카오가 근사 좌표를 줬을 수 있다(geocode_demo.py 가 address_type 을 검사하지 않음).
+- 한 점 공유(`shared_point`)는 **번지 없는** api 행끼리만 본다. 번지가 있는 행이 근사 좌표를 함께 쓰는 경우는
+  걸러지지 않는다(예: 완주산업단지 공원 4곳 — 용암리 766-1·840·829·823 — 이 한 점, 양평 용문면 여러 마을의
+  게이트볼장이 면 주소 '용문로 389'로 적혀 한 점). 반대로 한 공원 안의 서로 다른 시설(예: '동락공원 족구장'·
+  '동락공원 축구장', 주소 '경상북도 구미시 진미동')은 좌표가 실제로 맞더라도 주소로 확인할 수 없어 위치 미상으로
+  뺀다(보수적 선택 — 주소 검색으로는 찾는다).
+- 위치 미상 수는 시군구 전체 수라 범위 밖 시설이 섞이고, 겹치는 시군구 일부는 빠질 수 있다.
+- 기존 `/api/assess`·`/api/facilities/search`에는 좌표 등급을 적용하지 않았다 — 자리표시 점·먼 행·한 점 공유 행의
+  `dist_km`가 그대로 노출된다(후속 과제).
+- 웹 지도의 **'내 위치'**(검은 점)는 여전히 시군구 중심점이다(요청에 위치가 없으면 서울시청). 범위 결과를 보이는
+  동안에만 숨기고, 기본 화면·키워드 결과에서는 그대로 찍힌다.
+- 범위 결과 마커는 **같은 종류·같은 좌표**만 한 마커(`같은 자리 N곳`)로 묶는다. 종류가 다른 시설(이용권 가맹·장애인
+  가맹·공공)이 같은 좌표에 있으면 마커가 최대 3개 겹친다.
+- MapLibre 확대·축소(±) 버튼은 29px 로 권장 44px 보다 작다(이번 범위 밖). 두 손가락 팬·핀치는 headless Chromium 의
+  CDP 터치로만 확인했고 실기기에서는 검증하지 않았다.
+
 ## GET /api/fitness/items?age=N
 
 연령군별 공식 측정항목 카탈로그(폼 동적 렌더). 항목: `{code,name,unit,factor,alt_group,higher_better,hint}`.

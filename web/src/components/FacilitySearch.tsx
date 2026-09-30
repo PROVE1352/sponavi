@@ -9,7 +9,7 @@
 //   · 이용권 행은 자격 판정 없이 온다(subsidy/copay=null) — 수강료만 보여 준다(P-1).
 //   · 결과 수는 aria-live 로 알린다. 0건이면 도로명 주소의 한계를 정직하게 말한다.
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { FormEvent, KeyboardEvent, MouseEvent, RefObject } from 'react'
 import { searchFacilities } from '../api/client'
 import type {
   FacilitySearchResponse,
@@ -23,6 +23,16 @@ export const SEARCH_Q_MAX = 30
 export const SEARCH_LIMIT = 30
 export const ZERO_HINT =
   '도로명 주소에는 동 이름이 없을 수 있어요. 도로명(예: 구암로)이나 시설 이름으로도 찾아보세요.'
+
+// 폼 동작이 포인터로 시작했는가, 키보드로 시작했는가 — 끝난 뒤 포커스 이동이 화면을 굴릴지 정한다
+// (포인터면 focus({preventScroll}), 키보드면 기본 스크롤 · 계약 §6.11).
+export type InputVia = 'pointer' | 'keyboard'
+
+// 버튼 click 의 detail: 마우스·터치 누름은 1 이상, 키보드(Enter/Space)·입력칸 Enter 의 암묵 제출(기본 버튼에
+// 합성 click)은 0 이다.
+export function viaOfClick(e: { detail: number }): InputVia {
+  return e.detail === 0 ? 'keyboard' : 'pointer'
+}
 
 export interface FacilitySearchResult {
   q: string
@@ -59,24 +69,29 @@ export function useFacilitySearch(scope: FacilitySearchScope | undefined, resetK
 
   useEffect(() => () => ctrl.current?.abort(), [])
 
+  // scopeOverride: 이 요청만 다른 범위로(K6 "{label} 안에서 찾기"). 캡처된 scope 대신 인자로 받는다 —
+  // 범위를 바꾸는 setState 직후에 부르면 클로저의 scope 는 아직 옛 값이다(stale closure).
   const run = useCallback(
-    (raw: string) => {
-      if (!scope) return
+    (raw: string, scopeOverride?: FacilitySearchScope) => {
+      const s = scopeOverride ?? scope
+      if (!s) return
       const q = raw.split(/\s+/).filter(Boolean).join(' ')
       if (q.length === 0 || q.length > SEARCH_Q_MAX) return
       ctrl.current?.abort()
       const c = new AbortController()
       ctrl.current = c
       setState({ status: 'loading', q })
+      // 덮어쓴 범위(다른 시군구)에서는 거리 원점을 보내지 않고 거리도 싣지 않는다(P-1).
+      const noDistance = s.override === true
       const base = {
-        sigungu_cd: scope.sigungu_cd,
+        sigungu_cd: s.sigungu_cd,
         q,
         limit: SEARCH_LIMIT,
-        ...(scope.origin ? { lat: scope.origin.lat, lon: scope.origin.lon } : {}),
-        ...(scope.age != null ? { age: scope.age } : {}),
+        ...(!noDistance && s.origin ? { lat: s.origin.lat, lon: s.origin.lon } : {}),
+        ...(s.age != null ? { age: s.age } : {}),
       }
       Promise.allSettled([
-        searchFacilities({ ...base, program: scope.voucherProgram }, c.signal),
+        searchFacilities({ ...base, program: s.voucherProgram }, c.signal),
         searchFacilities({ ...base, program: 'public' }, c.signal),
       ]).then(([v, p]) => {
         if (c.signal.aborted || ctrl.current !== c) return
@@ -91,14 +106,16 @@ export function useFacilitySearch(scope: FacilitySearchScope | undefined, resetK
         }
         const vr: FacilitySearchResponse | null = v.status === 'fulfilled' ? v.value : null
         const pr: FacilitySearchResponse | null = p.status === 'fulfilled' ? p.value : null
+        const strip = <T extends { dist_km: number | null }>(rows: T[]): T[] =>
+          noDistance ? rows.map((r) => ({ ...r, dist_km: null })) : rows
         setState({
           status: 'done',
           result: {
             q,
-            vouchers: (vr?.facilities ?? []) as SearchVoucherFacility[],
+            vouchers: strip((vr?.facilities ?? []) as SearchVoucherFacility[]),
             voucherTotal: vr?.total ?? 0,
             voucherTruncated: vr?.truncated ?? false,
-            alts: (pr?.facilities ?? []) as SearchAltFacility[],
+            alts: strip((pr?.facilities ?? []) as SearchAltFacility[]),
             altTotal: pr?.total ?? 0,
             altTruncated: pr?.truncated ?? false,
             partialError: vr == null ? 'voucher' : pr == null ? 'public' : null,
@@ -114,26 +131,43 @@ export function useFacilitySearch(scope: FacilitySearchScope | undefined, resetK
 
 export function FacilitySearchForm({
   sigunguLabel,
+  help,
   busy,
   active,
   onSubmit,
   onClear,
+  initialValue = '',
+  inputRef,
+  onScopeReset,
 }: {
   sigunguLabel?: string
+  // 도움말 문장을 통째로 바꿀 때(지도 범위 모드 · 검색 범위 덮어쓰기). 없으면 "{시군구} 안에서 …".
+  help?: string
   busy: boolean
   // 검색 결과가 목록을 대신하고 있는가("검색 지우기" 노출)
   active: boolean
-  onSubmit: (q: string) => void
-  onClear: () => void
+  // via: 제출이 포인터(찾기 버튼 누름)로 시작했나, 키보드(입력칸 Enter·버튼에서 Enter/Space)로 시작했나
+  onSubmit: (q: string, via: InputVia) => void
+  onClear: (via: InputVia) => void
+  // 모드가 바뀔 때 부모가 key 를 바꿔 다시 마운트한다 — 그때 입력칸에 채워 둘 값.
+  initialValue?: string
+  inputRef?: RefObject<HTMLInputElement | null>
+  // 검색 범위를 다른 시군구로 덮어쓴 동안만: "내 지역으로"
+  onScopeReset?: () => void
 }) {
   const id = useId()
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(initialValue)
   const trimmed = value.trim()
+  // 이번 제출의 시작 방식. 찾기 버튼의 click 이 submit 보다 먼저 온다 — 입력칸 Enter 도 기본 버튼에 합성
+  // click(detail 0)을 보낸 뒤 제출하므로 두 경로 모두 여기서 가려진다. 기본값은 키보드(click 없는 제출).
+  const submitVia = useRef<InputVia>('keyboard')
 
   function submit(e: FormEvent) {
     e.preventDefault()
+    const via = submitVia.current
+    submitVia.current = 'keyboard'
     if (trimmed.length === 0) return
-    onSubmit(value)
+    onSubmit(value, via)
   }
 
   // 한글 조합 확정용 Enter 는 제출이 아니다(조합 끝난 뒤의 Enter 만 제출).
@@ -141,9 +175,9 @@ export function FacilitySearchForm({
     if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) e.preventDefault()
   }
 
-  function clear() {
+  function clear(e: MouseEvent<HTMLButtonElement>) {
     setValue('')
-    onClear()
+    onClear(viaOfClick(e))
   }
 
   return (
@@ -159,6 +193,7 @@ export function FacilitySearchForm({
       </label>
       <div className="flex items-stretch gap-2">
         <input
+          ref={inputRef}
           id={`${id}-q`}
           data-testid="facility-search-input"
           type="search"
@@ -177,6 +212,9 @@ export function FacilitySearchForm({
           type="submit"
           data-testid="facility-search-submit"
           disabled={busy || trimmed.length === 0}
+          onClick={(e) => {
+            submitVia.current = viaOfClick(e)
+          }}
           className="press min-h-11 shrink-0 rounded-[3px] bg-ink px-4 font-serif text-[15px] font-extrabold text-paper transition-opacity hover:opacity-90 disabled:opacity-50 dark:bg-ink-dark dark:text-paper-dark"
         >
           찾기
@@ -184,18 +222,30 @@ export function FacilitySearchForm({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3">
         <p id={`${id}-help`} className="text-[12px] leading-[1.6] text-mute dark:text-mute-dark">
-          {sigunguLabel ? `${sigunguLabel} 안에서 ` : ''}시설 이름·주소로 찾아요
+          {help ?? `${sigunguLabel ? `${sigunguLabel} 안에서 ` : ''}시설 이름·주소로 찾아요`}
         </p>
-        {active && (
-          <button
-            type="button"
-            data-testid="facility-search-clear"
-            onClick={clear}
-            className={BTN_TEXT}
-          >
-            검색 지우기
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-x-3">
+          {onScopeReset && (
+            <button
+              type="button"
+              data-testid="facility-search-scope-reset"
+              onClick={onScopeReset}
+              className={BTN_TEXT}
+            >
+              내 지역으로
+            </button>
+          )}
+          {active && (
+            <button
+              type="button"
+              data-testid="facility-search-clear"
+              onClick={clear}
+              className={BTN_TEXT}
+            >
+              검색 지우기
+            </button>
+          )}
+        </div>
       </div>
     </form>
   )

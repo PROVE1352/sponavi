@@ -117,3 +117,44 @@ describe('toAssessRequest.special', () => {
     expect(nextQuestion(s)).toBeNull()
   })
 })
+
+// 소득 구분 질문의 "북한이탈주민" 칩(2026-10-01) — 소득 '그외' + 2027 대상(defector)으로 저장하고 2027 질문은 건너뛴다.
+import { INCOME_DEFECTOR_ID, incomeChips } from './policy'
+
+describe('소득 구분의 북한이탈주민 칩', () => {
+  const chips = incomeChips()
+  const defector = chips.find((c) => c.id === INCOME_DEFECTOR_ID)!
+
+  it('한부모 다음 · 그 외 앞에 놓인다', () => {
+    expect(chips.map((c) => c.id)).toEqual([
+      'income-기초생활수급',
+      'income-차상위',
+      'income-한부모',
+      INCOME_DEFECTOR_ID,
+      'income-그외',
+      'income-unknown',
+    ])
+  })
+
+  it("소득 '그외' + special=['defector'] 로 저장하고 2027 질문을 다시 묻지 않는다", () => {
+    const a = defector.action as { slots: Partial<ChatSlots> }
+    expect(a.slots).toMatchObject({ income_class: '그외', income_unknown: false, special: ['defector'] })
+    const s = slots({ age: 16, ...a.slots })
+    expect(needsSpecial(s)).toBe(true)
+    expect(nextQuestion(s)).not.toBe('special')
+    expect(toAssessRequest({ ...s, disability_has: false }, SG)?.special).toEqual(['defector'])
+  })
+
+  it('성인이 골라도 요청에는 special 을 싣지 않는다(2027 판정은 5~18세만)', () => {
+    const a = defector.action as { slots: Partial<ChatSlots> }
+    const s = slots({ age_band: '30s', age: 32, ...a.slots, disability_has: false })
+    expect(toAssessRequest(s, SG)?.special).toEqual([])
+  })
+
+  it('다른 소득 칩으로 고쳐 고르면 special 이 비워져 2027 질문을 다시 묻는다', () => {
+    const other = chips.find((c) => c.id === 'income-그외')!.action as { slots: Partial<ChatSlots> }
+    const s = slots({ age: 16, special: ['defector'], ...other.slots })
+    expect(s.special).toBeNull()
+    expect(nextQuestion(s)).toBe('special')
+  })
+})

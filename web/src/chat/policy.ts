@@ -109,6 +109,7 @@ export const SPECIAL_AGE_MIN = 5
 export const SPECIAL_AGE_MAX = 18
 export const SPECIAL_NONE_ID = 'special-none'
 export const SPECIAL_CONFIRM_ID = 'special-confirm'
+export const INCOME_DEFECTOR_ID = 'income-defector'
 
 export const SPECIAL_OPTIONS: { value: SpecialCategory; label: string }[] = [
   { value: 'multichild', label: '3자녀 이상 가구' },
@@ -452,9 +453,22 @@ export function incomeChips(): Chip[] {
     action: {
       kind: 'answer',
       question: 'income',
-      slots: { income_class: o.value, income_unknown: false },
+      // special 을 비워 둔다 — 소득을 고쳐 고르면 2027 질문을 다시 묻는다(아래 북한이탈주민 칩의 잔재 방지).
+      slots: { income_class: o.value, income_unknown: false, special: null },
     },
   }))
+  // 북한이탈주민은 소득 구분은 아니지만, 이용자가 이 질문에서 자기 상황을 바로 고를 수 있게 둔다(2026-10-01 사용자 결정).
+  // 2026 기준으로는 소득 '그 외'와 같게 판정하고, 2027 예산안 신규 대상(defector)으로 표시한다 — 2027 질문은 건너뛴다.
+  base.splice(base.length - 1, 0, {
+    id: INCOME_DEFECTOR_ID,
+    label: '북한이탈주민',
+    hint: '2027년부터 이용권 신규 대상 예정(정부 예산안)',
+    action: {
+      kind: 'answer',
+      question: 'income',
+      slots: { income_class: '그외', income_unknown: false, special: ['defector'] },
+    },
+  })
   base.push({
     id: 'income-unknown',
     label: '잘 모르겠어요',
@@ -462,7 +476,7 @@ export function incomeChips(): Chip[] {
     action: {
       kind: 'answer',
       question: 'income',
-      slots: { income_class: '그외', income_unknown: true },
+      slots: { income_class: '그외', income_unknown: true, special: null },
     },
   })
   return base

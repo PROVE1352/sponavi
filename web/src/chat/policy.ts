@@ -42,7 +42,7 @@ export const INCOME_OPTIONS: { value: IncomeClass; label: string; hint: string }
   { value: '기초생활수급', label: '기초생활수급', hint: '생계·의료·주거·교육급여를 받고 있는 경우' },
   { value: '차상위', label: '차상위계층', hint: '기초생활수급 바로 위 소득 구간' },
   { value: '한부모', label: '한부모가정', hint: '한부모가족 지원 대상으로 등록된 경우' },
-  { value: '그외', label: '그 외 (해당 없음)', hint: '위 세 가지에 해당하지 않는 경우' },
+  { value: '그외', label: '그 외 (해당 없음)', hint: '위 항목에 해당하지 않는 경우' },
 ]
 
 // 법정 유형 명칭 8택(A11Y-5). 세부 등급·진단명은 묻지 않는다.
